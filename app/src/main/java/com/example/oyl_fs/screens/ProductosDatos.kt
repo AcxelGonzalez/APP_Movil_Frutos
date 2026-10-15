@@ -11,7 +11,7 @@ object ProductosDatos {
         categoria = "Frutos secos",
         descripcion = "Semillas comestibles del almendro, originarias de Asia. Son crujientes, de sabor suave y ricas en proteínas, fibra y grasas saludables.",
         presentacion = "Bolsa de 500 g",
-        precio = 6900,
+        precio = 6990,
         stock = 60,
         stockMinimo = 2,
         disponible = true,

@@ -2,7 +2,6 @@ package com.example.oyl_fs.screens
 import androidx.activity.compose.BackHandler
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.viewmodel.ProductoViewModel
-import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -13,11 +12,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -50,8 +48,8 @@ fun CatalogoScreen(
     onProductoClick: (ProductoInfo) -> Unit,
     onAgregarProducto: () -> Unit
 ) {
-    var busqueda by remember { mutableStateOf("") }
-    var categoria by remember { mutableStateOf("Todos") }
+    var busqueda by rememberSaveable { mutableStateOf("") }
+    var categoria by rememberSaveable { mutableStateOf("Todos") }
 
     val categorias = listOf(
         "Todos",
@@ -253,43 +251,101 @@ private fun TarjetaCatalogo(
 }
 
 
-// Controla el paso entre el catálogo y el formulario.
-
+// Navegación sencilla del módulo administrador.
 @Composable
 fun ProductosAdmin(
     viewModel: ProductoViewModel,
-    onProductoClick: (ProductoInfo) -> Unit
+    onVolver: () -> Unit
 ) {
-    var mostrarFormulario by remember {
-        mutableStateOf(false)
-    }
+    var pantalla by rememberSaveable { mutableStateOf("catalogo") }
+    var productoId by rememberSaveable { mutableStateOf<Int?>(null) }
 
-    //botón Atrás 
-    BackHandler(enabled = mostrarFormulario) {
+    val productos by viewModel.productos.collectAsState()
+    val producto = productos.find { it.id == productoId }
+    val error by viewModel.error.collectAsState()
+
+    fun volver() {
         viewModel.limpiarError()
-        mostrarFormulario = false
+        when (pantalla) {
+            "editar" -> pantalla = "detalle"
+            "detalle", "agregar" -> pantalla = "catalogo"
+            else -> onVolver()
+        }
     }
 
-    if (mostrarFormulario) {
-        AgregarProductoAdmin(
+    BackHandler { volver() }
+
+    // Si el producto ya no existe, vuelve al listado.
+    LaunchedEffect(pantalla, productoId, productos) {
+        if ((pantalla == "detalle" || pantalla == "editar") && producto == null) {
+            pantalla = "catalogo"
+            productoId = null
+        }
+    }
+
+    when (pantalla) {
+        "agregar" -> AgregarProductoAdmin(
             viewModel = viewModel,
-            onVolver = {
-                viewModel.limpiarError()
-                mostrarFormulario = false
-            }
+            onVolver = { volver() }
         )
-    } else {
-        CatalogoAdmin(
-            viewModel = viewModel,
-            onProductoClick = onProductoClick,
-            onAgregarProducto = {
-                viewModel.limpiarError()
-                mostrarFormulario = true
+
+        "editar" -> if (producto != null) {
+            EditarProductoAdmin(
+                producto = producto,
+                viewModel = viewModel,
+                onVolver = { volver() }
+            )
+        }
+
+        "detalle" -> if (producto != null) {
+            Column(Modifier.fillMaxSize()) {
+                if (error != null) {
+                    Text(
+                        text = error ?: "",
+                        color = Color(0xFFC0392B),
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+                Box(Modifier.weight(1f)) {
+                    DetalleProductoAdminScreen(
+                        producto = producto,
+                        onVolver = { volver() },
+                        onEditar = {
+                            viewModel.limpiarError()
+                            pantalla = "editar"
+                        },
+                        onEliminar = {
+                            if (viewModel.eliminarProducto(producto.id)) {
+                                productoId = null
+                                pantalla = "catalogo"
+                            }
+                        }
+                    )
+                }
             }
-        )
+        }
+
+        else -> Column(Modifier.fillMaxSize()) {
+            TextButton(onClick = onVolver) {
+                Text("‹ Volver al menú", color = CafeOscuroCatalogo)
+            }
+            Box(Modifier.weight(1f)) {
+                CatalogoAdmin(
+                    viewModel = viewModel,
+                    onProductoClick = { seleccionado ->
+                        viewModel.limpiarError()
+                        productoId = seleccionado.id
+                        pantalla = "detalle"
+                    },
+                    onAgregarProducto = {
+                        viewModel.limpiarError()
+                        pantalla = "agregar"
+                    }
+                )
+            }
+        }
     }
 }
-
 
 @Preview(showBackground = true)
 @Composable

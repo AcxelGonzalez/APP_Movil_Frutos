@@ -52,73 +52,42 @@ fun AgregarProductoAdmin(
     )
 }
 
-// Conecta el formulario para editar con el ViewModel.
-@Composable
-fun EditarProductoAdmin(
-    producto: ProductoInfo,
-    viewModel: ProductoViewModel,
-    onVolver: () -> Unit
-) {
-    val error by viewModel.error.collectAsState()
-
-    LaunchedEffect(producto.id) {
-        viewModel.limpiarError()
-    }
-
-    AgregarProductoScreen(
-        productoInicial = producto,
-        errorGuardado = error,
-        onVolver = {
-            viewModel.limpiarError()
-            onVolver()
-        },
-        onGuardar = { productoEditado ->
-            if (viewModel.editarProducto(productoEditado)) {
-                onVolver()
-            }
-        }
-    )
-}
-
 @Composable
 fun AgregarProductoScreen(
     onVolver: () -> Unit,
     onGuardar: (ProductoInfo) -> Unit,
-    errorGuardado: String? = null,
-    productoInicial: ProductoInfo? = null
+    errorGuardado: String? = null
 ) {
-    val editando = productoInicial != null
-
-    // Al editar, comienza con los datos del producto.
-    var nombre by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.nombre ?: "")
+    // Campos del nuevo producto.
+    var nombre by rememberSaveable {
+        mutableStateOf("")
     }
-    var codigo by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.codigo ?: "")
+    var codigo by rememberSaveable {
+        mutableStateOf("")
     }
-    var categoria by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.categoria ?: "")
+    var categoria by rememberSaveable {
+        mutableStateOf("")
     }
-    var descripcion by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.descripcion ?: "")
+    var descripcion by rememberSaveable {
+        mutableStateOf("")
     }
-    var precio by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.precio?.toString() ?: "")
+    var precio by rememberSaveable {
+        mutableStateOf("")
     }
-    var stock by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.stock?.toString() ?: "")
+    var stock by rememberSaveable {
+        mutableStateOf("")
     }
-    var stockMinimo by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.stockMinimo?.toString() ?: "")
+    var stockMinimo by rememberSaveable {
+        mutableStateOf("")
     }
-    var presentacion by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.presentacion ?: "")
+    var presentacion by rememberSaveable {
+        mutableStateOf("")
     }
-    var disponible by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.disponible ?: true)
+    var disponible by rememberSaveable {
+        mutableStateOf(true)
     }
-    var imagenUri by rememberSaveable(productoInicial?.id) {
-        mutableStateOf(productoInicial?.imagenUri)
+    var imagenUri by rememberSaveable {
+        mutableStateOf<String?>(null)
     }
 
     var menuCategorias by remember { mutableStateOf(false) }
@@ -149,9 +118,9 @@ fun AgregarProductoScreen(
         }
     }
 
-    // Conserva el identificador y la imagen original al editar.
+    // Reúne los datos del nuevo producto.
     val productoFormulario = ProductoInfo(
-        id = productoInicial?.id ?: 0,
+        id = 0,
         nombre = nombre,
         codigo = codigo,
         categoria = categoria,
@@ -161,7 +130,7 @@ fun AgregarProductoScreen(
         stock = stock.toIntOrNull() ?: 0,
         stockMinimo = stockMinimo.toIntOrNull() ?: 0,
         disponible = disponible,
-        imagen = productoInicial?.imagen ?: 0,
+        imagen = 0,
         imagenUri = imagenUri
     )
 
@@ -179,11 +148,7 @@ fun AgregarProductoScreen(
             }
 
             Text(
-                text = if (editando) {
-                    "Editar producto"
-                } else {
-                    "Agregar producto"
-                },
+                text = "Agregar producto",
                 color = OscuroAgregar,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -293,11 +258,7 @@ fun AgregarProductoScreen(
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Column(modifier = Modifier.weight(1f)) {
                 CampoAgregar(
-                    titulo = if (editando) {
-                        "Stock actual *"
-                    } else {
-                        "Stock inicial *"
-                    },
+                    titulo = "Stock inicial *",
                     valor = stock,
                     numerico = true
                 ) {
@@ -402,7 +363,7 @@ fun AgregarProductoScreen(
                 )
             ) {
                 Text(
-                    if (editando) "Guardar cambios" else "Guardar producto"
+                    "Guardar producto"
                 )
             }
         }

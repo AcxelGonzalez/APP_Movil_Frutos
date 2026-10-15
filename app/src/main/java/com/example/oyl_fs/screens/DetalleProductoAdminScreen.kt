@@ -17,17 +17,17 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-private val FondoAlmendra = Color(0xFFFFF5E7)
-private val CafeAlmendra = Color(0xFF92623D)
-private val OscuroAlmendra = Color(0xFF4B2E15)
-private val RojoAlmendra = Color(0xFFC0392B)
+private val FondoProductoAdmin = Color(0xFFFFF5E7)
+private val CafeProductoAdmin = Color(0xFF92623D)
+private val OscuroProductoAdmin = Color(0xFF4B2E15)
+private val RojoProductoAdmin = Color(0xFFC0392B)
 
 @Composable
-fun AlmendraScreen(
+fun DetalleProductoAdminScreen(
     onVolver: () -> Unit,
     onEditar: () -> Unit,
     onEliminar: () -> Unit,
-    producto: ProductoInfo = ProductosDatos.almendras
+    producto: ProductoInfo
 ) {
     var confirmarEliminar by remember(producto.id) {
         mutableStateOf(false)
@@ -46,13 +46,13 @@ fun AlmendraScreen(
     val colorEstado = if (producto.disponible && producto.stock > 0) {
         Color(0xFF2E7D32)
     } else {
-        RojoAlmendra
+        RojoProductoAdmin
     }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(FondoAlmendra)
+            .background(FondoProductoAdmin)
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -63,14 +63,14 @@ fun AlmendraScreen(
             TextButton(onClick = onVolver) {
                 Text(
                     text = "‹",
-                    color = OscuroAlmendra,
+                    color = OscuroProductoAdmin,
                     fontSize = 30.sp
                 )
             }
 
             Text(
                 text = "Detalle del producto",
-                color = OscuroAlmendra,
+                color = OscuroProductoAdmin,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.weight(1f)
@@ -99,14 +99,14 @@ fun AlmendraScreen(
             ) {
                 Text(
                     text = producto.nombre,
-                    color = OscuroAlmendra,
+                    color = OscuroProductoAdmin,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
                 )
 
                 Text(
                     text = "Código: ${producto.codigo}",
-                    color = CafeAlmendra
+                    color = CafeProductoAdmin
                 )
 
                 Row(
@@ -115,7 +115,7 @@ fun AlmendraScreen(
                 ) {
                     Text(
                         text = producto.presentacion,
-                        color = CafeAlmendra,
+                        color = CafeProductoAdmin,
                         modifier = Modifier.weight(1f)
                     )
 
@@ -140,7 +140,7 @@ fun AlmendraScreen(
                 ) {
                     Text(
                         text = precioTexto,
-                        color = OscuroAlmendra,
+                        color = OscuroProductoAdmin,
                         fontSize = 24.sp,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.weight(1f)
@@ -148,18 +148,18 @@ fun AlmendraScreen(
 
                     Text(
                         text = "${producto.stock} uds",
-                        color = CafeAlmendra
+                        color = CafeProductoAdmin
                     )
                 }
             }
         }
 
-        SeccionAlmendra(
+        SeccionProductoAdmin(
             titulo = "Categoría",
             contenido = producto.categoria
         )
 
-        SeccionAlmendra(
+        SeccionProductoAdmin(
             titulo = "Descripción",
             contenido = producto.descripcion
         )
@@ -169,19 +169,19 @@ fun AlmendraScreen(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            DatoAlmendra(
+            DatoProductoAdmin(
                 titulo = "Stock actual",
                 valor = "${producto.stock} uds",
                 modifier = Modifier.weight(1f)
             )
 
-            DatoAlmendra(
+            DatoProductoAdmin(
                 titulo = "Stock mínimo",
                 valor = "${producto.stockMinimo} uds",
                 modifier = Modifier.weight(1f)
             )
 
-            DatoAlmendra(
+            DatoProductoAdmin(
                 titulo = "Precio",
                 valor = precioTexto,
                 modifier = Modifier.weight(1f)
@@ -197,7 +197,7 @@ fun AlmendraScreen(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = OscuroAlmendra
+                    contentColor = OscuroProductoAdmin
                 )
             ) {
                 Text("Editar")
@@ -208,7 +208,7 @@ fun AlmendraScreen(
                 modifier = Modifier.weight(1f),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
-                    contentColor = RojoAlmendra
+                    contentColor = RojoProductoAdmin
                 )
             ) {
                 Text("Eliminar")
@@ -220,7 +220,7 @@ fun AlmendraScreen(
     if (confirmarEliminar) {
         AlertDialog(
             onDismissRequest = { confirmarEliminar = false },
-            containerColor = FondoAlmendra,
+            containerColor = FondoProductoAdmin,
             title = {
                 Text("¿Eliminar producto?")
             },
@@ -234,14 +234,14 @@ fun AlmendraScreen(
                         onEliminar()
                     }
                 ) {
-                    Text("Eliminar", color = RojoAlmendra)
+                    Text("Eliminar", color = RojoProductoAdmin)
                 }
             },
             dismissButton = {
                 TextButton(
                     onClick = { confirmarEliminar = false }
                 ) {
-                    Text("Cancelar", color = OscuroAlmendra)
+                    Text("Cancelar", color = OscuroProductoAdmin)
                 }
             }
         )
@@ -249,7 +249,7 @@ fun AlmendraScreen(
 }
 
 @Composable
-private fun SeccionAlmendra(
+private fun SeccionProductoAdmin(
     titulo: String,
     contenido: String
 ) {
@@ -266,20 +266,20 @@ private fun SeccionAlmendra(
         ) {
             Text(
                 text = titulo,
-                color = OscuroAlmendra,
+                color = OscuroProductoAdmin,
                 fontWeight = FontWeight.Bold
             )
 
             Text(
                 text = contenido,
-                color = CafeAlmendra
+                color = CafeProductoAdmin
             )
         }
     }
 }
 
 @Composable
-private fun DatoAlmendra(
+private fun DatoProductoAdmin(
     titulo: String,
     valor: String,
     modifier: Modifier
@@ -298,13 +298,13 @@ private fun DatoAlmendra(
         ) {
             Text(
                 text = titulo,
-                color = CafeAlmendra,
+                color = CafeProductoAdmin,
                 fontSize = 12.sp
             )
 
             Text(
                 text = valor,
-                color = OscuroAlmendra,
+                color = OscuroProductoAdmin,
                 fontWeight = FontWeight.Bold
             )
         }
@@ -318,9 +318,9 @@ private fun DatoAlmendra(
     heightDp = 1100
 )
 @Composable
-private fun AlmendraPreview() {
+private fun DetalleProductoAdminPreview() {
     MaterialTheme {
-        AlmendraScreen(
+        DetalleProductoAdminScreen(
             producto = ProductosDatos.almendras,
             onVolver = {},
             onEditar = {},
