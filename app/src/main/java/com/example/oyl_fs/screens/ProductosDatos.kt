@@ -1,22 +1,6 @@
 package com.example.oyl_fs.screens
-
+import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.R
-
-// Información de cada producto.
-data class ProductoInfo(
-    val id: Int,
-    val nombre: String,
-    val codigo: String,
-    val categoria: String,
-    val descripcion: String,
-    val presentacion: String,
-    val precio: Int,
-    val stock: Int,
-    val stockMinimo: Int,
-    val disponible: Boolean,
-    val imagen: Int
-)
-
 // Datos temporales
 object ProductosDatos {
 

@@ -1,6 +1,6 @@
 package com.example.oyl_fs.screens
 
-import androidx.compose.foundation.Image
+import com.example.oyl_fs.model.ProductoInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -12,8 +12,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -79,11 +77,9 @@ fun AlmendraScreen(
             )
         }
 
-        // Fotografía de las almendras.
-        Image(
-            painter = painterResource(producto.imagen),
-            contentDescription = producto.nombre,
-            contentScale = ContentScale.Crop,
+        // Muestra una imagen de drawable o del teléfono.
+        ImagenProducto(
+            producto = producto,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(210.dp)
@@ -220,7 +216,7 @@ fun AlmendraScreen(
         }
     }
 
-    // Solicita confirmación antes de eliminar.
+    // Ejecuta la acción de eliminar después de confirmar.
     if (confirmarEliminar) {
         AlertDialog(
             onDismissRequest = { confirmarEliminar = false },
@@ -315,7 +311,7 @@ private fun DatoAlmendra(
     }
 }
 
-// Solo para revisar el diseño en Android Studio.
+// Datos de ejemplo únicamente para revisar el diseño.
 @Preview(
     showBackground = true,
     widthDp = 360,
@@ -325,6 +321,7 @@ private fun DatoAlmendra(
 private fun AlmendraPreview() {
     MaterialTheme {
         AlmendraScreen(
+            producto = ProductosDatos.almendras,
             onVolver = {},
             onEditar = {},
             onEliminar = {}

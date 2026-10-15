@@ -1,4 +1,3 @@
-
 package com.example.oyl_fs.screens
 
 import androidx.compose.foundation.layout.*
@@ -9,15 +8,16 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
 @Composable
-fun HomeScreen(onLogout: () -> Unit) {
-
+fun HomeScreen(
+    onLogout: () -> Unit,
+    onAbrirProductos: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-
         Text(
             text = "OYL FRUTOS SECOS",
             style = MaterialTheme.typography.headlineMedium
@@ -36,7 +36,8 @@ fun HomeScreen(onLogout: () -> Unit) {
             Text("Pedidos")
         }
 
-        Button(onClick = {}) {
+        // Abre el módulo de productos.
+        Button(onClick = onAbrirProductos) {
             Text("Productos")
         }
 

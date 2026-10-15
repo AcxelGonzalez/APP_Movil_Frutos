@@ -1,5 +1,7 @@
 package com.example.oyl_fs.screens
-
+import androidx.activity.compose.BackHandler
+import com.example.oyl_fs.model.ProductoInfo
+import com.example.oyl_fs.viewmodel.ProductoViewModel
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -24,6 +26,22 @@ import androidx.compose.ui.unit.sp
 private val FondoCatalogo = Color(0xFFFFF5E7)
 private val CafeCatalogo = Color(0xFF92623D)
 private val CafeOscuroCatalogo = Color(0xFF4B2E15)
+
+// Conecta el catálogo con la lista observable del ViewModel.
+@Composable
+fun CatalogoAdmin(
+    viewModel: ProductoViewModel,
+    onProductoClick: (ProductoInfo) -> Unit,
+    onAgregarProducto: () -> Unit
+) {
+    val productos by viewModel.productos.collectAsState()
+
+    CatalogoScreen(
+        productos = productos,
+        onProductoClick = onProductoClick,
+        onAgregarProducto = onAgregarProducto
+    )
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -112,7 +130,6 @@ fun CatalogoScreen(
             }
         }
 
-        // Agregar Nuevo Producto
         Button(
             onClick = onAgregarProducto,
             modifier = Modifier
@@ -175,10 +192,8 @@ private fun TarjetaCatalogo(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Image(
-                painter = painterResource(producto.imagen),
-                contentDescription = producto.nombre,
-                contentScale = ContentScale.Crop,
+            ImagenProducto(
+                producto = producto,
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(100.dp)
@@ -220,7 +235,58 @@ private fun TarjetaCatalogo(
                 color = CafeOscuroCatalogo,
                 fontSize = 12.sp
             )
+
+            Button(
+                onClick = onClick,
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = CafeOscuroCatalogo,
+                    contentColor = Color.White
+                )
+            ) {
+                Text("Ver detalle")
+            }
+
         }
+    }
+}
+
+
+// Controla el paso entre el catálogo y el formulario.
+
+@Composable
+fun ProductosAdmin(
+    viewModel: ProductoViewModel,
+    onProductoClick: (ProductoInfo) -> Unit
+) {
+    var mostrarFormulario by remember {
+        mutableStateOf(false)
+    }
+
+    //botón Atrás 
+    BackHandler(enabled = mostrarFormulario) {
+        viewModel.limpiarError()
+        mostrarFormulario = false
+    }
+
+    if (mostrarFormulario) {
+        AgregarProductoAdmin(
+            viewModel = viewModel,
+            onVolver = {
+                viewModel.limpiarError()
+                mostrarFormulario = false
+            }
+        )
+    } else {
+        CatalogoAdmin(
+            viewModel = viewModel,
+            onProductoClick = onProductoClick,
+            onAgregarProducto = {
+                viewModel.limpiarError()
+                mostrarFormulario = true
+            }
+        )
     }
 }
 
@@ -236,3 +302,4 @@ private fun CatalogoPreview() {
         )
     }
 }
+
