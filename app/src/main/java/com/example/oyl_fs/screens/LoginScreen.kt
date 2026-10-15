@@ -19,7 +19,9 @@ import com.example.oyl_fs.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(onLoginSuccess: (Boolean) -> Unit) { // true sera admin
+fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
+                onIrARegistro:() -> Unit
+) {
     var usuario by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
@@ -103,7 +105,7 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit) { // true sera admin
             Spacer(modifier = Modifier.height(16.dp))
 
             OutlinedButton(
-                onClick = {},
+                onClick = onIrARegistro,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Registrarse", color = cafe)
