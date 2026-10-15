@@ -2,108 +2,88 @@
 package com.example.oyl_fs
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.lifecycle.ViewModelProvider
-
-import com.example.oyl_fs.screens.LoginScreen
 import com.example.oyl_fs.screens.HomeAdmin
 import com.example.oyl_fs.screens.HomeCliente
-import com.example.oyl_fs.screens.HistorialScreen
-import com.example.oyl_fs.viewmodel.HistorialViewModel
+import com.example.oyl_fs.screens.LoginScreen
+import com.example.oyl_fs.screens.ProductosAdmin
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
+import com.example.oyl_fs.viewmodel.ProductoViewModel
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ViewModel asociado al ciclo de vida de la Activity.
-        val historialViewModel = ViewModelProvider(this)[
-            HistorialViewModel::class.java
+        val productoViewModel = ViewModelProvider(this)[
+            ProductoViewModel::class.java
         ]
 
         setContent {
             OYL_FSTheme {
-
-                // Controla si existe una sesión iniciada.
                 var sesionIniciada by rememberSaveable {
                     mutableStateOf(false)
                 }
 
-                // Identifica el rol del usuario.
                 var esAdmin by rememberSaveable {
                     mutableStateOf(false)
                 }
 
-                // Controla la navegación hacia Historial.
-                var mostrarHistorial by rememberSaveable {
+                var mostrarProductos by rememberSaveable {
                     mutableStateOf(false)
                 }
 
-                when {
+                // Aviso hasta integrar el módulo de pedidos.
+                val abrirHistorial: () -> Unit = {
+                    Toast.makeText(
+                        this@MainActivity,
+                        "El historial todavía no está integrado",
+                        Toast.LENGTH_SHORT
+                    ).show()
+                }
 
-                    // Sin sesión: mostrar Login.
-                    !sesionIniciada -> {
-                        LoginScreen(
-                            onLoginSuccess = { admin ->
-                                esAdmin = admin
-                                mostrarHistorial = false
-                                sesionIniciada = true
-                            }
-                        )
-                    }
-
-                    // Historial del perfil autenticado.
-                    mostrarHistorial -> {
-                        HistorialScreen(
-                            // Identificadores temporales de prueba.
-                            usuarioId = if (esAdmin) {
-                                "admin-demo"
-                            } else {
-                                "cliente-demo"
-                            },
-
-                            esAdmin = esAdmin,
-                            viewModel = historialViewModel,
-
-                            onVolver = {
-                                mostrarHistorial = false
-                            }
-                        )
-                    }
-
-                    // Pantalla del administrador.
-                    esAdmin -> {
-                        HomeAdmin(
-                            onLogout = {
-                                mostrarHistorial = false
-                                sesionIniciada = false
-                            },
-
-                            onAbrirHistorial = {
-                                mostrarHistorial = true
-                            }
-                        )
-                    }
-
-                    // Pantalla del cliente.
-                    else -> {
-                        HomeCliente(
-                            nombre = "Cliente",
-
-                            onLogout = {
-                                mostrarHistorial = false
-                                sesionIniciada = false
-                            },
-
-                            onAbrirHistorial = {
-                                mostrarHistorial = true
-                            }
-                        )
-                    }
+                if (!sesionIniciada) {
+                    LoginScreen(
+                        onLoginSuccess = { admin ->
+                            esAdmin = admin
+                            mostrarProductos = false
+                            sesionIniciada = true
+                        }
+                    )
+                } else if (esAdmin && mostrarProductos) {
+                    ProductosAdmin(
+                        viewModel = productoViewModel,
+                        onVolver = {
+                            mostrarProductos = false
+                        }
+                    )
+                } else if (esAdmin) {
+                    HomeAdmin(
+                        onLogout = {
+                            mostrarProductos = false
+                            sesionIniciada = false
+                            esAdmin = false
+                        },
+                        onAbrirHistorial = abrirHistorial,
+                        onAbrirProductos = {
+                            mostrarProductos = true
+                        }
+                    )
+                } else {
+                    HomeCliente(
+                        nombre = "Cliente",
+                        onLogout = {
+                            mostrarProductos = false
+                            sesionIniciada = false
+                            esAdmin = false
+                        },
+                        onAbrirHistorial = abrirHistorial
+                    )
                 }
             }
         }
