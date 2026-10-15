@@ -35,7 +35,12 @@ data class Promo(val titulo: String, val detalle: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeCliente(nombre: String = "Cliente", onLogout: () -> Unit) {
+
+fun HomeCliente(
+    nombre: String = "Cliente",
+    onLogout: () -> Unit,
+    onAbrirHistorial: () -> Unit
+) {
     // Datos de prueba (luego vendrán del ViewModel / SQLite)
     val promos = listOf(
         Promo("20% en nueces", "Solo esta semana"),
@@ -58,7 +63,20 @@ fun HomeCliente(nombre: String = "Cliente", onLogout: () -> Unit) {
 
     Scaffold(
         containerColor = FondoOYL,
-        bottomBar = { BarraCliente(tab) { tab = it } }
+
+        bottomBar = {
+            BarraCliente(tab) { indice ->
+
+                // La pestaña Pedidos tiene índice 3.
+                if (indice == 3) {
+                    onAbrirHistorial()
+                } else {
+                    // Las demás pestañas conservan su comportamiento.
+                    tab = indice
+                }
+            }
+        }
+
     ) { padding ->
         AnimatedVisibility(
             visible = visible,

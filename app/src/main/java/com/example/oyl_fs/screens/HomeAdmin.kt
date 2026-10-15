@@ -36,7 +36,12 @@ data class ProductoStock(val nombre: String, val stock: Int)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeAdmin(onLogout: () -> Unit) {
+
+fun HomeAdmin(
+    onLogout: () -> Unit,
+    onAbrirHistorial: () -> Unit
+) {
+
     // Datos de prueba (luego vendrán del ViewModel / SQLite)
     val pedidos = listOf(
         PedidoResumen(1, 12500, "Pendiente"),
@@ -55,7 +60,18 @@ fun HomeAdmin(onLogout: () -> Unit) {
 
     Scaffold(
         containerColor = FondoOYL,
-        bottomBar = { BarraAdmin(tab) { tab = it } }
+
+        bottomBar = {
+            BarraAdmin(tab) { indice ->
+
+                if (indice == 3) {
+                    onAbrirHistorial()
+                } else {
+                    tab = indice
+                }
+            }
+        }
+
     ) { padding ->
         AnimatedVisibility(
             visible = visible,
@@ -111,7 +127,13 @@ fun HomeAdmin(onLogout: () -> Unit) {
 
                 // ---------- Indicadores ----------
                 Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    TarjetaDato("${pedidos.size}", "Pendientes", AlertaOYL, Modifier.weight(1f)) { tab = 3 }
+                    TarjetaDato(
+                        "${pedidos.size}",
+                        "Pendientes",
+                        AlertaOYL,
+                        Modifier.weight(1f),
+                        onClick = onAbrirHistorial
+                    )
                     TarjetaDato("${stockBajo.size}", "Stock bajo", CriticoOYL, Modifier.weight(1f)) { tab = 2 }
                     TarjetaDato("24", "Productos", PrincipalOYL, Modifier.weight(1f)) { tab = 1 }
                 }
@@ -165,7 +187,11 @@ fun HomeAdmin(onLogout: () -> Unit) {
                 }
 
                 // ---------- Pedidos recientes ----------
-                Seccion("Pedidos recientes", accion = "Ver todo", onAccion = { tab = 3 }) {
+                Seccion(
+                    "Pedidos recientes",
+                    accion = "Ver todo",
+                    onAccion = onAbrirHistorial
+                ) {
                     pedidos.forEach { p ->
                         Row(
                             modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
