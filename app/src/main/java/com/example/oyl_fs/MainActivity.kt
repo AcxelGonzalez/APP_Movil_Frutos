@@ -249,6 +249,7 @@ class MainActivity : ComponentActivity() {
                             // Compartimos el catálogo y el carrito.
                             productoViewModel = productoViewModel,
                             carritoViewModel = carritoViewModel,
+                            historialViewModel = historialViewModel,
 
                             onLogout = {
                                 mostrarHistorial = false

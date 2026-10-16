@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * ViewModel del historial de pedidos.
@@ -169,6 +171,26 @@ class HistorialViewModel : ViewModel() {
             usuarioId = usuarioId,
             items = productos
         )
+    }
+
+    /**
+     * Observa el pedido más reciente de un cliente.
+     *
+     * Solo devuelve pedidos pertenecientes al usuario
+     * indicado, sin depender de los filtros de Historial.
+     *
+     * Se actualiza cuando se crea un pedido o cambia
+     * su estado.
+     */
+    fun observarUltimoPedidoCliente(
+        usuarioId: String
+    ): Flow<Pedido?> {
+
+        return repository
+            .observarPedidosUsuario(usuarioId)
+            .map { pedidos ->
+                pedidos.firstOrNull()
+            }
     }
 
 }

@@ -28,6 +28,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.HistorialViewModel
+import com.example.oyl_fs.model.EstadoPedido
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
@@ -43,6 +45,7 @@ fun HomeCliente(
     clienteId: String,
     productoViewModel: ProductoViewModel,
     carritoViewModel: CarritoViewModel,
+    historialViewModel: HistorialViewModel,
     onLogout: () -> Unit,
     onAbrirHistorial: () -> Unit,
     onAbrirCarrito: () -> Unit
@@ -70,6 +73,17 @@ fun HomeCliente(
                 (categoria == 0 ||
                         producto.categoria == categorias[categoria])
     }
+
+// Observa el último pedido del cliente actual.
+// remember evita recrear el Flow en cada recomposición.
+    val ultimoPedido by remember(
+        historialViewModel,
+        clienteId
+    ) {
+        historialViewModel.observarUltimoPedidoCliente(
+            clienteId
+        )
+    }.collectAsState(initial = null)
 
 // Observamos el carrito para actualizar el contador.
     val estadoCarrito by carritoViewModel.uiState.collectAsState()
@@ -456,50 +470,69 @@ fun HomeCliente(
                             )
 
                             Text(
-                                "#Pedido 3",
+                                ultimoPedido?.id ?: "Sin pedidos",
                                 color = PrincipalOYL,
                                 fontSize = 13.sp
                             )
                         }
 
-                        Spacer(Modifier.height(14.dp))
 
-                        LinearProgressIndicator(
-                            progress = 0.75f,   // 3 de 4 pasos
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(50)),
+                        ultimoPedido?.let { pedido ->
+
+                            // Posición correspondiente al estado actual.
+                            val indiceEstado = when (pedido.estado) {
+                                EstadoPedido.PENDIENTE_VALIDACION -> 0
+                                EstadoPedido.CONFIRMADO -> 1
+                                EstadoPedido.PREPARADO -> 2
+                                EstadoPedido.ENTREGADO -> 3
+                            }
+
+                            Spacer(Modifier.height(14.dp))
+
+                            // Progreso del pedido: 25 %, 50 %, 75 % o 100 %.
+                            LinearProgressIndicator(
+                                progress = (indiceEstado + 1) / 4f,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(50)),
+                                color = PrincipalOYL,
+                                trackColor = FondoOYL
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Etapas del pedido.
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                listOf(
+                                    "Pendiente",
+                                    "Confirmado",
+                                    "Preparado",
+                                    "Entregado"
+                                ).forEachIndexed { indice, nombreEstado ->
+
+                                    Text(
+                                        text = nombreEstado,
+                                        fontSize = 10.sp,
+                                        color = if (indice <= indiceEstado) {
+                                            SecundarioOYL
+                                        } else {
+                                            PrincipalOYL.copy(alpha = 0.4f)
+                                        }
+                                    )
+                                }
+                            }
+
+                        } ?: Text(
+                            text = "Aún no tienes pedidos registrados.",
                             color = PrincipalOYL,
-                            trackColor = FondoOYL
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 14.dp)
                         )
 
-                        Spacer(Modifier.height(8.dp))
-
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-
-                            listOf(
-                                "Pendiente",
-                                "Confirmado",
-                                "Preparado",
-                                "Entregado"
-                            ).forEachIndexed { i, paso ->
-
-                                Text(
-                                    paso,
-                                    fontSize = 10.sp,
-
-                                    color = if (i <= 2) {
-                                        SecundarioOYL
-                                    } else {
-                                        PrincipalOYL.copy(alpha = 0.4f)
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
             }
