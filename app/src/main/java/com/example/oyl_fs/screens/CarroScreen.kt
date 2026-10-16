@@ -146,7 +146,9 @@ private fun FilaCarrito(
             Column(Modifier.weight(1f)) {
                 Text(item.nombre, fontWeight = FontWeight.Bold, color = SecundarioOYL)
                 Text(
-                    "${item.formato} · ${formatoPrecio(item.precio)} c/u",
+
+                    "${item.formato} · ${formatoPrecio(item.precio.toLong())} c/u",
+
                     fontSize = 12.sp,
                     color = PrincipalOYL
                 )
@@ -243,9 +245,16 @@ private fun CarritoVacio(modifier: Modifier) {
     }
 }
 
-// 12990 -> "$12.990"
-private fun formatoPrecio(valor: Int): String =
-    "$" + NumberFormat.getIntegerInstance(Locale("es", "CL")).format(valor)
+
+/**
+ * Formatea montos en pesos chilenos.
+ * Acepta valores Long para representar
+ * correctamente subtotales y totales elevados.
+ */
+private fun formatoPrecio(valor: Long): String =
+    "$" + NumberFormat
+        .getIntegerInstance(Locale("es", "CL"))
+        .format(valor)
 
 // ---------- Preview (se ve sin emulador) ----------
 @Preview(showBackground = true)

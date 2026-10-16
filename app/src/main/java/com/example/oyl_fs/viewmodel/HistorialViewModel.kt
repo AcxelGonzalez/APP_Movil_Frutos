@@ -5,12 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.repository.PedidoRepository
+import com.example.oyl_fs.model.ItemCarrito
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * ViewModel del historial de pedidos.
@@ -26,6 +29,15 @@ class HistorialViewModel : ViewModel() {
 
     // Repositorio temporal con pedidos de demostración.
     private val repository = PedidoRepository()
+
+    // Permite mostrar los pedidos reales en el panel
+    // del administrador, sin aplicar los filtros
+    // utilizados por HistorialScreen.
+    //
+    // Se expone como StateFlow de solo lectura.
+    // La autorización definitiva corresponderá al backend.
+    val pedidosParaAdmin: StateFlow<List<Pedido>> =
+        repository.pedidos
 
     // Identificador del usuario que inició sesión.
     private val _usuarioId = MutableStateFlow("")
@@ -132,4 +144,53 @@ class HistorialViewModel : ViewModel() {
             nuevoEstado
         )
     }
+
+    /**
+     * Registra un nuevo pedido desde el carrito.
+     *
+     * Recibe el identificador del cliente y los productos
+     * seleccionados, delegando el registro al repositorio.
+     *
+     * Devuelve el pedido creado o null si ocurre
+     * un problema de validación.
+     *
+     * Los datos permanecen temporalmente en memoria.
+     */
+    fun registrarPedido(
+        usuarioId: String,
+        productos: List<ItemCarrito>
+    ): Pedido? {
+
+        // Validar que exista un cliente identificado.
+        if (usuarioId.isBlank()) {
+            return null
+        }
+
+        // Delegar el registro al repositorio.
+        return repository.registrarPedido(
+            usuarioId = usuarioId,
+            items = productos
+        )
+    }
+
+    /**
+     * Observa el pedido más reciente de un cliente.
+     *
+     * Solo devuelve pedidos pertenecientes al usuario
+     * indicado, sin depender de los filtros de Historial.
+     *
+     * Se actualiza cuando se crea un pedido o cambia
+     * su estado.
+     */
+    fun observarUltimoPedidoCliente(
+        usuarioId: String
+    ): Flow<Pedido?> {
+
+        return repository
+            .observarPedidosUsuario(usuarioId)
+            .map { pedidos ->
+                pedidos.firstOrNull()
+            }
+    }
+
 }

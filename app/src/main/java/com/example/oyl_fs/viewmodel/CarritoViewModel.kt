@@ -3,6 +3,7 @@ package com.example.oyl_fs.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.oyl_fs.model.ItemCarrito
+import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.repository.CarritoRepository
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -16,7 +17,14 @@ import kotlinx.coroutines.flow.stateIn
 data class CarritoUiState(
     val items: List<ItemCarrito> = emptyList()
 ) {
-    val total: Int get() = items.sumOf { it.subtotal }
+
+    /**
+     * Calcula el total del carrito con Long.
+     * Evita desbordamientos de Int al sumar subtotales.
+     */
+    val total: Long
+        get() = items.sumOf { it.subtotal }
+
     val cantidadProductos: Int get() = items.sumOf { it.cantidad }
     val estaVacio: Boolean get() = items.isEmpty()
     val sinStock: List<ItemCarrito> get() = items.filterNot { it.stockSuficiente }
@@ -39,6 +47,69 @@ class CarritoViewModel : ViewModel() {
 
     fun iniciar(id: String) {
         clienteId.value = id
+    }
+
+    /**
+     * Actualiza la disponibilidad de los productos
+     * del carrito cuando cambia el catálogo.
+     */
+    fun sincronizarConCatalogo(
+        clienteId: String,
+        productos: List<ProductoInfo>
+    ) {
+        repo.sincronizarConCatalogo(
+            clienteId = clienteId,
+            catalogo = productos
+        )
+    }
+
+    /**
+     * Agrega un producto al carrito del cliente.
+     *
+     * Comprueba que exista una sesión identificada,
+     * que el producto esté disponible y que haya stock.
+     *
+     * Devuelve true si el producto se agregó correctamente.
+     */
+    fun agregarProducto(producto: ProductoInfo): Boolean {
+
+        val id = clienteId.value
+
+        // Comprueba que exista un cliente identificado.
+        if (id.isBlank()) {
+            _mensaje.value = "No se ha identificado al cliente"
+            return false
+        }
+
+        // No permite agregar productos inactivos o agotados.
+        if (!producto.disponible || producto.stock <= 0) {
+            _mensaje.value = "Este producto no está disponible"
+            return false
+        }
+
+        // Convierte el producto del catálogo
+        // al modelo utilizado por el carrito.
+        val item = ItemCarrito(
+            productoId = producto.id.toString(),
+            nombre = producto.nombre,
+            formato = producto.presentacion,
+            precio = producto.precio,
+            cantidad = 1,
+            stockDisponible = producto.stock
+        )
+
+        // El repositorio comprueba también que la cantidad
+        // acumulada no supere el stock disponible.
+        val agregado = repo.agregar(id, item)
+
+        // Mensaje para mostrar al usuario.
+        _mensaje.value = if (agregado) {
+            "${producto.nombre} agregado al carrito"
+        } else {
+            "No hay stock suficiente de ${producto.nombre}"
+        }
+
+        return agregado
     }
 
     fun aumentar(item: ItemCarrito) {
@@ -69,6 +140,27 @@ class CarritoViewModel : ViewModel() {
             return false
         }
         return true
+    }
+
+    /**
+     * Vacía el carrito después de registrar
+     * correctamente un pedido.
+     *
+     * Se ejecuta únicamente cuando el registro
+     * de la compra fue exitoso.
+     */
+    fun vaciarDespuesDeConfirmar() {
+
+        // Identificar al cliente del carrito actual.
+        val id = clienteId.value
+
+        // Evitar operaciones sin un cliente identificado.
+        if (id.isBlank()) {
+            return
+        }
+
+        // Eliminar los productos del carrito.
+        repo.vaciar(id)
     }
 
     fun mensajeMostrado() {
