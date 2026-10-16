@@ -26,18 +26,23 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.oyl_fs.viewmodel.CarritoViewModel
+import com.example.oyl_fs.viewmodel.ProductoViewModel
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
 private val SecundarioOYL = Color(0xFF4B2E15)
 
-data class ProductoDestacado(val nombre: String, val precio: Int, val formato: String)
 data class Promo(val titulo: String, val detalle: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+
 fun HomeCliente(
     nombre: String = "Cliente",
+    clienteId: String,
+    productoViewModel: ProductoViewModel,
+    carritoViewModel: CarritoViewModel,
     onLogout: () -> Unit,
     onAbrirHistorial: () -> Unit,
     onAbrirCarrito: () -> Unit
@@ -51,22 +56,53 @@ fun HomeCliente(
 
     val categorias = listOf("Todos", "Frutos secos", "Semillas", "Deshidratados")
 
-    val destacados = listOf(
-        ProductoDestacado("Almendras", 6990, "500 g"),
-        ProductoDestacado("Nueces", 8490, "1 kg"),
-        ProductoDestacado("Pasas", 2990, "250 g"),
-        ProductoDestacado("Maní tostado", 3490, "500 g")
-    )
+
+// Observamos los productos administrados por el equipo.
+    val productos by productoViewModel.productos.collectAsState()
+
+// Categoría seleccionada por el cliente.
+    var categoria by remember { mutableStateOf(0) }
+
+// Muestra productos activos y con stock disponible.
+    val destacados = productos.filter { producto ->
+        producto.disponible &&
+                producto.stock > 0 &&
+                (categoria == 0 ||
+                        producto.categoria == categorias[categoria])
+    }
+
+// Observamos el carrito para actualizar el contador.
+    val estadoCarrito by carritoViewModel.uiState.collectAsState()
+
+// Observamos mensajes de éxito y error.
+    val mensajeCarrito by carritoViewModel.mensaje.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+// Identificamos al cliente en el ViewModel.
+    LaunchedEffect(clienteId) {
+        carritoViewModel.iniciar(clienteId)
+    }
+
+// Mostramos mensajes al agregar productos.
+    LaunchedEffect(mensajeCarrito) {
+        val texto = mensajeCarrito ?: return@LaunchedEffect
+
+        carritoViewModel.mensajeMostrado()
+        snackbarHostState.showSnackbar(texto)
+    }
+
 
     var tab by remember { mutableStateOf(0) }
-    var categoria by remember { mutableStateOf(0) }
-    var carrito by remember { mutableStateOf(0) }
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { visible = true }
 
     Scaffold(
         containerColor = FondoOYL,
+        snackbarHost = {
+            SnackbarHost(snackbarHostState)
+        },
 
         bottomBar = {
             BarraCliente(tab) { indice ->
@@ -169,9 +205,9 @@ fun HomeCliente(
                     // ---------- Carrito de compras ----------
                     BadgedBox(
                         badge = {
-                            if (carrito > 0) {
+                            if (estadoCarrito.cantidadProductos > 0) {
                                 Badge {
-                                    Text("$carrito")
+                                    Text("${estadoCarrito.cantidadProductos}")
                                 }
                             }
                         }
@@ -306,7 +342,7 @@ fun HomeCliente(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
 
-                    items(destacados) { p ->
+                    items(destacados, key = { it.id }) { p ->
 
                         Card(
                             modifier = Modifier.width(150.dp),
@@ -349,7 +385,7 @@ fun HomeCliente(
                                 )
 
                                 Text(
-                                    p.formato,
+                                    p.presentacion,
                                     fontSize = 12.sp,
                                     color = PrincipalOYL
                                 )
@@ -375,8 +411,9 @@ fun HomeCliente(
                                             .size(32.dp)
                                             .clip(CircleShape)
                                             .background(SecundarioOYL)
-                                            .clickable { carrito++ },
-
+                                            .clickable {
+                                                carritoViewModel.agregarProducto(p)
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
 

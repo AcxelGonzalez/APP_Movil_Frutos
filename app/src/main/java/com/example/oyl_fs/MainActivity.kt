@@ -17,6 +17,7 @@ import com.example.oyl_fs.screens.CarroScreen
 
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
 class MainActivity : ComponentActivity() {
@@ -32,6 +33,12 @@ class MainActivity : ComponentActivity() {
         // ViewModel para gestionar los productos
         val productoViewModel = ViewModelProvider(this)[
             ProductoViewModel::class.java
+        ]
+
+        // ViewModel compartido entre HomeCliente y CarroScreen.
+        // Evita que cada pantalla utilice un estado independiente.
+        val carritoViewModel = ViewModelProvider(this)[
+            CarritoViewModel::class.java
         ]
 
         setContent {
@@ -93,14 +100,20 @@ class MainActivity : ComponentActivity() {
 
                     // carrito
                     mostrarCarrito && !esAdmin -> {
+
                         CarroScreen(
                             clienteId = "cliente-demo",
+
+                            // Utiliza el mismo ViewModel que HomeCliente.
+                            vm = carritoViewModel,
+
                             onVolver = {
                                 mostrarCarrito = false
                             },
+
                             onConfirmar = { productos ->
-                                // Pendiente: registrar el pedido confirmado
-                                // utilizando los productos recibidos.
+                                // Pendiente: crear un pedido real y enviarlo
+                                // al repositorio de Historial.
                             }
                         )
                     }
@@ -142,16 +155,27 @@ class MainActivity : ComponentActivity() {
                     // home cliente
                     else -> {
 
+
                         HomeCliente(
                             nombre = "Cliente",
+
+                            // Identificador temporal hasta implementar sesiones.
+                            clienteId = "cliente-demo",
+
+                            // Compartimos el catálogo y el carrito.
+                            productoViewModel = productoViewModel,
+                            carritoViewModel = carritoViewModel,
+
                             onLogout = {
                                 mostrarHistorial = false
                                 mostrarCarrito = false
                                 sesionIniciada = false
                             },
+
                             onAbrirHistorial = {
                                 mostrarHistorial = true
                             },
+
                             onAbrirCarrito = {
                                 mostrarCarrito = true
                             }
