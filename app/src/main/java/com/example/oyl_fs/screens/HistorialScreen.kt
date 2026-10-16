@@ -1,3 +1,4 @@
+
 package com.example.oyl_fs.screens
 
 import androidx.compose.foundation.layout.*
@@ -35,6 +36,9 @@ private val SecundarioHistorial = Color(0xFF4B2E15)
  * Muestra los pedidos del cliente o administrador.
  * Utiliza un ViewModel para obtener los datos,
  * gestionar filtros y actualizar estados.
+ *
+ * Permite al administrador acceder a la preparación
+ * de pedidos mediante validación de códigos QR.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,7 +46,8 @@ fun HistorialScreen(
     usuarioId: String,
     esAdmin: Boolean,
     viewModel: HistorialViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onPrepararPedido: (Pedido) -> Unit
 ) {
 
     // Configura el usuario al ingresar a la pantalla.
@@ -126,11 +131,9 @@ fun HistorialScreen(
                     horizontal = 16.dp
                 ),
                 horizontalArrangement =
-                    Arrangement.spacedBy(8.dp)
+                Arrangement.spacedBy(8.dp)
             ) {
-
                 items(estados.size) { indice ->
-
                     val estado = estados[indice]
 
                     FilterChip(
@@ -148,7 +151,7 @@ fun HistorialScreen(
 
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor =
-                                PrincipalHistorial,
+                            PrincipalHistorial,
                             selectedLabelColor = Color.White
                         )
                     )
@@ -181,9 +184,8 @@ fun HistorialScreen(
                     contentPadding = PaddingValues(16.dp),
 
                     verticalArrangement =
-                        Arrangement.spacedBy(12.dp)
+                    Arrangement.spacedBy(12.dp)
                 ) {
-
                     items(
                         items = pedidos,
                         key = { it.id }
@@ -202,6 +204,11 @@ fun HistorialScreen(
                                     pedido.id,
                                     nuevoEstado
                                 )
+                            },
+
+                            // Abre la preparación del pedido seleccionado.
+                            onPrepararPedido = {
+                                onPrepararPedido(pedido)
                             }
                         )
                     }
@@ -225,9 +232,8 @@ fun HistorialScreen(
             text = {
                 Column(
                     verticalArrangement =
-                        Arrangement.spacedBy(8.dp)
+                    Arrangement.spacedBy(8.dp)
                 ) {
-
                     Text(
                         "Fecha: ${formatearFecha(pedidoSeleccionado.fecha)}"
                     )
@@ -245,7 +251,6 @@ fun HistorialScreen(
 
                     // Muestra los productos del pedido.
                     pedidoSeleccionado.productos.forEach { detalle ->
-
                         Text(
                             text = "${detalle.nombreProducto} " +
                                     "x${detalle.cantidad} - " +
@@ -282,13 +287,17 @@ fun HistorialScreen(
  *
  * Permite consultar sus detalles y,
  * si corresponde, modificar su estado.
+ *
+ * En pedidos confirmados permite al administrador
+ * iniciar la preparación mediante códigos QR.
  */
 @Composable
 private fun TarjetaPedido(
     pedido: Pedido,
     esAdmin: Boolean,
     onVerDetalle: () -> Unit,
-    onCambiarEstado: (EstadoPedido) -> Unit
+    onCambiarEstado: (EstadoPedido) -> Unit,
+    onPrepararPedido: () -> Unit
 ) {
 
     // Controla el menú administrativo.
@@ -318,14 +327,13 @@ private fun TarjetaPedido(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement =
-                    Arrangement.SpaceBetween,
+                Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
                 Column(
                     modifier = Modifier.weight(1f)
                 ) {
-
                     Text(
                         text = pedido.id,
                         fontWeight = FontWeight.Bold,
@@ -352,50 +360,79 @@ private fun TarjetaPedido(
             )
 
             // Acciones disponibles para el usuario.
-            Row(
+            // Se usa Column para evitar que los botones
+            // ocupen más espacio que el ancho de la pantalla.
+            Column(
                 modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.End,
-                verticalAlignment = Alignment.CenterVertically
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
 
-                TextButton(onClick = onVerDetalle) {
-                    Text("Ver detalle")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+
+                    TextButton(onClick = onVerDetalle) {
+                        Text("Ver detalle")
+                    }
+
+                    // Solo el administrador puede modificar estados.
+                    if (esAdmin) {
+
+                        Box {
+
+                            OutlinedButton(
+                                onClick = {
+                                    menuAbierto = true
+                                }
+                            ) {
+                                Text("Cambiar estado")
+                            }
+
+                            DropdownMenu(
+                                expanded = menuAbierto,
+                                onDismissRequest = {
+                                    menuAbierto = false
+                                }
+                            ) {
+
+                                // PREPARADO solo se podrá establecer
+                                // luego de completar la validación QR.
+                                EstadoPedido.values()
+                                    .filter {
+                                        it != EstadoPedido.PREPARADO
+                                    }
+                                    .forEach { estado ->
+
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(estado.descripcion)
+                                            },
+
+                                            onClick = {
+                                                menuAbierto = false
+                                                onCambiarEstado(estado)
+                                            }
+                                        )
+                                    }
+                            }
+                        }
+                    }
                 }
 
-                // Solo el administrador puede modificar estados.
-                if (esAdmin) {
+                // El administrador puede preparar pedidos confirmados.
+                if (esAdmin && pedido.estado == EstadoPedido.CONFIRMADO) {
 
-                    Box {
-
-                        OutlinedButton(
-                            onClick = {
-                                menuAbierto = true
-                            }
-                        ) {
-                            Text("Cambiar estado")
-                        }
-
-                        DropdownMenu(
-                            expanded = menuAbierto,
-                            onDismissRequest = {
-                                menuAbierto = false
-                            }
-                        ) {
-
-                            EstadoPedido.values().forEach { estado ->
-
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(estado.descripcion)
-                                    },
-
-                                    onClick = {
-                                        menuAbierto = false
-                                        onCambiarEstado(estado)
-                                    }
-                                )
-                            }
-                        }
+                    Button(
+                        onClick = onPrepararPedido,
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.buttonColors(
+                            containerColor = SecundarioHistorial
+                        ),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Text("Preparar pedido (QR)")
                     }
                 }
             }
