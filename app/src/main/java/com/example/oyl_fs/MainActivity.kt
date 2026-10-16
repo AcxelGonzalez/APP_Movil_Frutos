@@ -36,6 +36,10 @@ class MainActivity : ComponentActivity() {
 
         setContent {
             OYL_FSTheme {
+                // PRUEBA TEMPORAL - NO SUBIR A GIT
+                com.example.oyl_fs.screens.MapaScreen(onVolver = {})
+                return@OYL_FSTheme
+
 
                 // Controla si existe una sesión iniciada
                 var sesionIniciada by rememberSaveable {

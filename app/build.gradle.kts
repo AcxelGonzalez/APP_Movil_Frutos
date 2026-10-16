@@ -50,6 +50,7 @@ dependencies {
 
     implementation("androidx.core:core-ktx:1.10.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.6.1")
+    implementation("org.osmdroid:osmdroid-android:6.1.20")
     // Permite utilizar ViewModel y viewModelScope.
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.6.1")
     // Permite usar viewModel() dentro de pantallas Compose.
