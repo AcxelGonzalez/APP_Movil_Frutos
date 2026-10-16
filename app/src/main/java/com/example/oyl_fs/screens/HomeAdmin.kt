@@ -35,7 +35,6 @@ private val CriticoOYL = Color(0xFFC0392B)
 
 // Datos utilizados para mostrar información de prueba
 data class PedidoResumen(val id: Int, val total: Int, val estado: String)
-data class ProductoStock(val nombre: String, val stock: Int)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -45,18 +44,20 @@ fun HomeAdmin(
     viewModel: ProductoViewModel
 ) {
 
+    // Observa los productos actualizados del catálogo.
+    val productos by viewModel.productos.collectAsState()
+
+    // Detecta productos agotados o con stock
+    // igual o inferior al mínimo establecido.
+    val stockBajo = productos.filter { producto ->
+        producto.stock <= producto.stockMinimo
+    }
+
     // Pedidos de prueba
     val pedidos = listOf(
         PedidoResumen(1, 12500, "Pendiente"),
         PedidoResumen(2, 8900, "Confirmado"),
         PedidoResumen(3, 15300, "Preparado")
-    )
-
-    // Productos con stock bajo (datos de prueba)
-    val stockBajo = listOf(
-        ProductoStock("Almendras 500g", 0),
-        ProductoStock("Nueces 500g", 2),
-        ProductoStock("Pasas 500g", 0)
     )
 
     // Controla la pantalla seleccionada
@@ -214,11 +215,12 @@ fun HomeAdmin(
                                 CriticoOYL,
                                 Modifier.weight(1f)
                             ) {
-                                tab = 2
+                                tab = 1
                             }
 
+
                             TarjetaDato(
-                                "24",
+                                "${productos.size}",
                                 "Productos",
                                 PrincipalOYL,
                                 Modifier.weight(1f)
@@ -258,6 +260,13 @@ fun HomeAdmin(
 
                         // ---------- PRODUCTOS CON ALERTAS ----------
                         Seccion("Atencion!!") {
+
+                            if (stockBajo.isEmpty()) {
+                                Text(
+                                    text = "No hay productos con stock bajo.",
+                                    color = SecundarioOYL
+                                )
+                            }
 
                             stockBajo.forEach { p ->
 
@@ -321,7 +330,7 @@ fun HomeAdmin(
 
                                     FilledTonalButton(
                                         onClick = {
-                                            tab = 2
+                                            tab = 1
                                         },
 
                                         colors = ButtonDefaults.filledTonalButtonColors(
