@@ -2,6 +2,7 @@
 package com.example.oyl_fs
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
@@ -102,9 +103,10 @@ class MainActivity : ComponentActivity() {
                     mostrarCarrito && !esAdmin -> {
 
                         CarroScreen(
+                            // Identificador temporal del cliente.
                             clienteId = "cliente-demo",
 
-                            // Utiliza el mismo ViewModel que HomeCliente.
+                            // ViewModel compartido con HomeCliente.
                             vm = carritoViewModel,
 
                             onVolver = {
@@ -112,10 +114,43 @@ class MainActivity : ComponentActivity() {
                             },
 
                             onConfirmar = { productos ->
-                                // Pendiente: crear un pedido real y enviarlo
-                                // al repositorio de Historial.
+
+                                // 1. Registrar el pedido en Historial.
+                                val pedido = historialViewModel.registrarPedido(
+                                    usuarioId = "cliente-demo",
+                                    productos = productos
+                                )
+
+                                // 2. Comprobar el resultado.
+                                if (pedido != null) {
+
+                                    // Vaciar el carrito solo si el registro
+                                    // del pedido fue exitoso.
+                                    carritoViewModel.vaciarDespuesDeConfirmar()
+
+                                    // Cerrar CarroScreen y abrir HistorialScreen.
+                                    mostrarCarrito = false
+                                    mostrarHistorial = true
+
+                                    // Informar al cliente sobre su compra.
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Pedido ${pedido.id} registrado correctamente",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                } else {
+
+                                    // Si el registro falla, conservar el carrito.
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "No se pudo registrar el pedido. Revisa el carrito.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                }
                             }
                         )
+
                     }
 
                     // historial

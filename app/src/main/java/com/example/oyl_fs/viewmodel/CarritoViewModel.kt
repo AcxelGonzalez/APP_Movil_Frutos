@@ -121,6 +121,27 @@ class CarritoViewModel : ViewModel() {
         return true
     }
 
+    /**
+     * Vacía el carrito después de registrar
+     * correctamente un pedido.
+     *
+     * Se ejecuta únicamente cuando el registro
+     * de la compra fue exitoso.
+     */
+    fun vaciarDespuesDeConfirmar() {
+
+        // Identificar al cliente del carrito actual.
+        val id = clienteId.value
+
+        // Evitar operaciones sin un cliente identificado.
+        if (id.isBlank()) {
+            return
+        }
+
+        // Eliminar los productos del carrito.
+        repo.vaciar(id)
+    }
+
     fun mensajeMostrado() {
         _mensaje.value = null
     }
