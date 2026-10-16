@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.repository.PedidoRepository
+import com.example.oyl_fs.model.ItemCarrito
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -132,4 +133,33 @@ class HistorialViewModel : ViewModel() {
             nuevoEstado
         )
     }
+
+    /**
+     * Registra un nuevo pedido desde el carrito.
+     *
+     * Recibe el identificador del cliente y los productos
+     * seleccionados, delegando el registro al repositorio.
+     *
+     * Devuelve el pedido creado o null si ocurre
+     * un problema de validación.
+     *
+     * Los datos permanecen temporalmente en memoria.
+     */
+    fun registrarPedido(
+        usuarioId: String,
+        productos: List<ItemCarrito>
+    ): Pedido? {
+
+        // Validar que exista un cliente identificado.
+        if (usuarioId.isBlank()) {
+            return null
+        }
+
+        // Delegar el registro al repositorio.
+        return repository.registrarPedido(
+            usuarioId = usuarioId,
+            items = productos
+        )
+    }
+
 }
