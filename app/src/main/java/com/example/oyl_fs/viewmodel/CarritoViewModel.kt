@@ -17,7 +17,14 @@ import kotlinx.coroutines.flow.stateIn
 data class CarritoUiState(
     val items: List<ItemCarrito> = emptyList()
 ) {
-    val total: Int get() = items.sumOf { it.subtotal }
+
+    /**
+     * Calcula el total del carrito con Long.
+     * Evita desbordamientos de Int al sumar subtotales.
+     */
+    val total: Long
+        get() = items.sumOf { it.subtotal }
+
     val cantidadProductos: Int get() = items.sumOf { it.cantidad }
     val estaVacio: Boolean get() = items.isEmpty()
     val sinStock: List<ItemCarrito> get() = items.filterNot { it.stockSuficiente }

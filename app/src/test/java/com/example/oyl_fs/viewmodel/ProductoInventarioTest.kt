@@ -4,6 +4,7 @@ package com.example.oyl_fs.viewmodel
 import com.example.oyl_fs.model.ItemCarrito
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.repository.PedidoRepository
+import com.example.oyl_fs.viewmodel.CarritoUiState
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -274,5 +275,56 @@ class ProductoInventarioTest {
             repository.pedidos.value.size
         )
     }
+
+    @Test
+    fun subtotalElevadoSeCalculaSinDesbordamiento() {
+
+        val item = ItemCarrito(
+            productoId = "1",
+            nombre = "Producto de prueba",
+            formato = "1 unidad",
+            precio = 1_500_000_000,
+            cantidad = 2,
+            stockDisponible = 2
+        )
+
+        // El subtotal debe ser 3.000.000.000.
+        assertEquals(
+            3_000_000_000L,
+            item.subtotal
+        )
+    }
+
+    @Test
+    fun totalCarritoElevadoSeCalculaCorrectamente() {
+
+        val estado = CarritoUiState(
+            items = listOf(
+                ItemCarrito(
+                    productoId = "1",
+                    nombre = "Producto A",
+                    formato = "1 unidad",
+                    precio = 1_500_000_000,
+                    cantidad = 2,
+                    stockDisponible = 2
+                ),
+                ItemCarrito(
+                    productoId = "2",
+                    nombre = "Producto B",
+                    formato = "1 unidad",
+                    precio = 600_000_000,
+                    cantidad = 1,
+                    stockDisponible = 1
+                )
+            )
+        )
+
+        // El total correcto es 3.600.000.000.
+        assertEquals(
+            3_600_000_000L,
+            estado.total
+        )
+    }
+
 }
 
