@@ -28,6 +28,15 @@ class HistorialViewModel : ViewModel() {
     // Repositorio temporal con pedidos de demostración.
     private val repository = PedidoRepository()
 
+    // Permite mostrar los pedidos reales en el panel
+    // del administrador, sin aplicar los filtros
+    // utilizados por HistorialScreen.
+    //
+    // Se expone como StateFlow de solo lectura.
+    // La autorización definitiva corresponderá al backend.
+    val pedidosParaAdmin: StateFlow<List<Pedido>> =
+        repository.pedidos
+
     // Identificador del usuario que inició sesión.
     private val _usuarioId = MutableStateFlow("")
 

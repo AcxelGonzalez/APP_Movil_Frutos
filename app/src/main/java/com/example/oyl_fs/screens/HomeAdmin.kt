@@ -2,6 +2,9 @@
 package com.example.oyl_fs.screens
 
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.HistorialViewModel
+import com.example.oyl_fs.model.EstadoPedido
+import com.example.oyl_fs.ui.components.EstadoPedidoChip
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -33,15 +36,13 @@ private val SecundarioOYL = Color(0xFF4B2E15)
 private val AlertaOYL = Color(0xFFD9822B)
 private val CriticoOYL = Color(0xFFC0392B)
 
-// Datos utilizados para mostrar información de prueba
-data class PedidoResumen(val id: Int, val total: Int, val estado: String)
-
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HomeAdmin(
     onLogout: () -> Unit,
     onAbrirHistorial: () -> Unit,
-    viewModel: ProductoViewModel
+    viewModel: ProductoViewModel,
+    historialViewModel: HistorialViewModel
 ) {
 
     // Observa los productos actualizados del catálogo.
@@ -53,12 +54,22 @@ fun HomeAdmin(
         producto.stock <= producto.stockMinimo
     }
 
-    // Pedidos de prueba
-    val pedidos = listOf(
-        PedidoResumen(1, 12500, "Pendiente"),
-        PedidoResumen(2, 8900, "Confirmado"),
-        PedidoResumen(3, 15300, "Preparado")
-    )
+    // Observamos los pedidos reales registrados
+    // en PedidoRepository.
+    val pedidos by historialViewModel
+        .pedidosParaAdmin
+        .collectAsState()
+
+    // Contamos únicamente pedidos pendientes.
+    val cantidadPendientes = pedidos.count { pedido ->
+        pedido.estado == EstadoPedido.PENDIENTE_VALIDACION
+    }
+
+    // Seleccionamos los tres pedidos más recientes.
+    val pedidosRecientes = pedidos
+        .sortedByDescending { it.fecha }
+        .take(3)
+
 
     // Controla la pantalla seleccionada
     var tab by remember { mutableStateOf(0) }
@@ -202,7 +213,7 @@ fun HomeAdmin(
                         ) {
 
                             TarjetaDato(
-                                "${pedidos.size}",
+                                "${cantidadPendientes}",
                                 "Pendientes",
                                 AlertaOYL,
                                 Modifier.weight(1f),
@@ -353,7 +364,7 @@ fun HomeAdmin(
                             onAccion = onAbrirHistorial
                         ) {
 
-                            pedidos.forEach { p ->
+                            pedidosRecientes.forEach { p ->
 
                                 Row(
                                     modifier = Modifier
@@ -364,12 +375,12 @@ fun HomeAdmin(
                                 ) {
 
                                     Text(
-                                        "#Pedido ${p.id}",
+                                        "Pedido ${p.id}",
                                         color = SecundarioOYL,
                                         modifier = Modifier.weight(1f)
                                     )
 
-                                    EstadoChip(p.estado)
+                                    EstadoPedidoChip(estado = p.estado)
 
                                     Spacer(Modifier.width(12.dp))
 
@@ -582,34 +593,6 @@ private fun Seccion(
         }
     }
 }
-
-
-// ---------- ESTADO DE PEDIDO ----------
-@Composable
-private fun EstadoChip(estado: String) {
-
-    val color = when (estado) {
-        "Pendiente" -> AlertaOYL
-        "Confirmado" -> PrincipalOYL
-        "Preparado" -> Color(0xFF6B8E23)
-        else -> Color(0xFF2E7D32)
-    }
-
-    Text(
-        estado,
-        color = Color.White,
-        fontSize = 11.sp,
-
-        modifier = Modifier
-            .clip(RoundedCornerShape(50))
-            .background(color)
-            .padding(
-                horizontal = 10.dp,
-                vertical = 3.dp
-            )
-    )
-}
-
 
 // ---------- BARRA DE NAVEGACIÓN ----------
 @Composable

@@ -231,7 +231,8 @@ class MainActivity : ComponentActivity() {
                                 mostrarHistorial = true
                             },
                             // catalogo + vm
-                            viewModel = productoViewModel
+                            viewModel = productoViewModel,
+                            historialViewModel = historialViewModel
                         )
                     }
 
