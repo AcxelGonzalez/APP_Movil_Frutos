@@ -113,42 +113,90 @@ class MainActivity : ComponentActivity() {
                                 mostrarCarrito = false
                             },
 
+
                             onConfirmar = { productos ->
 
-                                // 1. Registrar el pedido en Historial.
-                                val pedido = historialViewModel.registrarPedido(
-                                    usuarioId = "cliente-demo",
-                                    productos = productos
-                                )
+                                // PASO 1: validar los datos del carrito contra
+                                // los productos actuales del catálogo.
+                                val errorStock = productoViewModel
+                                    .validarStockParaCompra(productos)
 
-                                // 2. Comprobar el resultado.
-                                if (pedido != null) {
+                                if (errorStock != null) {
 
-                                    // Vaciar el carrito solo si el registro
-                                    // del pedido fue exitoso.
-                                    carritoViewModel.vaciarDespuesDeConfirmar()
-
-                                    // Cerrar CarroScreen y abrir HistorialScreen.
-                                    mostrarCarrito = false
-                                    mostrarHistorial = true
-
-                                    // Informar al cliente sobre su compra.
+                                    // La compra se rechaza y se conserva el carrito.
                                     Toast.makeText(
                                         this@MainActivity,
-                                        "Pedido ${pedido.id} registrado correctamente",
+                                        errorStock,
                                         Toast.LENGTH_LONG
                                     ).show()
 
                                 } else {
 
-                                    // Si el registro falla, conservar el carrito.
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "No se pudo registrar el pedido. Revisa el carrito.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                    // PASO 2: guardar el estado anterior de los
+                                    // productos para revertir cambios si falla
+                                    // el registro del pedido.
+                                    val productosAnteriores = productos
+                                        .mapNotNull { item ->
+                                            productoViewModel.obtenerProducto(
+                                                item.productoId.toInt()
+                                            )
+                                        }
+                                        .distinctBy { it.id }
+
+                                    // PASO 3: descontar las unidades compradas.
+                                    val stockActualizado = productoViewModel
+                                        .descontarStockPorCompra(productos)
+
+                                    if (!stockActualizado) {
+
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "No se pudo actualizar el stock",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+
+                                    } else {
+
+                                        // PASO 4: registrar el nuevo pedido.
+                                        val pedido = historialViewModel.registrarPedido(
+                                            usuarioId = "cliente-demo",
+                                            productos = productos
+                                        )
+
+                                        if (pedido != null) {
+
+                                            // PASO 5: vaciar el carrito solo después
+                                            // de completar el registro.
+                                            carritoViewModel.vaciarDespuesDeConfirmar()
+
+                                            // PASO 6: abrir Historial.
+                                            mostrarCarrito = false
+                                            mostrarHistorial = true
+
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Pedido ${pedido.id} registrado correctamente",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+
+                                        } else {
+
+                                            // Si el pedido no se pudo registrar,
+                                            // restauramos el stock previo.
+                                            productosAnteriores.forEach { producto ->
+                                                productoViewModel.editarProducto(producto)
+                                            }
+
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "No se pudo registrar el pedido",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
                                 }
                             }
+
                         )
 
                     }
