@@ -3,6 +3,7 @@ package com.example.oyl_fs.repository
 import com.example.oyl_fs.model.DetallePedido
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.model.ItemCarrito
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -65,6 +66,74 @@ class PedidoRepository {
         }
 
         return true
+    }
+
+    /**
+     * Registra un nuevo pedido utilizando los productos
+     * seleccionados en el carrito del cliente.
+     *
+     * Los datos se almacenan temporalmente en memoria.
+     * Posteriormente se utilizará Room y la API REST.
+     *
+     * Devuelve el pedido creado o null si los datos
+     * no son válidos.
+     */
+    fun registrarPedido(
+        usuarioId: String,
+        items: List<ItemCarrito>
+    ): Pedido? {
+
+        // Validar cliente y contenido del carrito.
+        if (usuarioId.isBlank() || items.isEmpty()) {
+            return null
+        }
+
+        // Evitar cantidades inválidas, precios negativos
+        // y productos sin stock suficiente.
+        if (items.any {
+                it.cantidad <= 0 ||
+                        it.precio < 0 ||
+                        !it.stockSuficiente
+            }) {
+            return null
+        }
+
+        // Convertir cada artículo del carrito
+        // en un detalle de pedido.
+        val detalles = items.map { item ->
+            DetallePedido(
+                productoId = item.productoId,
+                nombreProducto = item.nombre,
+                cantidad = item.cantidad,
+                precioUnitario = item.precio
+            )
+        }
+
+        // Buscar el último número de pedido utilizado.
+        val ultimoNumero = _pedidos.value
+            .mapNotNull {
+                it.id.removePrefix("PED-").toIntOrNull()
+            }
+            .maxOrNull() ?: 0
+
+        // Generar un identificador para el nuevo pedido.
+        val nuevoId = "PED-" +
+                (ultimoNumero + 1).toString().padStart(3, '0')
+
+        // Crear el pedido con su estado inicial.
+        val nuevoPedido = Pedido(
+            id = nuevoId,
+            usuarioId = usuarioId,
+            fecha = System.currentTimeMillis(),
+            productos = detalles,
+            total = detalles.sumOf { it.subtotal },
+            estado = EstadoPedido.PENDIENTE_VALIDACION
+        )
+
+        // Guardar el pedido en la lista observable.
+        _pedidos.value = listOf(nuevoPedido) + _pedidos.value
+
+        return nuevoPedido
     }
 
     /**
