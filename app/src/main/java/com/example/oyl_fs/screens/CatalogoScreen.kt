@@ -1,4 +1,12 @@
 package com.example.oyl_fs.screens
+
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.activity.compose.BackHandler
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.viewmodel.ProductoViewModel
@@ -198,13 +206,13 @@ private fun TarjetaCatalogo(
                     .clip(RoundedCornerShape(14.dp))
             )
 
-            Text(
+            TextoTarjetaProducto(
                 text = producto.nombre,
                 color = CafeOscuroCatalogo,
                 fontWeight = FontWeight.Bold
             )
 
-            Text(
+            TextoTarjetaProducto(
                 text = producto.presentacion,
                 color = CafeCatalogo,
                 fontSize = 12.sp
@@ -267,7 +275,7 @@ fun ProductosAdmin(
     fun volver() {
         viewModel.limpiarError()
         when (pantalla) {
-            "editar" -> pantalla = "detalle"
+            "editar", "qr" -> pantalla = "detalle"
             "detalle", "agregar" -> pantalla = "catalogo"
             else -> onVolver()
         }
@@ -277,7 +285,7 @@ fun ProductosAdmin(
 
     // Si el producto ya no existe, vuelve al listado.
     LaunchedEffect(pantalla, productoId, productos) {
-        if ((pantalla == "detalle" || pantalla == "editar") && producto == null) {
+        if ((pantalla == "detalle" || pantalla == "editar" || pantalla == "qr") && producto == null) {
             pantalla = "catalogo"
             productoId = null
         }
@@ -297,6 +305,10 @@ fun ProductosAdmin(
             )
         }
 
+        "qr" -> if (producto != null) {
+            QrProductoScreen(producto = producto, onVolver = { volver() })
+        }
+
         "detalle" -> if (producto != null) {
             Column(Modifier.fillMaxSize()) {
                 if (error != null) {
@@ -310,6 +322,7 @@ fun ProductosAdmin(
                     DetalleProductoAdminScreen(
                         producto = producto,
                         onVolver = { volver() },
+                        onGenerarQr = { pantalla = "qr" },
                         onEditar = {
                             viewModel.limpiarError()
                             pantalla = "editar"
@@ -359,3 +372,24 @@ private fun CatalogoPreview() {
     }
 }
 
+@Composable
+private fun TextoTarjetaProducto(
+    text: String,
+    color: Color,
+    fontWeight: FontWeight = FontWeight.Normal,
+    fontSize: TextUnit = 16.sp,
+    lineas: Int = 2
+) {
+    val altoLinea = (fontSize.value * 1.5f).sp
+    val alto = with(LocalDensity.current) { (altoLinea.value * lineas).sp.toDp() }
+    Text(
+        text = text,
+        color = color,
+        fontWeight = fontWeight,
+        fontSize = fontSize,
+        lineHeight = altoLinea,
+        maxLines = lineas,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().height(alto)
+    )
+}

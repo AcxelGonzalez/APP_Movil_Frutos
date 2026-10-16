@@ -71,13 +71,18 @@ class CarritoViewModel : ViewModel() {
      *
      * Devuelve true si el producto se agregó correctamente.
      */
-    fun agregarProducto(producto: ProductoInfo): Boolean {
+    fun agregarProducto(producto: ProductoInfo, cantidad: Int = 1): Boolean {
 
         val id = clienteId.value
 
         // Comprueba que exista un cliente identificado.
         if (id.isBlank()) {
             _mensaje.value = "No se ha identificado al cliente"
+            return false
+        }
+
+        if (cantidad <= 0 || cantidad > producto.stock) {
+            _mensaje.value = "La cantidad supera las unidades disponibles"
             return false
         }
 
@@ -94,7 +99,7 @@ class CarritoViewModel : ViewModel() {
             nombre = producto.nombre,
             formato = producto.presentacion,
             precio = producto.precio,
-            cantidad = 1,
+            cantidad = cantidad,
             stockDisponible = producto.stock
         )
 

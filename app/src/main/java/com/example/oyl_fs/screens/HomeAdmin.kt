@@ -1,6 +1,12 @@
 
 package com.example.oyl_fs.screens
 
+import androidx.compose.foundation.Image
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.painterResource
+import com.example.oyl_fs.R
+
 import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.model.EstadoPedido
@@ -20,6 +26,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import com.example.oyl_fs.viewmodel.PerfilViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,7 +51,9 @@ fun HomeAdmin(
     onLogout: () -> Unit,
     onAbrirHistorial: () -> Unit,
     viewModel: ProductoViewModel,
-    historialViewModel: HistorialViewModel
+    historialViewModel: HistorialViewModel,
+    perfilViewModel: PerfilViewModel,
+    nombre: String = "Administrador"
 ) {
 
     // Observa los productos actualizados del catálogo.
@@ -72,7 +83,7 @@ fun HomeAdmin(
 
 
     // Controla la pantalla seleccionada
-    var tab by remember { mutableStateOf(0) }
+    var tab by rememberSaveable { mutableStateOf(0) }
 
     // Controla la animación inicial
     var visible by remember { mutableStateOf(false) }
@@ -80,6 +91,8 @@ fun HomeAdmin(
     LaunchedEffect(Unit) {
         visible = true
     }
+
+    BackHandler(enabled = tab != 0) { tab = 0 }
 
     Scaffold(
         containerColor = FondoOYL,
@@ -125,89 +138,21 @@ fun HomeAdmin(
                     ) {
 
                         // ---------- ENCABEZADO ----------
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-
-                            Card(
-                                // Temporal: permite cerrar sesión
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .clickable { onLogout() },
-
-                                shape = RoundedCornerShape(50),
-
-                                colors = CardDefaults.cardColors(
-                                    containerColor = Color.White
-                                )
-                            ) {
-
-                                Row(
-                                    modifier = Modifier.padding(
-                                        horizontal = 10.dp,
-                                        vertical = 8.dp
-                                    ),
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-
-                                    Box(
-                                        modifier = Modifier
-                                            .size(38.dp)
-                                            .clip(CircleShape)
-                                            .background(FondoOYL),
-
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            Icons.Default.Person,
-                                            contentDescription = null,
-                                            tint = SecundarioOYL
-                                        )
-                                    }
-
-                                    Spacer(Modifier.width(10.dp))
-
-                                    Column(Modifier.weight(1f)) {
-
-                                        Text(
-                                            "Hola,",
-                                            color = PrincipalOYL,
-                                            fontSize = 12.sp
-                                        )
-
-                                        Text(
-                                            "Admin",
-                                            fontWeight = FontWeight.Bold,
-                                            color = SecundarioOYL,
-                                            fontSize = 15.sp
-                                        )
-                                    }
-
-                                    Icon(
-                                        Icons.Default.KeyboardArrowRight,
-                                        contentDescription = null,
-                                        tint = PrincipalOYL
-                                    )
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LogoInicio(modifier = Modifier.weight(1f))
+                        Box(Modifier.size(64.dp)) {
+                            IconoCircular(Icons.Default.Notifications, "Notificaciones", onClick = {})
+                            if (3 > 0) {
+                                Badge(modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+                                    containerColor = Color(0xFFB3261E), contentColor = Color.White) {
+                                    Text(if (3 > 99) "99+" else "${3}", fontSize = 11.sp)
                                 }
-                            }
-
-                            Spacer(Modifier.width(10.dp))
-
-                            BadgedBox(
-                                badge = {
-                                    Badge {
-                                        Text("3")
-                                    }
-                                }
-                            ) {
-                                IconoCircular(
-                                    Icons.Default.Notifications,
-                                    "Notificaciones"
-                                ) {}
                             }
                         }
+                    }
 
-                        // ---------- INDICADORES ----------
+                    // ---------- INDICADORES ----------
                         Row(
                             horizontalArrangement = Arrangement.spacedBy(10.dp)
                         ) {
@@ -439,21 +384,13 @@ fun HomeAdmin(
             }
 
             // ---------- PERFIL ----------
-            4 -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(padding),
-
-                    contentAlignment = Alignment.Center
-                ) {
-
-                    Text(
-                        "Perfil",
-                        color = SecundarioOYL,
-                        fontSize = 22.sp
-                    )
-                }
+            4 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                PerfilUsuarioScreen(
+                    usuarioId = "admin-demo",
+                    viewModel = perfilViewModel,
+                    onVolver = { tab = 0 },
+                    onLogout = onLogout
+                )
             }
 
         } // Cierra when
@@ -473,7 +410,7 @@ private fun IconoCircular(
 
     Box(
         modifier = Modifier
-            .size(42.dp)
+            .size(64.dp)
             .clip(CircleShape)
             .background(Color.White)
             .clickable(onClick = onClick),
@@ -485,7 +422,7 @@ private fun IconoCircular(
             icono,
             contentDescription = descripcion,
             tint = SecundarioOYL,
-            modifier = Modifier.size(20.dp)
+            modifier = Modifier.size(32.dp)
         )
     }
 }
@@ -643,6 +580,26 @@ private fun BarraAdmin(
                     unselectedIconColor = PrincipalOYL,
                     unselectedTextColor = PrincipalOYL
                 )
+            )
+        }
+    }
+}
+
+@Composable
+private fun LogoInicio(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth().height(76.dp),
+        shape = RoundedCornerShape(38.dp),
+        color = Color.White
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Image(
+                painter = painterResource(R.drawable.logo_oyl_vector),
+                contentDescription = "OYL Frutos Secos",
+                // Ajuste visual: compensa el peso del texto bajo el símbolo.
+                modifier = Modifier.fillMaxSize()
+                    .padding(horizontal = 20.dp, vertical = 12.dp)
+                    .offset(y = (-2).dp)
             )
         }
     }
