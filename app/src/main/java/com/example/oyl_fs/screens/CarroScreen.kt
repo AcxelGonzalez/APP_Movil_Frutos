@@ -1,5 +1,8 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -207,12 +210,15 @@ private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
                     color = PrincipalOYL,
                     modifier = Modifier.weight(1f)
                 )
-                Text(
-                    formatoPrecio(estado.total),
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = SecundarioOYL
-                )
+                // Transición entre importes exactos, sin modificar el cálculo del pedido.
+                Crossfade(targetState = estado.total, animationSpec = tween(450)) { total ->
+                    Text(
+                        formatoPrecio(total),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SecundarioOYL
+                    )
+                }
             }
             Spacer(Modifier.height(14.dp))
             Button(

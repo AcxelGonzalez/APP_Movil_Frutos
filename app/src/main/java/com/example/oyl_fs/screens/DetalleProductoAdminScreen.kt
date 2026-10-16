@@ -1,5 +1,10 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalDensity
+
 import com.example.oyl_fs.model.ProductoInfo
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -27,8 +32,16 @@ fun DetalleProductoAdminScreen(
     onVolver: () -> Unit,
     onEditar: () -> Unit,
     onEliminar: () -> Unit,
-    producto: ProductoInfo
+    producto: ProductoInfo,
+    onGenerarQr: () -> Unit
 ) {
+    val entrada = remember(producto.id) { Animatable(0f) }
+    val desplazamiento = with(LocalDensity.current) { 18.dp.toPx() }
+    LaunchedEffect(producto.id) {
+        withFrameNanos { }
+        entrada.animateTo(1f, tween(650))
+    }
+
     var confirmarEliminar by remember(producto.id) {
         mutableStateOf(false)
     }
@@ -50,7 +63,10 @@ fun DetalleProductoAdminScreen(
     }
 
     Column(
-        modifier = Modifier
+        modifier = Modifier.graphicsLayer {
+                alpha = entrada.value
+                translationY = (1f - entrada.value) * desplazamiento
+            }
             .fillMaxSize()
             .background(FondoProductoAdmin)
             .verticalScroll(rememberScrollState())
@@ -153,6 +169,13 @@ fun DetalleProductoAdminScreen(
                 }
             }
         }
+
+        OutlinedButton(
+            onClick = onGenerarQr,
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroProductoAdmin)
+        ) { Text("Generar QR del producto") }
 
         SeccionProductoAdmin(
             titulo = "Categoría",
@@ -324,7 +347,8 @@ private fun DetalleProductoAdminPreview() {
             producto = ProductosDatos.almendras,
             onVolver = {},
             onEditar = {},
-            onEliminar = {}
+            onEliminar = {},
+            onGenerarQr = {}
         )
     }
 }

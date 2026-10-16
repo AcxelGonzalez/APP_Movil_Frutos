@@ -1,5 +1,12 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
+
 import android.content.Intent
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -302,8 +309,9 @@ fun AgregarProductoScreen(
 
         val mensaje = errorFormulario ?: errorGuardado
 
-        if (mensaje != null) {
-            Text(mensaje, color = Color(0xFFC0392B))
+        AnimatedVisibility(visible = mensaje != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
+            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
+            Text(mensaje.orEmpty(), color = Color(0xFFC0392B))
         }
 
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {

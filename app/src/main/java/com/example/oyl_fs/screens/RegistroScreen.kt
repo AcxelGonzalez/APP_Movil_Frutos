@@ -1,5 +1,12 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
+
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -103,9 +110,12 @@ fun RegistroScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
-        if (error.isNotEmpty()) {
+        AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
+            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
+            Column {
             Spacer(Modifier.height(10.dp))
             Text(error, color = rojo, fontSize = 13.sp)
+            }
         }
 
         Spacer(Modifier.height(24.dp))

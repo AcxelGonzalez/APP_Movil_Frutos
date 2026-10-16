@@ -4,6 +4,7 @@ package com.example.oyl_fs
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -18,6 +19,7 @@ import com.example.oyl_fs.screens.CarroScreen
 
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.PerfilViewModel
 import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
@@ -42,8 +44,13 @@ class MainActivity : ComponentActivity() {
             CarritoViewModel::class.java
         ]
 
+        // Datos personales separados por rol, compartidos con ambos inicios.
+        val perfilViewModel = ViewModelProvider(this)[PerfilViewModel::class.java]
+
         setContent {
             OYL_FSTheme {
+                val perfiles by perfilViewModel.perfiles.collectAsState()
+
 
                 // Observa los productos del catálogo compartido.
                 val productosActuales by productoViewModel
@@ -82,6 +89,15 @@ class MainActivity : ComponentActivity() {
                 // navegacion al carrito
                 var mostrarCarrito by rememberSaveable {
                     mutableStateOf(false)
+                }
+
+                // Regresa de los módulos externos al inicio del mismo usuario.
+                BackHandler(enabled = sesionIniciada && (mostrarHistorial || mostrarCarrito)) {
+                    mostrarHistorial = false
+                    mostrarCarrito = false
+                }
+                BackHandler(enabled = !sesionIniciada && mostrarRegistro) {
+                    mostrarRegistro = false
                 }
 
                 when {
@@ -246,7 +262,9 @@ class MainActivity : ComponentActivity() {
                             },
                             // catalogo + vm
                             viewModel = productoViewModel,
-                            historialViewModel = historialViewModel
+                            historialViewModel = historialViewModel,
+                            perfilViewModel = perfilViewModel,
+                            nombre = perfiles.find { it.id == "admin-demo" }?.nombre ?: "Administrador"
                         )
                     }
 
@@ -255,7 +273,7 @@ class MainActivity : ComponentActivity() {
 
 
                         HomeCliente(
-                            nombre = "Cliente",
+                            nombre = perfiles.find { it.id == "cliente-demo" }?.nombre ?: "Cliente",
 
                             // Identificador temporal hasta implementar sesiones.
                             clienteId = "cliente-demo",
@@ -264,6 +282,7 @@ class MainActivity : ComponentActivity() {
                             productoViewModel = productoViewModel,
                             carritoViewModel = carritoViewModel,
                             historialViewModel = historialViewModel,
+                            perfilViewModel = perfilViewModel,
 
                             onLogout = {
                                 mostrarHistorial = false

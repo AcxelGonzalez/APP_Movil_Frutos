@@ -15,6 +15,9 @@ class ProductoViewModel : ViewModel() {
         ProductosDatos.productos
     )
 
+    // Evita reutilizar el ID de un producto eliminado durante la simulación.
+    private var siguienteId = (ProductosDatos.productos.maxOfOrNull { it.id } ?: 0) + 1
+
     val productos: StateFlow<List<ProductoInfo>> =
         _productos.asStateFlow()
 
@@ -73,7 +76,7 @@ class ProductoViewModel : ViewModel() {
         }
 
         // despues bd
-        val nuevoId = (_productos.value.maxOfOrNull { it.id } ?: 0) + 1
+        val nuevoId = siguienteId++
 
         val nuevoProducto = producto.copy(
             id = nuevoId,

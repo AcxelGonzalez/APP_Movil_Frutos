@@ -1,5 +1,12 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.core.tween
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardOptions
@@ -77,9 +84,12 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
             )
 
             // Mensaje de error (ocupa lugar solo cuando hay algo que decir)
-            if (error.isNotEmpty()) {
+            AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
+            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
+            Column {
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(error, color = rojo, fontSize = 13.sp)
+            }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
