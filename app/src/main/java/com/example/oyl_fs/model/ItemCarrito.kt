@@ -8,6 +8,16 @@ data class ItemCarrito(
     val cantidad: Int,
     val stockDisponible: Int
 ) {
-    val subtotal: Int get() = precio * cantidad
+
+    /**
+     * Calcula el subtotal utilizando Long.
+     *
+     * Convertimos antes de multiplicar para evitar
+     * desbordamientos cuando el precio o la cantidad
+     * son elevados.
+     */
+    val subtotal: Long
+        get() = precio.toLong() * cantidad.toLong()
+
     val stockSuficiente: Boolean get() = cantidad <= stockDisponible
 }

@@ -26,18 +26,26 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.oyl_fs.viewmodel.CarritoViewModel
+import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.HistorialViewModel
+import com.example.oyl_fs.model.EstadoPedido
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
 private val SecundarioOYL = Color(0xFF4B2E15)
 
-data class ProductoDestacado(val nombre: String, val precio: Int, val formato: String)
 data class Promo(val titulo: String, val detalle: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
+
 fun HomeCliente(
     nombre: String = "Cliente",
+    clienteId: String,
+    productoViewModel: ProductoViewModel,
+    carritoViewModel: CarritoViewModel,
+    historialViewModel: HistorialViewModel,
     onLogout: () -> Unit,
     onAbrirHistorial: () -> Unit,
     onAbrirCarrito: () -> Unit
@@ -51,22 +59,64 @@ fun HomeCliente(
 
     val categorias = listOf("Todos", "Frutos secos", "Semillas", "Deshidratados")
 
-    val destacados = listOf(
-        ProductoDestacado("Almendras", 6990, "500 g"),
-        ProductoDestacado("Nueces", 8490, "1 kg"),
-        ProductoDestacado("Pasas", 2990, "250 g"),
-        ProductoDestacado("Maní tostado", 3490, "500 g")
-    )
+
+// Observamos los productos administrados por el equipo.
+    val productos by productoViewModel.productos.collectAsState()
+
+// Categoría seleccionada por el cliente.
+    var categoria by remember { mutableStateOf(0) }
+
+// Muestra productos activos y con stock disponible.
+    val destacados = productos.filter { producto ->
+        producto.disponible &&
+                producto.stock > 0 &&
+                (categoria == 0 ||
+                        producto.categoria == categorias[categoria])
+    }
+
+// Observa el último pedido del cliente actual.
+// remember evita recrear el Flow en cada recomposición.
+    val ultimoPedido by remember(
+        historialViewModel,
+        clienteId
+    ) {
+        historialViewModel.observarUltimoPedidoCliente(
+            clienteId
+        )
+    }.collectAsState(initial = null)
+
+// Observamos el carrito para actualizar el contador.
+    val estadoCarrito by carritoViewModel.uiState.collectAsState()
+
+// Observamos mensajes de éxito y error.
+    val mensajeCarrito by carritoViewModel.mensaje.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+
+// Identificamos al cliente en el ViewModel.
+    LaunchedEffect(clienteId) {
+        carritoViewModel.iniciar(clienteId)
+    }
+
+// Mostramos mensajes al agregar productos.
+    LaunchedEffect(mensajeCarrito) {
+        val texto = mensajeCarrito ?: return@LaunchedEffect
+
+        carritoViewModel.mensajeMostrado()
+        snackbarHostState.showSnackbar(texto)
+    }
+
 
     var tab by remember { mutableStateOf(0) }
-    var categoria by remember { mutableStateOf(0) }
-    var carrito by remember { mutableStateOf(0) }
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { visible = true }
 
     Scaffold(
         containerColor = FondoOYL,
+        snackbarHost = {
+            SnackbarHost(snackbarHostState)
+        },
 
         bottomBar = {
             BarraCliente(tab) { indice ->
@@ -169,9 +219,9 @@ fun HomeCliente(
                     // ---------- Carrito de compras ----------
                     BadgedBox(
                         badge = {
-                            if (carrito > 0) {
+                            if (estadoCarrito.cantidadProductos > 0) {
                                 Badge {
-                                    Text("$carrito")
+                                    Text("${estadoCarrito.cantidadProductos}")
                                 }
                             }
                         }
@@ -306,7 +356,7 @@ fun HomeCliente(
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
 
-                    items(destacados) { p ->
+                    items(destacados, key = { it.id }) { p ->
 
                         Card(
                             modifier = Modifier.width(150.dp),
@@ -349,7 +399,7 @@ fun HomeCliente(
                                 )
 
                                 Text(
-                                    p.formato,
+                                    p.presentacion,
                                     fontSize = 12.sp,
                                     color = PrincipalOYL
                                 )
@@ -375,8 +425,9 @@ fun HomeCliente(
                                             .size(32.dp)
                                             .clip(CircleShape)
                                             .background(SecundarioOYL)
-                                            .clickable { carrito++ },
-
+                                            .clickable {
+                                                carritoViewModel.agregarProducto(p)
+                                            },
                                         contentAlignment = Alignment.Center
                                     ) {
 
@@ -419,50 +470,69 @@ fun HomeCliente(
                             )
 
                             Text(
-                                "#Pedido 3",
+                                ultimoPedido?.id ?: "Sin pedidos",
                                 color = PrincipalOYL,
                                 fontSize = 13.sp
                             )
                         }
 
-                        Spacer(Modifier.height(14.dp))
 
-                        LinearProgressIndicator(
-                            progress = 0.75f,   // 3 de 4 pasos
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .height(8.dp)
-                                .clip(RoundedCornerShape(50)),
+                        ultimoPedido?.let { pedido ->
+
+                            // Posición correspondiente al estado actual.
+                            val indiceEstado = when (pedido.estado) {
+                                EstadoPedido.PENDIENTE_VALIDACION -> 0
+                                EstadoPedido.CONFIRMADO -> 1
+                                EstadoPedido.PREPARADO -> 2
+                                EstadoPedido.ENTREGADO -> 3
+                            }
+
+                            Spacer(Modifier.height(14.dp))
+
+                            // Progreso del pedido: 25 %, 50 %, 75 % o 100 %.
+                            LinearProgressIndicator(
+                                progress = (indiceEstado + 1) / 4f,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(8.dp)
+                                    .clip(RoundedCornerShape(50)),
+                                color = PrincipalOYL,
+                                trackColor = FondoOYL
+                            )
+
+                            Spacer(Modifier.height(8.dp))
+
+                            // Etapas del pedido.
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween
+                            ) {
+                                listOf(
+                                    "Pendiente",
+                                    "Confirmado",
+                                    "Preparado",
+                                    "Entregado"
+                                ).forEachIndexed { indice, nombreEstado ->
+
+                                    Text(
+                                        text = nombreEstado,
+                                        fontSize = 10.sp,
+                                        color = if (indice <= indiceEstado) {
+                                            SecundarioOYL
+                                        } else {
+                                            PrincipalOYL.copy(alpha = 0.4f)
+                                        }
+                                    )
+                                }
+                            }
+
+                        } ?: Text(
+                            text = "Aún no tienes pedidos registrados.",
                             color = PrincipalOYL,
-                            trackColor = FondoOYL
+                            fontSize = 13.sp,
+                            modifier = Modifier.padding(top = 14.dp)
                         )
 
-                        Spacer(Modifier.height(8.dp))
-
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-
-                            listOf(
-                                "Pendiente",
-                                "Confirmado",
-                                "Preparado",
-                                "Entregado"
-                            ).forEachIndexed { i, paso ->
-
-                                Text(
-                                    paso,
-                                    fontSize = 10.sp,
-
-                                    color = if (i <= 2) {
-                                        SecundarioOYL
-                                    } else {
-                                        PrincipalOYL.copy(alpha = 0.4f)
-                                    }
-                                )
-                            }
-                        }
                     }
                 }
             }

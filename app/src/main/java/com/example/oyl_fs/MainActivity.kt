@@ -2,6 +2,7 @@
 package com.example.oyl_fs
 
 import android.os.Bundle
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.runtime.*
@@ -17,6 +18,7 @@ import com.example.oyl_fs.screens.CarroScreen
 
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
 class MainActivity : ComponentActivity() {
@@ -34,8 +36,28 @@ class MainActivity : ComponentActivity() {
             ProductoViewModel::class.java
         ]
 
+        // ViewModel compartido entre HomeCliente y CarroScreen.
+        // Evita que cada pantalla utilice un estado independiente.
+        val carritoViewModel = ViewModelProvider(this)[
+            CarritoViewModel::class.java
+        ]
+
         setContent {
             OYL_FSTheme {
+
+                // Observa los productos del catálogo compartido.
+                val productosActuales by productoViewModel
+                    .productos
+                    .collectAsState()
+
+                // Cada vez que cambia el catálogo, actualiza
+                // las existencias disponibles en el carrito.
+                LaunchedEffect(productosActuales) {
+                    carritoViewModel.sincronizarConCatalogo(
+                        clienteId = "cliente-demo",
+                        productos = productosActuales
+                    )
+                }
 
                 // Controla si existe una sesión iniciada
                 var sesionIniciada by rememberSaveable {
@@ -93,16 +115,104 @@ class MainActivity : ComponentActivity() {
 
                     // carrito
                     mostrarCarrito && !esAdmin -> {
+
                         CarroScreen(
+                            // Identificador temporal del cliente.
                             clienteId = "cliente-demo",
+
+                            // ViewModel compartido con HomeCliente.
+                            vm = carritoViewModel,
+
                             onVolver = {
                                 mostrarCarrito = false
                             },
+
+
                             onConfirmar = { productos ->
-                                // Pendiente: registrar el pedido confirmado
-                                // utilizando los productos recibidos.
+
+                                // PASO 1: validar los datos del carrito contra
+                                // los productos actuales del catálogo.
+                                val errorStock = productoViewModel
+                                    .validarStockParaCompra(productos)
+
+                                if (errorStock != null) {
+
+                                    // La compra se rechaza y se conserva el carrito.
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        errorStock,
+                                        Toast.LENGTH_LONG
+                                    ).show()
+
+                                } else {
+
+                                    // PASO 2: guardar el estado anterior de los
+                                    // productos para revertir cambios si falla
+                                    // el registro del pedido.
+                                    val productosAnteriores = productos
+                                        .mapNotNull { item ->
+                                            productoViewModel.obtenerProducto(
+                                                item.productoId.toInt()
+                                            )
+                                        }
+                                        .distinctBy { it.id }
+
+                                    // PASO 3: descontar las unidades compradas.
+                                    val stockActualizado = productoViewModel
+                                        .descontarStockPorCompra(productos)
+
+                                    if (!stockActualizado) {
+
+                                        Toast.makeText(
+                                            this@MainActivity,
+                                            "No se pudo actualizar el stock",
+                                            Toast.LENGTH_LONG
+                                        ).show()
+
+                                    } else {
+
+                                        // PASO 4: registrar el nuevo pedido.
+                                        val pedido = historialViewModel.registrarPedido(
+                                            usuarioId = "cliente-demo",
+                                            productos = productos
+                                        )
+
+                                        if (pedido != null) {
+
+                                            // PASO 5: vaciar el carrito solo después
+                                            // de completar el registro.
+                                            carritoViewModel.vaciarDespuesDeConfirmar()
+
+                                            // PASO 6: abrir Historial.
+                                            mostrarCarrito = false
+                                            mostrarHistorial = true
+
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Pedido ${pedido.id} registrado correctamente",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+
+                                        } else {
+
+                                            // Si el pedido no se pudo registrar,
+                                            // restauramos el stock previo.
+                                            productosAnteriores.forEach { producto ->
+                                                productoViewModel.editarProducto(producto)
+                                            }
+
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "No se pudo registrar el pedido",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        }
+                                    }
+                                }
                             }
+
                         )
+
                     }
 
                     // historial
@@ -135,23 +245,36 @@ class MainActivity : ComponentActivity() {
                                 mostrarHistorial = true
                             },
                             // catalogo + vm
-                            viewModel = productoViewModel
+                            viewModel = productoViewModel,
+                            historialViewModel = historialViewModel
                         )
                     }
 
                     // home cliente
                     else -> {
 
+
                         HomeCliente(
                             nombre = "Cliente",
+
+                            // Identificador temporal hasta implementar sesiones.
+                            clienteId = "cliente-demo",
+
+                            // Compartimos el catálogo y el carrito.
+                            productoViewModel = productoViewModel,
+                            carritoViewModel = carritoViewModel,
+                            historialViewModel = historialViewModel,
+
                             onLogout = {
                                 mostrarHistorial = false
                                 mostrarCarrito = false
                                 sesionIniciada = false
                             },
+
                             onAbrirHistorial = {
                                 mostrarHistorial = true
                             },
+
                             onAbrirCarrito = {
                                 mostrarCarrito = true
                             }

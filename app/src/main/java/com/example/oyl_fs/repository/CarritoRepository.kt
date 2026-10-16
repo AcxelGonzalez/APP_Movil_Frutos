@@ -1,6 +1,7 @@
 package com.example.oyl_fs.repository
 
 import com.example.oyl_fs.model.ItemCarrito
+import com.example.oyl_fs.model.ProductoInfo
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map as mapFlow
@@ -44,6 +45,56 @@ object CarritoRepository {
     fun quitar(clienteId: String, productoId: String) = cambiarCantidad(clienteId, productoId, 0)
 
     fun vaciar(clienteId: String) = guardar(clienteId, emptyList())
+
+    /**
+     * Sincroniza el stock del carrito con el catálogo.
+     *
+     * Si un producto fue eliminado o desactivado,
+     * su stock disponible pasa a cero.
+     *
+     * Conserva la cantidad seleccionada y el precio
+     * original para no modificar silenciosamente
+     * los datos de una compra.
+     */
+    fun sincronizarConCatalogo(
+        clienteId: String,
+        catalogo: List<ProductoInfo>
+    ) {
+        if (clienteId.isBlank()) return
+
+        val actual = carritos.value[clienteId].orEmpty()
+
+        if (actual.isEmpty()) return
+
+        // Permite localizar los productos por identificador.
+        val productosPorId = catalogo.associateBy {
+            it.id.toString()
+        }
+
+        val actualizados = actual.map { item ->
+
+            val producto = productosPorId[item.productoId]
+
+            // Si el producto no existe o fue desactivado,
+            // no se considera disponible para comprar.
+            val stockActual = if (
+                producto != null && producto.disponible
+            ) {
+                producto.stock
+            } else {
+                0
+            }
+
+            item.copy(
+                stockDisponible = stockActual
+            )
+        }
+
+        // Evita actualizaciones innecesarias del StateFlow.
+        if (actualizados != actual) {
+            guardar(clienteId, actualizados)
+        }
+    }
 
     private fun guardar(clienteId: String, lista: List<ItemCarrito>) {
         carritos.update { it + (clienteId to lista) }
