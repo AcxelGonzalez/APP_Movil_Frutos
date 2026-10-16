@@ -158,6 +158,30 @@ class ProductoViewModel : ViewModel() {
             return "El carrito está vacío"
         }
 
+        // Validar los montos utilizando Long para evitar
+        // desbordamientos antes de calcular el total.
+        var totalSeguro = 0L
+
+        for (item in items) {
+
+            // Rechazar precios o cantidades inválidas.
+            if (item.precio <= 0 || item.cantidad <= 0) {
+                return "Precio o cantidad inválidos en ${item.nombre}"
+            }
+
+            // Convertir a Long ANTES de multiplicar.
+            val subtotalSeguro =
+                item.precio.toLong() * item.cantidad.toLong()
+
+            // No permitir totales superiores al máximo
+            // representable por los modelos actuales.
+            if (subtotalSeguro > Int.MAX_VALUE.toLong() - totalSeguro) {
+                return "El monto de la compra supera el máximo permitido"
+            }
+
+            totalSeguro += subtotalSeguro
+        }
+
         // Agrupar cantidades por identificador.
         val cantidades = mutableMapOf<Int, Int>()
 

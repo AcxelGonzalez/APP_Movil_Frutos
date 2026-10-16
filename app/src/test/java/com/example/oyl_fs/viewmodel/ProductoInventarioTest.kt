@@ -3,6 +3,7 @@ package com.example.oyl_fs.viewmodel
 
 import com.example.oyl_fs.model.ItemCarrito
 import com.example.oyl_fs.model.ProductoInfo
+import com.example.oyl_fs.repository.PedidoRepository
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -205,4 +206,73 @@ class ProductoInventarioTest {
         assertNotNull(vm.validarStockParaCompra(carrito))
         assertFalse(vm.descontarStockPorCompra(carrito))
     }
+
+    @Test
+    fun compraConMontoExcesivoEsRechazada() {
+
+        val vm = ProductoViewModel()
+        val producto = vm.productos.value.first()
+
+        // Simulamos un producto con un precio elevado.
+        val actualizado = producto.copy(
+            precio = 1_500_000_000,
+            stock = 2
+        )
+
+        assertTrue(vm.editarProducto(actualizado))
+
+        val carrito = listOf(
+            crearItem(actualizado, cantidad = 2)
+        )
+
+        // El monto sería 3.000.000.000,
+        // superior al límite de Int.
+        assertNotNull(
+            vm.validarStockParaCompra(carrito)
+        )
+
+        // La compra no debe descontar stock.
+        assertFalse(
+            vm.descontarStockPorCompra(carrito)
+        )
+
+        assertEquals(
+            2,
+            vm.obtenerProducto(producto.id)?.stock
+        )
+    }
+
+    @Test
+    fun repositorioNoRegistraPedidosConMontosExcesivos() {
+
+        val repository = PedidoRepository()
+
+        val cantidadInicial = repository.pedidos.value.size
+
+        val carrito = listOf(
+            ItemCarrito(
+                productoId = "1",
+                nombre = "Producto de prueba",
+                formato = "1 unidad",
+                precio = 1_500_000_000,
+                cantidad = 2,
+                stockDisponible = 2
+            )
+        )
+
+        // El repositorio debe rechazar el pedido.
+        val resultado = repository.registrarPedido(
+            usuarioId = "cliente-demo",
+            items = carrito
+        )
+
+        assertNull(resultado)
+
+        // No se debe haber agregado ningún pedido.
+        assertEquals(
+            cantidadInicial,
+            repository.pedidos.value.size
+        )
+    }
 }
+

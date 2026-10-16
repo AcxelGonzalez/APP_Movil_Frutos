@@ -98,6 +98,28 @@ class PedidoRepository {
             return null
         }
 
+        // Segunda validación de seguridad:
+        // el repositorio nunca debe guardar montos
+        // que no puedan representarse correctamente.
+        var totalSeguro = 0L
+
+        for (item in items) {
+
+            if (item.precio <= 0 || item.cantidad <= 0) {
+                return null
+            }
+
+            val subtotalSeguro =
+                item.precio.toLong() * item.cantidad.toLong()
+
+            if (subtotalSeguro > Int.MAX_VALUE.toLong() - totalSeguro) {
+                return null
+            }
+
+            totalSeguro += subtotalSeguro
+        }
+
+
         // Convertir cada artículo del carrito
         // en un detalle de pedido.
         val detalles = items.map { item ->
@@ -126,7 +148,7 @@ class PedidoRepository {
             usuarioId = usuarioId,
             fecha = System.currentTimeMillis(),
             productos = detalles,
-            total = detalles.sumOf { it.subtotal },
+            total = totalSeguro.toInt(),
             estado = EstadoPedido.PENDIENTE_VALIDACION
         )
 
