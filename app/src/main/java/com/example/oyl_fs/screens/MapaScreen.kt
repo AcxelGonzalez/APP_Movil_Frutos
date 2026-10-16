@@ -46,7 +46,7 @@ private fun rememberMapaOYL(): MapView {
     val context = LocalContext.current
 
     val mapa = remember {
-        Configuration.getInstance().userAgentValue = context.packageName
+        Configuration.getInstance().userAgentValue = "OYL-FrutosSecos/1.0 (proyecto academico DUOC)"
 
         MapView(context).apply {
             setTileSource(TileSourceFactory.MAPNIK)   // estilo clásico de OpenStreetMap
