@@ -45,6 +45,20 @@ class MainActivity : ComponentActivity() {
         setContent {
             OYL_FSTheme {
 
+                // Observa los productos del catálogo compartido.
+                val productosActuales by productoViewModel
+                    .productos
+                    .collectAsState()
+
+                // Cada vez que cambia el catálogo, actualiza
+                // las existencias disponibles en el carrito.
+                LaunchedEffect(productosActuales) {
+                    carritoViewModel.sincronizarConCatalogo(
+                        clienteId = "cliente-demo",
+                        productos = productosActuales
+                    )
+                }
+
                 // Controla si existe una sesión iniciada
                 var sesionIniciada by rememberSaveable {
                     mutableStateOf(false)

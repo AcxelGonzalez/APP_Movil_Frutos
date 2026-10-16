@@ -43,6 +43,20 @@ class CarritoViewModel : ViewModel() {
     }
 
     /**
+     * Actualiza la disponibilidad de los productos
+     * del carrito cuando cambia el catálogo.
+     */
+    fun sincronizarConCatalogo(
+        clienteId: String,
+        productos: List<ProductoInfo>
+    ) {
+        repo.sincronizarConCatalogo(
+            clienteId = clienteId,
+            catalogo = productos
+        )
+    }
+
+    /**
      * Agrega un producto al carrito del cliente.
      *
      * Comprueba que exista una sesión identificada,
