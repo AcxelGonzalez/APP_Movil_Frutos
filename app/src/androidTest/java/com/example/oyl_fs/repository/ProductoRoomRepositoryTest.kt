@@ -58,6 +58,16 @@ class ProductoRoomRepositoryTest {
                 base.productoDao()
             )
 
+            // Verificar la consulta inicial del catálogo.
+            val productosIniciales = repositorio.cargarProductos()
+
+            assertEquals(5, productosIniciales.size)
+
+            assertEquals(
+                listOf(1, 2, 3, 4, 5),
+                productosIniciales.map { it.id }
+            )
+
             // 1. Verificar los cinco productos iniciales.
             assertEquals(
                 5,
@@ -72,7 +82,17 @@ class ProductoRoomRepositoryTest {
                 stock = 15
             )
 
-            val nuevoId = repositorio.insertar(nuevo).toInt()
+            // Guardar y recuperar el ID definitivo de SQLite.
+            val nuevoGuardado = repositorio.insertarYObtener(nuevo)
+
+            val nuevoId = nuevoGuardado.id
+
+            assertTrue(nuevoId > 5)
+
+            assertEquals(
+                "Producto de prueba Room",
+                nuevoGuardado.nombre
+            )
 
             // El nuevo ID no debe reemplazar los IDs
             // iniciales utilizados por los códigos QR.

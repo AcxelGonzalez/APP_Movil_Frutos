@@ -27,6 +27,15 @@ interface ProductoDao {
     fun observarProductos(): Flow<List<ProductoEntity>>
 
     /**
+     * Recupera todos los productos almacenados
+     * en SQLite mediante una consulta puntual.
+     *
+     * Se utilizará para inicializar el catálogo.
+     */
+    @Query("SELECT * FROM productos ORDER BY id ASC")
+    suspend fun listarProductos(): List<ProductoEntity>
+
+    /**
      * Consulta un producto mediante su ID.
      */
     @Query("SELECT * FROM productos WHERE id = :id LIMIT 1")

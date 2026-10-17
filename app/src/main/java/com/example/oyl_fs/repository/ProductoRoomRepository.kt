@@ -53,6 +53,18 @@ class ProductoRoomRepository(
         }
 
     /**
+     * Carga los productos guardados en Room.
+     *
+     * Se utiliza durante la inicialización.
+     */
+    suspend fun cargarProductos(): List<ProductoInfo> {
+
+        return dao.listarProductos().map { entidad ->
+            convertirAProducto(entidad)
+        }
+    }
+
+    /**
      * Convierte una entidad Room a ProductoInfo
      * recuperando la imagen drawable por nombre.
      */
@@ -124,6 +136,25 @@ class ProductoRoomRepository(
         ).copy(id = 0)
 
         return dao.insertar(entidad)
+    }
+
+    /**
+     * Inserta un producto y recupera su información
+     * utilizando el identificador generado por Room.
+     *
+     * Esto evita generar IDs manualmente y mantiene
+     * la compatibilidad con el carrito y los códigos QR.
+     */
+    suspend fun insertarYObtener(
+        producto: ProductoInfo
+    ): ProductoInfo {
+
+        val nuevoId = insertar(producto).toInt()
+
+        return obtenerPorId(nuevoId)
+            ?: error(
+                "No se pudo recuperar el producto insertado"
+            )
     }
 
     /**
