@@ -7,12 +7,27 @@ import com.example.oyl_fs.model.ItemCarrito
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import androidx.lifecycle.viewModelScope
+import com.example.oyl_fs.repository.ProductoRoomRepository
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.collect
 
-class ProductoViewModel : ViewModel() {
+class ProductoViewModel(
+    // Si no se proporciona un repositorio, mantiene
+    // el comportamiento en memoria para las pruebas.
+    private val roomRepository: ProductoRoomRepository? = null
+) : ViewModel() {
 
 
     private val _productos = MutableStateFlow<List<ProductoInfo>>(
-        ProductosDatos.productos
+        if (roomRepository == null) {
+            // Modo de pruebas unitarias actual.
+            ProductosDatos.productos
+        } else {
+            // En modo Room esperamos los datos de SQLite.
+            emptyList()
+        }
     )
 
     // Evita reutilizar el ID de un producto eliminado durante la simulación.
@@ -24,6 +39,44 @@ class ProductoViewModel : ViewModel() {
     private val _error = MutableStateFlow<String?>(null)
 
     val error: StateFlow<String?> = _error.asStateFlow()
+
+    // Indica si todavía estamos cargando los
+// productos desde la base de datos.
+    private val _cargandoProductos =
+        MutableStateFlow(roomRepository != null)
+
+    val cargandoProductos: StateFlow<Boolean> =
+        _cargandoProductos.asStateFlow()
+
+    /**
+     * Observa SQLite cuando se utiliza Room.
+     *
+     * Room será la fuente de información.
+     * No copiamos productos ficticios encima
+     * de los registros persistentes.
+     */
+    init {
+        roomRepository?.let { repositorio ->
+
+            viewModelScope.launch {
+                try {
+                    repositorio.productos.collect { lista ->
+
+                        _productos.value = lista
+                        _cargandoProductos.value = false
+                    }
+
+                } catch (e: CancellationException) {
+                    throw e
+
+                } catch (e: Exception) {
+                    _error.value =
+                        "No se pudieron cargar los productos"
+                    _cargandoProductos.value = false
+                }
+            }
+        }
+    }
 
     // Busca un producto
     fun obtenerProducto(id: Int): ProductoInfo? {
@@ -141,6 +194,153 @@ class ProductoViewModel : ViewModel() {
         }
 
         return true
+    }
+
+    /**
+     * Agrega un producto a Room.
+     *
+     * La operación solo devuelve true después
+     * de finalizar correctamente la escritura.
+     */
+    suspend fun agregarProductoPersistente(
+        producto: ProductoInfo
+    ): Boolean {
+
+        val repo = roomRepository
+            ?: return agregarProducto(producto)
+
+        if (!validarProducto(producto)) return false
+
+        val limpio = producto.copy(
+            nombre = producto.nombre.trim(),
+            codigo = producto.codigo.trim()
+        )
+
+        return try {
+
+            val duplicado = repo.cargarProductos().any {
+                it.codigo.trim().equals(
+                    limpio.codigo,
+                    ignoreCase = true
+                )
+            }
+
+            if (duplicado) {
+                _error.value =
+                    "Ya existe un producto con ese código"
+                false
+
+            } else {
+                // Room genera y devuelve el ID definitivo.
+                repo.insertarYObtener(limpio)
+
+                _error.value = null
+                true
+            }
+
+        } catch (e: CancellationException) {
+            throw e
+
+        } catch (e: Exception) {
+            _error.value = "No se pudo guardar el producto"
+            false
+        }
+    }
+
+    /**
+     * Actualiza un producto existente en SQLite.
+     */
+    suspend fun editarProductoPersistente(
+        producto: ProductoInfo
+    ): Boolean {
+
+        val repo = roomRepository
+            ?: return editarProducto(producto)
+
+        if (!validarProducto(producto)) return false
+
+        val limpio = producto.copy(
+            nombre = producto.nombre.trim(),
+            codigo = producto.codigo.trim()
+        )
+
+        return try {
+
+            if (repo.obtenerPorId(limpio.id) == null) {
+                _error.value = "El producto ya no existe"
+                false
+
+            } else {
+
+                val duplicado = repo.cargarProductos().any {
+                    it.id != limpio.id &&
+                            it.codigo.trim().equals(
+                                limpio.codigo,
+                                ignoreCase = true
+                            )
+                }
+
+                if (duplicado) {
+                    _error.value =
+                        "Otro producto ya utiliza ese código"
+                    false
+
+                } else {
+
+                    val actualizado = repo.actualizar(limpio)
+
+                    if (!actualizado) {
+                        _error.value =
+                            "No se pudo actualizar el producto"
+                    } else {
+                        _error.value = null
+                    }
+
+                    actualizado
+                }
+            }
+
+        } catch (e: CancellationException) {
+            throw e
+
+        } catch (e: Exception) {
+            _error.value = "Error al actualizar el producto"
+            false
+        }
+    }
+
+    /**
+     * Elimina un producto persistente.
+     *
+     * Devuelve true solamente si Room confirmó
+     * que el registro fue eliminado.
+     */
+    suspend fun eliminarProductoPersistente(
+        id: Int
+    ): Boolean {
+
+        val repo = roomRepository
+            ?: return eliminarProducto(id)
+
+        limpiarError()
+
+        return try {
+
+            val eliminado = repo.eliminar(id)
+
+            if (!eliminado) {
+                _error.value = "El producto ya no existe"
+            }
+
+            eliminado
+
+        } catch (e: CancellationException) {
+            throw e
+
+        } catch (e: Exception) {
+            _error.value = "No se pudo eliminar el producto"
+            false
+        }
     }
 
     /**
