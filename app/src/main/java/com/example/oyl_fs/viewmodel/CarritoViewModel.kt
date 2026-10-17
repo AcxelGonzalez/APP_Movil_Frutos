@@ -19,9 +19,8 @@ data class CarritoUiState(
 ) {
 
     /**
-     * Calcula el total del carrito con Long.
-     * Evita desbordamientos de Int al sumar subtotales.
-     */
+      Calcula el total del carrito
+     **/
     val total: Long
         get() = items.sumOf { it.subtotal }
 
@@ -49,10 +48,6 @@ class CarritoViewModel : ViewModel() {
         clienteId.value = id
     }
 
-    /**
-     * Actualiza la disponibilidad de los productos
-     * del carrito cuando cambia el catálogo.
-     */
     fun sincronizarConCatalogo(
         clienteId: String,
         productos: List<ProductoInfo>
@@ -66,9 +61,7 @@ class CarritoViewModel : ViewModel() {
     /**
      * Agrega un producto al carrito del cliente.
      *
-     * Comprueba que exista una sesión identificada,
-     * que el producto esté disponible y que haya stock.
-     *
+     * Comprueba que exista un producto esté disponible y que haya stock.
      * Devuelve true si el producto se agregó correctamente.
      */
     fun agregarProducto(producto: ProductoInfo, cantidad: Int = 1): Boolean {
@@ -100,7 +93,9 @@ class CarritoViewModel : ViewModel() {
             formato = producto.presentacion,
             precio = producto.precio,
             cantidad = cantidad,
-            stockDisponible = producto.stock
+            stockDisponible = producto.stock,
+            imagen = producto.imagen,
+            imagenUri = producto.imagenUri
         )
 
         // El repositorio comprueba también que la cantidad
