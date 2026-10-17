@@ -370,15 +370,13 @@ fun HomeAdmin(
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .padding(padding),
-
-                    contentAlignment = Alignment.Center
+                        .padding(padding)
                 ) {
-
-                    Text(
-                        "Inventario",
-                        color = SecundarioOYL,
-                        fontSize = 22.sp
+                    InventarioScreen(
+                        viewModel = viewModel,
+                        onVolver = {
+                            tab = 0
+                        }
                     )
                 }
             }

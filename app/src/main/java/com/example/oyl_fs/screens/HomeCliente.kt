@@ -50,6 +50,7 @@ import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.model.EstadoPedido
+import com.example.oyl_fs.model.ProductoInfo
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
@@ -142,11 +143,25 @@ fun HomeCliente(
 
 
     var tab by rememberSaveable { mutableStateOf(0) }
+
+    // identificar producto
+    var productoDetalleId by rememberSaveable {
+        mutableStateOf<Int?>(null)
+    }
+
+
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { visible = true }
 
-    BackHandler(enabled = tab != 0) { tab = 0 }
+    BackHandler(enabled = tab != 0) {
+        if (tab == 5) {
+            // Salimos del detalle y volvemos al inicio.
+            productoDetalleId = null
+        }
+
+        tab = 0
+    }
 
     Scaffold(
         containerColor = FondoOYL,
@@ -201,6 +216,50 @@ fun HomeCliente(
                     onAbrirCarrito = onAbrirCarrito
                 )
             }
+
+            // ---------- DETALLE DEL PRODUCTO ----------
+            5 -> {
+                val seleccionado = productos.find {
+                    it.id == productoDetalleId && it.disponible
+                }
+
+                if (seleccionado != null) {
+
+                    // Descontamos las unidades que ya están en el carrito.
+                    val enCarrito = estadoCarrito.items.find {
+                        it.productoId == seleccionado.id.toString()
+                    }?.cantidad ?: 0
+
+                    val unidadesDisponibles =
+                        (seleccionado.stock - enCarrito).coerceAtLeast(0)
+
+                    DetalleProductoClienteScreen(
+                        producto = seleccionado,
+                        disponibleParaAgregar = unidadesDisponibles,
+
+                        onVolver = {
+                            productoDetalleId = null
+                            tab = 0
+                        },
+
+                        onAgregar = { cantidad ->
+                            carritoViewModel.agregarProducto(
+                                seleccionado,
+                                cantidad
+                            )
+                        },
+
+                        onAbrirCarrito = onAbrirCarrito
+                    )
+
+                } else {
+                    LaunchedEffect(productoDetalleId) {
+                        productoDetalleId = null
+                        tab = 0
+                    }
+                }
+            }
+
             4 -> Box(Modifier.fillMaxSize().padding(padding)) {
                 PerfilUsuarioScreen(
                     usuarioId = clienteId,
@@ -422,14 +481,15 @@ fun HomeCliente(
                                                 .clip(CircleShape)
                                                 .background(SecundarioOYL)
                                                 .clickable {
-                                                    carritoViewModel.agregarProducto(p)
+                                                    productoDetalleId = p.id
+                                                    tab = 5
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) {
 
                                             Icon(
                                                 Icons.Default.Add,
-                                                "Agregar al carrito",
+                                                "Ver detalle del producto",
                                                 tint = Color.White,
                                                 modifier = Modifier.size(18.dp)
                                             )
