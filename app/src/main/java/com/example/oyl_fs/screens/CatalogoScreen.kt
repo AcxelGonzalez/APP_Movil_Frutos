@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.launch
 
 private val FondoCatalogo = Color(0xFFFFF5E7)
 private val CafeCatalogo = Color(0xFF92623D)
@@ -272,6 +273,14 @@ fun ProductosAdmin(
     val producto = productos.find { it.id == productoId }
     val error by viewModel.error.collectAsState()
 
+    // Permite ejecutar la eliminación sin bloquear Compose.
+    val scope = rememberCoroutineScope()
+
+    // Evita iniciar dos eliminaciones simultáneas.
+    var eliminando by remember {
+        mutableStateOf(false)
+    }
+
     fun volver() {
         viewModel.limpiarError()
         when (pantalla) {
@@ -281,7 +290,11 @@ fun ProductosAdmin(
         }
     }
 
-    BackHandler { volver() }
+    BackHandler {
+        if (!eliminando) {
+            volver()
+        }
+    }
 
     // Si el producto ya no existe, vuelve al listado.
     LaunchedEffect(pantalla, productoId, productos) {
@@ -311,6 +324,19 @@ fun ProductosAdmin(
 
         "detalle" -> if (producto != null) {
             Column(Modifier.fillMaxSize()) {
+
+                if (eliminando) {
+                    LinearProgressIndicator(
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Text(
+                        text = "Eliminando producto...",
+                        color = CafeOscuroCatalogo,
+                        modifier = Modifier.padding(16.dp)
+                    )
+                }
+
                 if (error != null) {
                     Text(
                         text = error ?: "",
@@ -321,18 +347,59 @@ fun ProductosAdmin(
                 Box(Modifier.weight(1f)) {
                     DetalleProductoAdminScreen(
                         producto = producto,
-                        onVolver = { volver() },
-                        onGenerarQr = { pantalla = "qr" },
-                        onEditar = {
-                            viewModel.limpiarError()
-                            pantalla = "editar"
+                        onVolver = {
+                            if (!eliminando) volver()
                         },
+                        onGenerarQr = {
+                            if (!eliminando) pantalla = "qr"
+                        },
+                        onEditar = {
+                            if (!eliminando) {
+                                viewModel.limpiarError()
+                                pantalla = "editar"
+                            }
+                        },
+
                         onEliminar = {
-                            if (viewModel.eliminarProducto(producto.id)) {
-                                productoId = null
-                                pantalla = "catalogo"
+
+                            // Impide procesar solicitudes repetidas.
+                            if (!eliminando) {
+
+                                eliminando = true
+
+                                // Guardamos el ID antes de comenzar
+                                // la operación asíncrona.
+                                val idEliminar = producto.id
+
+                                scope.launch {
+
+                                    try {
+
+                                        // En modo Room, espera la confirmación
+                                        // de que SQLite eliminó el registro.
+                                        val eliminado = viewModel
+                                            .eliminarProductoPersistente(idEliminar)
+
+                                        if (eliminado) {
+
+                                            // Regresar al catálogo solamente
+                                            // cuando la eliminación fue exitosa.
+                                            productoId = null
+                                            pantalla = "catalogo"
+                                        }
+
+                                        // Si falla, permanecemos en detalle.
+                                        // El ViewModel mostrará el mensaje
+                                        // mediante su StateFlow de error.
+
+                                    } finally {
+
+                                        eliminando = false
+                                    }
+                                }
                             }
                         }
+
                     )
                 }
             }
