@@ -52,29 +52,40 @@ abstract class OylDatabase : RoomDatabase() {
                     OylDatabase::class.java,
                     "oyl_frutos_secos.db"
                 )
+
                     .addCallback(
-                        object : Callback() {
-
-                            /**
-                             * Se ejecuta únicamente cuando
-                             * se crea la base de datos.
-                             */
-                            override fun onCreate(
-                                db: SupportSQLiteDatabase
-                            ) {
-                                super.onCreate(db)
-
-                                insertarProductosIniciales(
-                                    contexto,
-                                    db
-                                )
-                            }
-                        }
+                        crearCallbackInicializacion(contexto)
                     )
+
                     .build()
                     .also {
                         INSTANCE = it
                     }
+            }
+        }
+
+        /**
+         * Prepara la carga inicial de productos.
+         *
+         * Se utiliza tanto en la base principal
+         * como en las pruebas instrumentadas.
+         */
+        fun crearCallbackInicializacion(
+            context: Context
+        ): Callback {
+
+            return object : Callback() {
+
+                override fun onCreate(
+                    db: SupportSQLiteDatabase
+                ) {
+                    super.onCreate(db)
+
+                    insertarProductosIniciales(
+                        context.applicationContext,
+                        db
+                    )
+                }
             }
         }
 
