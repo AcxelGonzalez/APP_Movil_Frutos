@@ -1,0 +1,301 @@
+
+package com.example.oyl_fs.repository
+
+import androidx.room.Room
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
+
+import com.example.oyl_fs.data.local.OylDatabase
+import com.example.oyl_fs.screens.ProductosDatos
+import com.example.oyl_fs.model.ItemCarrito
+
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+
+import org.junit.Assert.*
+import org.junit.Test
+import org.junit.runner.RunWith
+
+/**
+ * Comprueba el funcionamiento real del repositorio
+ * de productos utilizando SQLite.
+ *
+ * La base de pruebas es independiente de la
+ * utilizada normalmente por OYL Frutos Secos.
+ */
+@RunWith(AndroidJUnit4::class)
+class ProductoRoomRepositoryTest {
+
+    @Test
+    fun crudYPersistenciaDeProductos() = runBlocking {
+
+        val contexto = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+
+        val nombreBase = "oyl_repositorio_prueba.db"
+
+        // Eliminar únicamente la base de pruebas.
+        contexto.deleteDatabase(nombreBase)
+
+        fun crearBase(): OylDatabase {
+            return Room.databaseBuilder(
+                contexto,
+                OylDatabase::class.java,
+                nombreBase
+            )
+                .addCallback(
+                    OylDatabase.crearCallbackInicializacion(contexto)
+                )
+                .build()
+        }
+
+        var base = crearBase()
+
+        try {
+
+            val repositorio = ProductoRoomRepository(
+                contexto,
+                base.productoDao()
+            )
+
+            // Verificar la consulta inicial del catálogo.
+            val productosIniciales = repositorio.cargarProductos()
+
+            assertEquals(5, productosIniciales.size)
+
+            assertEquals(
+                listOf(1, 2, 3, 4, 5),
+                productosIniciales.map { it.id }
+            )
+
+            // 1. Verificar los cinco productos iniciales.
+            assertEquals(
+                5,
+                repositorio.productos.first().size
+            )
+
+            // 2. Agregar un producto nuevo.
+            val nuevo = ProductosDatos.almendras.copy(
+                id = 0,
+                nombre = "Producto de prueba Room",
+                codigo = "OYL-ROOM-TEST",
+                stock = 15
+            )
+
+            // Guardar y recuperar el ID definitivo de SQLite.
+            val nuevoGuardado = repositorio.insertarYObtener(nuevo)
+
+            val nuevoId = nuevoGuardado.id
+
+            assertTrue(nuevoId > 5)
+
+            assertEquals(
+                "Producto de prueba Room",
+                nuevoGuardado.nombre
+            )
+
+            // El nuevo ID no debe reemplazar los IDs
+            // iniciales utilizados por los códigos QR.
+            assertTrue(nuevoId > 5)
+
+            // 3. Recuperar el producto insertado.
+            val guardado = repositorio.obtenerPorId(nuevoId)
+
+            assertNotNull(guardado)
+            assertEquals(
+                "Producto de prueba Room",
+                guardado?.nombre
+            )
+
+            // 4. Editar el stock.
+            assertTrue(
+                repositorio.actualizar(
+                    guardado!!.copy(stock = 7)
+                )
+            )
+
+            assertEquals(
+                7,
+                repositorio.obtenerPorId(nuevoId)?.stock
+            )
+
+            // 5. Comprobar que ahora existen seis productos.
+            assertEquals(
+                6,
+                repositorio.contar()
+            )
+
+            // 6. Eliminar el producto agregado.
+            assertTrue(repositorio.eliminar(nuevoId))
+
+            assertNull(
+                repositorio.obtenerPorId(nuevoId)
+            )
+
+            // 7. Modificar el stock de Almendras para
+            // comprobar que persiste al cerrar la base.
+            val almendras = repositorio.obtenerPorId(1)!!
+
+            assertTrue(
+                repositorio.actualizar(
+                    almendras.copy(stock = 45)
+                )
+            )
+
+            // Cerrar y volver a abrir la misma base.
+            base.close()
+            base = crearBase()
+
+            val repositorioRecuperado =
+                ProductoRoomRepository(
+                    contexto,
+                    base.productoDao()
+                )
+
+            // 8. Los cambios deben permanecer.
+            assertEquals(
+                5,
+                repositorioRecuperado.contar()
+            )
+
+            assertEquals(
+                45,
+                repositorioRecuperado
+                    .obtenerPorId(1)?.stock
+            )
+
+            // El producto eliminado no debe reaparecer.
+            assertNull(
+                repositorioRecuperado.obtenerPorId(nuevoId)
+            )
+
+        } finally {
+            base.close()
+            contexto.deleteDatabase(nombreBase)
+        }
+    }
+
+    @Test
+    fun descuentoDeStockEsAtomico() = runBlocking {
+
+        val contexto = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+
+        val nombreBase = "oyl_descuento_prueba.db"
+
+        contexto.deleteDatabase(nombreBase)
+
+        val base = Room.databaseBuilder(
+            contexto,
+            OylDatabase::class.java,
+            nombreBase
+        )
+            .addCallback(
+                OylDatabase.crearCallbackInicializacion(
+                    contexto
+                )
+            )
+            .build()
+
+        try {
+
+            val repo = ProductoRoomRepository(
+                contexto,
+                base.productoDao()
+            )
+
+            val almendras = repo.obtenerPorId(1)!!
+            val nueces = repo.obtenerPorId(2)!!
+
+            // Preparar una compra válida.
+            val itemAlmendras = ItemCarrito(
+                productoId = almendras.id.toString(),
+                nombre = almendras.nombre,
+                formato = almendras.presentacion,
+                precio = almendras.precio,
+                cantidad = 2,
+                stockDisponible = almendras.stock
+            )
+
+            val itemNueces = ItemCarrito(
+                productoId = nueces.id.toString(),
+                nombre = nueces.nombre,
+                formato = nueces.presentacion,
+                precio = nueces.precio,
+                cantidad = 3,
+                stockDisponible = nueces.stock
+            )
+
+            // CASO 1: ambos productos tienen stock.
+            assertTrue(
+                repo.descontarStockPorCompra(
+                    listOf(itemAlmendras, itemNueces)
+                )
+            )
+
+            assertEquals(
+                58,
+                repo.obtenerPorId(1)?.stock
+            )
+
+            assertEquals(
+                57,
+                repo.obtenerPorId(2)?.stock
+            )
+
+            // CASO 2: el primer producto tiene stock,
+            // pero el segundo solicita demasiadas
+            // unidades.
+            val compraInvalida = listOf(
+                itemAlmendras.copy(cantidad = 4),
+                itemNueces.copy(cantidad = 999)
+            )
+
+            assertFalse(
+                repo.descontarStockPorCompra(
+                    compraInvalida
+                )
+            )
+
+            // Verificar que el primer producto
+            // NO se descontó parcialmente.
+            assertEquals(
+                58,
+                repo.obtenerPorId(1)?.stock
+            )
+
+            assertEquals(
+                57,
+                repo.obtenerPorId(2)?.stock
+            )
+
+            // CASO 3: precio incorrecto.
+            assertFalse(
+                repo.descontarStockPorCompra(
+                    listOf(
+                        itemAlmendras.copy(
+                            cantidad = 1,
+                            precio = almendras.precio + 1
+                        )
+                    )
+                )
+            )
+
+            assertEquals(
+                58,
+                repo.obtenerPorId(1)?.stock
+            )
+
+        } finally {
+
+            base.close()
+
+            // Limpiar exclusivamente la base
+            // utilizada durante esta prueba.
+            contexto.deleteDatabase(nombreBase)
+        }
+    }
+
+}

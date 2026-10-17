@@ -18,6 +18,7 @@ import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.util.escanearQr
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.util.leerIdQrProducto
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
@@ -68,9 +69,15 @@ fun EscanerScreen(
                     context = contexto,
                     alLeer = { texto ->
                         codigoLeido = texto
-                        encontrado = productos.find {
-                            it.codigo.equals(texto.trim(), ignoreCase = true)
+
+                        // Leer el ID que contiene el QR generado por OYL.
+                        val productoId = leerIdQrProducto(texto)
+
+                        // Buscar ese producto en el catálogo actualizado.
+                        encontrado = productos.find { producto ->
+                            producto.id == productoId
                         }
+
                         mensaje = if (encontrado != null) {
                             "Producto encontrado."
                         } else {

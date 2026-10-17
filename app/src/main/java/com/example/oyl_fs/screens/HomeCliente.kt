@@ -169,8 +169,30 @@ fun HomeCliente(
     ) { padding ->
 
         when (tab) {
-            // Tiendas queda vacía hasta incorporar el mapa.
-            2 -> Box(Modifier.fillMaxSize().padding(padding))
+            /*
+             * PESTAÑA TIENDAS
+             *
+             * Integra MapaScreen dentro de HomeCliente.
+             *
+             * El mapa obtiene sus puntos desde MapaViewModel
+             * y PuntoRetiroRepository.
+             *
+             * El botón Volver regresa al inicio del cliente.
+             */
+            2 -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    MapaScreen(
+                        onVolver = {
+                            tab = 0
+                        }
+                    )
+                }
+            }
+
             1 -> Box(Modifier.fillMaxSize().padding(padding)) {
                 ProductosCliente(
                     productoViewModel = productoViewModel,
