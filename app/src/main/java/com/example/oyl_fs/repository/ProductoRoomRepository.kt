@@ -5,6 +5,7 @@ import android.content.Context
 import com.example.oyl_fs.data.local.OylDatabase
 import com.example.oyl_fs.data.local.ProductoEntity
 import com.example.oyl_fs.data.local.aEntidad
+import com.example.oyl_fs.data.local.ProductoDao
 import com.example.oyl_fs.data.local.aProducto
 import com.example.oyl_fs.model.ProductoInfo
 
@@ -24,14 +25,19 @@ import kotlinx.coroutines.flow.map
  * Las operaciones de escritura son suspend
  * para no bloquear el hilo principal.
  */
-class ProductoRoomRepository(context: Context) {
+class ProductoRoomRepository(
+    context: Context,
+
+    // Utiliza la base principal normalmente.
+    // Durante las pruebas podemos proporcionar
+    // un DAO de una base SQLite independiente.
+    private val dao: ProductoDao = OylDatabase
+        .obtener(context.applicationContext)
+        .productoDao()
+) {
 
     private val contexto = context.applicationContext
 
-    // Utiliza la base de datos compartida.
-    private val dao = OylDatabase
-        .obtener(contexto)
-        .productoDao()
 
     /**
      * Observa los productos almacenados.
