@@ -7,6 +7,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 
 import com.example.oyl_fs.data.local.OylDatabase
 import com.example.oyl_fs.screens.ProductosDatos
+import com.example.oyl_fs.model.ItemCarrito
 
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -174,4 +175,127 @@ class ProductoRoomRepositoryTest {
             contexto.deleteDatabase(nombreBase)
         }
     }
+
+    @Test
+    fun descuentoDeStockEsAtomico() = runBlocking {
+
+        val contexto = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+
+        val nombreBase = "oyl_descuento_prueba.db"
+
+        contexto.deleteDatabase(nombreBase)
+
+        val base = Room.databaseBuilder(
+            contexto,
+            OylDatabase::class.java,
+            nombreBase
+        )
+            .addCallback(
+                OylDatabase.crearCallbackInicializacion(
+                    contexto
+                )
+            )
+            .build()
+
+        try {
+
+            val repo = ProductoRoomRepository(
+                contexto,
+                base.productoDao()
+            )
+
+            val almendras = repo.obtenerPorId(1)!!
+            val nueces = repo.obtenerPorId(2)!!
+
+            // Preparar una compra válida.
+            val itemAlmendras = ItemCarrito(
+                productoId = almendras.id.toString(),
+                nombre = almendras.nombre,
+                formato = almendras.presentacion,
+                precio = almendras.precio,
+                cantidad = 2,
+                stockDisponible = almendras.stock
+            )
+
+            val itemNueces = ItemCarrito(
+                productoId = nueces.id.toString(),
+                nombre = nueces.nombre,
+                formato = nueces.presentacion,
+                precio = nueces.precio,
+                cantidad = 3,
+                stockDisponible = nueces.stock
+            )
+
+            // CASO 1: ambos productos tienen stock.
+            assertTrue(
+                repo.descontarStockPorCompra(
+                    listOf(itemAlmendras, itemNueces)
+                )
+            )
+
+            assertEquals(
+                58,
+                repo.obtenerPorId(1)?.stock
+            )
+
+            assertEquals(
+                57,
+                repo.obtenerPorId(2)?.stock
+            )
+
+            // CASO 2: el primer producto tiene stock,
+            // pero el segundo solicita demasiadas
+            // unidades.
+            val compraInvalida = listOf(
+                itemAlmendras.copy(cantidad = 4),
+                itemNueces.copy(cantidad = 999)
+            )
+
+            assertFalse(
+                repo.descontarStockPorCompra(
+                    compraInvalida
+                )
+            )
+
+            // Verificar que el primer producto
+            // NO se descontó parcialmente.
+            assertEquals(
+                58,
+                repo.obtenerPorId(1)?.stock
+            )
+
+            assertEquals(
+                57,
+                repo.obtenerPorId(2)?.stock
+            )
+
+            // CASO 3: precio incorrecto.
+            assertFalse(
+                repo.descontarStockPorCompra(
+                    listOf(
+                        itemAlmendras.copy(
+                            cantidad = 1,
+                            precio = almendras.precio + 1
+                        )
+                    )
+                )
+            )
+
+            assertEquals(
+                58,
+                repo.obtenerPorId(1)?.stock
+            )
+
+        } finally {
+
+            base.close()
+
+            // Limpiar exclusivamente la base
+            // utilizada durante esta prueba.
+            contexto.deleteDatabase(nombreBase)
+        }
+    }
+
 }

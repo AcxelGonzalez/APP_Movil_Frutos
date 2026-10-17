@@ -8,6 +8,9 @@ import com.example.oyl_fs.data.local.aEntidad
 import com.example.oyl_fs.data.local.ProductoDao
 import com.example.oyl_fs.data.local.aProducto
 import com.example.oyl_fs.model.ProductoInfo
+import com.example.oyl_fs.data.local.DescuentoStock
+import com.example.oyl_fs.data.local.StockNoDisponibleException
+import com.example.oyl_fs.model.ItemCarrito
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -201,4 +204,97 @@ class ProductoRoomRepository(
     suspend fun contar(): Int {
         return dao.contar()
     }
+
+    /**
+     * Descuenta el stock de una compra utilizando
+     * una transacción de Room.
+     *
+     * Comprueba identificadores, cantidades,
+     * precios y límites numéricos antes
+     * de realizar las actualizaciones.
+     *
+     * Devuelve true si todos los descuentos
+     * fueron confirmados por SQLite.
+     */
+    suspend fun descontarStockPorCompra(
+        items: List<ItemCarrito>
+    ): Boolean {
+
+        if (items.isEmpty()) return false
+
+        val descuentos = linkedMapOf<Int, DescuentoStock>()
+
+        var totalCompra = 0L
+
+        for (item in items) {
+
+            val id = item.productoId.toIntOrNull()
+                ?: return false
+
+            if (
+                id <= 0 ||
+                item.cantidad <= 0 ||
+                item.precio <= 0
+            ) {
+                return false
+            }
+
+            // Evita desbordamientos del total.
+            val subtotal =
+                item.precio.toLong() * item.cantidad.toLong()
+
+            if (
+                subtotal >
+                Int.MAX_VALUE.toLong() - totalCompra
+            ) {
+                return false
+            }
+
+            totalCompra += subtotal
+
+            // Si el mismo producto aparece varias
+            // veces, agrupar todas sus cantidades.
+            val anterior = descuentos[id]
+
+            // No aceptar precios distintos
+            // para un mismo identificador.
+            if (
+                anterior != null &&
+                anterior.precioUnitario != item.precio
+            ) {
+                return false
+            }
+
+            val cantidadTotal =
+                (anterior?.cantidad?.toLong() ?: 0L) +
+                        item.cantidad.toLong()
+
+            if (cantidadTotal > Int.MAX_VALUE) {
+                return false
+            }
+
+            descuentos[id] = DescuentoStock(
+                productoId = id,
+                cantidad = cantidadTotal.toInt(),
+                precioUnitario = item.precio
+            )
+        }
+
+        return try {
+
+            // Todos los descuentos se realizan
+            // dentro de una sola transacción.
+            dao.descontarStockLote(
+                descuentos.values.toList()
+            )
+
+            true
+
+        } catch (e: StockNoDisponibleException) {
+
+            // La transacción se revierte.
+            false
+        }
+    }
+
 }
