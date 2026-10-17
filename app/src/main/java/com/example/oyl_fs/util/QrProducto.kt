@@ -11,6 +11,30 @@ fun textoQrProducto(id: Int): String {
     return """{"tipo":"producto","id":$id}"""
 }
 
+/**
+ * Obtiene el identificador numérico de un QR
+ * generado por OYL Frutos Secos.
+ *
+ * Formato esperado:
+ * {"tipo":"producto","id":1}
+ *
+ * Devuelve null si el contenido es inválido.
+ */
+fun leerIdQrProducto(texto: String): Int? {
+
+    // Validar el formato producido por textoQrProducto().
+    val patron = Regex(
+        """\{\s*"tipo"\s*:\s*"producto"\s*,\s*"id"\s*:\s*([1-9][0-9]*)\s*\}"""
+    )
+
+    val resultado = patron.matchEntire(texto.trim())
+        ?: return null
+
+    return resultado.groupValues[1]
+        .toIntOrNull()
+        ?.takeIf { it > 0 }
+}
+
 fun generarQrProducto(id: Int): BitMatrix {
     return QRCodeWriter().encode(
         textoQrProducto(id), BarcodeFormat.QR_CODE, 512, 512,

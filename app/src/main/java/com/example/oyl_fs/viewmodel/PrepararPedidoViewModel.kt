@@ -3,11 +3,11 @@ package com.example.oyl_fs.viewmodel
 
 import androidx.lifecycle.ViewModel
 import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.util.leerIdQrProducto
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
-import org.json.JSONObject
 
 // Controla los productos verificados durante la preparación de un pedido.
 class PrepararPedidoViewModel : ViewModel() {
@@ -45,20 +45,10 @@ class PrepararPedidoViewModel : ViewModel() {
             return
         }
 
-        // Extraer y comprobar el identificador del QR.
-        val productoId = try {
-            val json = JSONObject(textoQr)
-
-            if (json.getString("tipo") != "producto") {
-                null
-            } else {
-                json.getInt("id")
-                    .takeIf { it > 0 }
-                    ?.toString()
-            }
-        } catch (e: Exception) {
-            null
-        }
+        // Utilizamos la misma interpretación QR que EscanerScreen.
+        // Convertimos el ID a String porque DetallePedido
+        // almacena productoId como texto.
+        val productoId = leerIdQrProducto(textoQr)?.toString()
 
         if (productoId == null) {
             _mensaje.value = "El código QR no es válido."

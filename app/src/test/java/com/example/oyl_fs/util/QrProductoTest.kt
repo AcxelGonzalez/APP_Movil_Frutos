@@ -7,6 +7,7 @@ import com.google.zxing.qrcode.QRCodeReader
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
 import org.junit.Test
+import org.junit.Assert.assertNull
 
 class QrProductoTest {
     @Test
@@ -37,4 +38,31 @@ class QrProductoTest {
     fun rechazaIdentificadoresInvalidos() {
         generarQrProducto(0)
     }
+
+    @Test
+    fun qrGeneradoPermiteRecuperarId() {
+        val texto = textoQrProducto(1)
+
+        assertEquals(1, leerIdQrProducto(texto))
+    }
+
+    @Test
+    fun qrConTipoIncorrectoEsRechazado() {
+        val texto = """{"tipo":"pedido","id":1}"""
+
+        assertNull(leerIdQrProducto(texto))
+    }
+
+    @Test
+    fun qrConIdInvalidoEsRechazado() {
+        val texto = """{"tipo":"producto","id":0}"""
+
+        assertNull(leerIdQrProducto(texto))
+    }
+
+    @Test
+    fun qrConTextoDesconocidoEsRechazado() {
+        assertNull(leerIdQrProducto("OYL001"))
+    }
+
 }
