@@ -86,11 +86,12 @@ object CarritoRepository {
             }
 
             item.copy(
-                stockDisponible = stockActual
+                stockDisponible = stockActual,
+                imagen = producto?.imagen ?: item.imagen,
+                imagenUri = producto?.imagenUri ?: item.imagenUri
             )
         }
 
-        // Evita actualizaciones innecesarias del StateFlow.
         if (actualizados != actual) {
             guardar(clienteId, actualizados)
         }
