@@ -46,7 +46,7 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
     BoxWithConstraints(modifier = Modifier.fillMaxSize().imePadding()) {
 
         Image(
-            painter = painterResource(R.drawable.login_main),
+            painter = painterResource(R.drawable.fondo_login_vector),
             contentDescription = null,
             contentScale = ContentScale.Crop,
             modifier = Modifier.fillMaxSize()
@@ -61,6 +61,14 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
+            Image(
+                painter = painterResource(R.drawable.logo_oyl_vector),
+                contentDescription = "OYL Frutos Secos",
+                contentScale = ContentScale.Fit,
+                modifier = Modifier.widthIn(max = 280.dp).fillMaxWidth()
+                    .height(110.dp).padding(horizontal = 16.dp, vertical = 12.dp)
+            )
+            Spacer(Modifier.height(20.dp))
 
             OutlinedTextField(
                 value = usuario,
