@@ -31,18 +31,37 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import kotlinx.coroutines.launch
 
 private val FondoAgregar = Color(0xFFFFF5E7)
 private val CafeAgregar = Color(0xFF92623D)
 private val OscuroAgregar = Color(0xFF4B2E15)
 
-// Conecta el formulario para agregar con el ViewModel.
+
+/**
+ * Conecta el formulario de productos
+ * con las operaciones persistentes del ViewModel.
+ *
+ * Espera la confirmación del guardado antes
+ * de regresar al catálogo.
+ */
 @Composable
 fun AgregarProductoAdmin(
     viewModel: ProductoViewModel,
     onVolver: () -> Unit
 ) {
+
     val error by viewModel.error.collectAsState()
+
+    // Permite ejecutar operaciones suspend
+    // sin bloquear la interfaz.
+    val scope = rememberCoroutineScope()
+
+    // Evita múltiples guardados por pulsaciones
+    // repetidas del botón.
+    var guardando by remember {
+        mutableStateOf(false)
+    }
 
     LaunchedEffect(Unit) {
         viewModel.limpiarError()
@@ -51,9 +70,31 @@ fun AgregarProductoAdmin(
     AgregarProductoScreen(
         onVolver = onVolver,
         errorGuardado = error,
+        guardando = guardando,
+
         onGuardar = { producto ->
-            if (viewModel.agregarProducto(producto)) {
-                onVolver()
+
+            if (!guardando) {
+
+                guardando = true
+
+                scope.launch {
+
+                    try {
+
+                        val guardado = viewModel
+                            .agregarProductoPersistente(producto)
+
+                        // Solo salir si el guardado
+                        // finalizó correctamente.
+                        if (guardado) {
+                            onVolver()
+                        }
+
+                    } finally {
+                        guardando = false
+                    }
+                }
             }
         }
     )
@@ -63,8 +104,10 @@ fun AgregarProductoAdmin(
 fun AgregarProductoScreen(
     onVolver: () -> Unit,
     onGuardar: (ProductoInfo) -> Unit,
-    errorGuardado: String? = null
+    errorGuardado: String? = null,
+    guardando: Boolean = false
 ) {
+
     // Campos del nuevo producto.
     var nombre by rememberSaveable {
         mutableStateOf("")
@@ -145,6 +188,7 @@ fun AgregarProductoScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FondoAgregar)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -156,6 +200,7 @@ fun AgregarProductoScreen(
 
             Text(
                 text = "Agregar producto",
+                modifier = Modifier.weight(1f),
                 color = OscuroAgregar,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -262,8 +307,8 @@ fun AgregarProductoScreen(
             precio = it
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(modifier = Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 CampoAgregar(
                     titulo = "Stock inicial *",
                     valor = stock,
@@ -273,7 +318,7 @@ fun AgregarProductoScreen(
                 }
             }
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 CampoAgregar(
                     titulo = "Stock mínimo *",
                     valor = stockMinimo,
@@ -314,17 +359,19 @@ fun AgregarProductoScreen(
             Text(mensaje.orEmpty(), color = Color(0xFFC0392B))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = onVolver,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
+                enabled = !guardando,
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = OscuroAgregar
                 )
             ) {
                 Text("Cancelar")
             }
+
 
             Button(
                 onClick = {
@@ -363,15 +410,16 @@ fun AgregarProductoScreen(
                         onGuardar(productoFormulario)
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
+                enabled = !guardando,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = OscuroAgregar,
                     contentColor = Color.White
                 )
             ) {
                 Text(
-                    "Guardar producto"
+                    if (guardando) "Guardando..." else "Guardar producto"
                 )
             }
         }

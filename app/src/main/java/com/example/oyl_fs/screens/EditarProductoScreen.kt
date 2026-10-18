@@ -31,19 +31,32 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.viewmodel.ProductoViewModel
+import kotlinx.coroutines.launch
 
 private val FondoEditar = Color(0xFFFFF5E7)
 private val CafeEditar = Color(0xFF92623D)
 private val OscuroEditar = Color(0xFF4B2E15)
 
-// Conecta el formulario para editar con el ViewModel.
+/**
+ * Conecta la edición de productos con el ViewModel.
+ *
+ * Cuando Room esté activo, los cambios
+ * se confirmarán desde SQLite antes de salir.
+ */
 @Composable
 fun EditarProductoAdmin(
     producto: ProductoInfo,
     viewModel: ProductoViewModel,
     onVolver: () -> Unit
 ) {
+
     val error by viewModel.error.collectAsState()
+
+    val scope = rememberCoroutineScope()
+
+    var guardando by remember {
+        mutableStateOf(false)
+    }
 
     LaunchedEffect(producto.id) {
         viewModel.limpiarError()
@@ -52,13 +65,36 @@ fun EditarProductoAdmin(
     EditarProductoScreen(
         producto = producto,
         errorGuardado = error,
+        guardando = guardando,
+
         onVolver = {
             viewModel.limpiarError()
             onVolver()
         },
+
         onGuardar = { productoEditado ->
-            if (viewModel.editarProducto(productoEditado)) {
-                onVolver()
+
+            if (!guardando) {
+
+                guardando = true
+
+                scope.launch {
+
+                    try {
+
+                        val actualizado = viewModel
+                            .editarProductoPersistente(
+                                productoEditado
+                            )
+
+                        if (actualizado) {
+                            onVolver()
+                        }
+
+                    } finally {
+                        guardando = false
+                    }
+                }
             }
         }
     )
@@ -69,8 +105,10 @@ fun EditarProductoScreen(
     producto: ProductoInfo,
     onVolver: () -> Unit,
     onGuardar: (ProductoInfo) -> Unit,
-    errorGuardado: String? = null
+    errorGuardado: String? = null,
+    guardando: Boolean = false
 ) {
+
     // Al editar, comienza con los datos del producto.
     var nombre by rememberSaveable(producto.id) {
         mutableStateOf(producto.nombre)
@@ -151,6 +189,7 @@ fun EditarProductoScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FondoEditar)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -162,6 +201,7 @@ fun EditarProductoScreen(
 
             Text(
                 text = "Editar producto",
+                modifier = Modifier.weight(1f),
                 color = OscuroEditar,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -268,8 +308,8 @@ fun EditarProductoScreen(
             precio = it
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(modifier = Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 CampoEditar(
                     titulo = "Stock actual *",
                     valor = stock,
@@ -279,7 +319,7 @@ fun EditarProductoScreen(
                 }
             }
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 CampoEditar(
                     titulo = "Stock mínimo *",
                     valor = stockMinimo,
@@ -320,10 +360,11 @@ fun EditarProductoScreen(
             Text(mensaje.orEmpty(), color = Color(0xFFC0392B))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = onVolver,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !guardando,
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = OscuroEditar
@@ -369,15 +410,16 @@ fun EditarProductoScreen(
                         onGuardar(productoFormulario)
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
+                enabled = !guardando,
                 colors = ButtonDefaults.buttonColors(
                     containerColor = OscuroEditar,
                     contentColor = Color.White
                 )
             ) {
                 Text(
-                    "Guardar cambios"
+                    if (guardando) "Guardando..." else "Guardar cambios"
                 )
             }
         }

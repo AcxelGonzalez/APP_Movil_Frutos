@@ -76,7 +76,7 @@ fun PerfilScreen(
 ) {
     Column(
         Modifier.fillMaxSize().background(FondoPerfil)
-            .verticalScroll(rememberScrollState()).padding(24.dp),
+            .imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
@@ -93,7 +93,7 @@ fun PerfilScreen(
         Text(perfil.correo, color = CafePerfil)
         Text(if (perfil.esAdmin) "Cuenta de administrador" else "Cuenta de cliente", color = CafePerfil)
         Button(
-            onClick = onDatosPersonales, modifier = Modifier.fillMaxWidth().height(56.dp),
+            onClick = onDatosPersonales, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)
         ) {
@@ -103,7 +103,7 @@ fun PerfilScreen(
             Text("›")
         }
         Divider(color = CafePerfil.copy(alpha = 0.2f))
-        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth().height(52.dp),
+        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text("Cerrar sesión") }
     }
@@ -116,7 +116,7 @@ private fun DatosPersonalesScreen(
     onEditar: () -> Unit
 ) {
     Column(Modifier.fillMaxSize().background(FondoPerfil)
-        .verticalScroll(rememberScrollState()).padding(24.dp),
+        .imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
         TextButton(onClick = onVolver) { Text("‹ Datos personales", color = OscuroPerfil) }
         Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
@@ -129,7 +129,7 @@ private fun DatosPersonalesScreen(
                 if (!perfil.esAdmin) DatoPerfil("Dirección", perfil.direccion)
             }
         }
-        Button(onClick = onEditar, modifier = Modifier.fillMaxWidth().height(52.dp),
+        Button(onClick = onEditar, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text("Editar datos") }
     }
@@ -156,7 +156,7 @@ private fun EditarPerfilScreen(
     var telefono by rememberSaveable(perfil.id) { mutableStateOf(perfil.telefono) }
     var direccion by rememberSaveable(perfil.id) { mutableStateOf(perfil.direccion) }
     Column(Modifier.fillMaxSize().background(FondoPerfil)
-        .verticalScroll(rememberScrollState()).padding(24.dp),
+        .imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onVolver) { Text("‹ Editar datos", color = OscuroPerfil) }
         CampoPerfil("Nombre *", nombre) { nombre = it }
@@ -170,12 +170,12 @@ private fun EditarPerfilScreen(
             Text(error.orEmpty(), color = Color(0xFFC0392B))
         }
         Text("Utiliza únicamente datos ficticios para la demostración.", color = CafePerfil, fontSize = 12.sp)
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            OutlinedButton(onClick = onVolver, modifier = Modifier.weight(1f)) { Text("Cancelar") }
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            OutlinedButton(onClick = onVolver, modifier = Modifier.fillMaxWidth()) { Text("Cancelar") }
             Button(onClick = {
                 onGuardar(perfil.copy(nombre = nombre, apellido = apellido, rut = rut,
                     correo = correo, telefono = telefono, direccion = direccion))
-            }, modifier = Modifier.weight(1f),
+            }, modifier = Modifier.fillMaxWidth(),
                 colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text("Guardar") }
         }
     }

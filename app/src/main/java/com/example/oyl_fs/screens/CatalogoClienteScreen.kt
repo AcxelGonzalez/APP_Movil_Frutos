@@ -19,6 +19,11 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.window.Dialog
 import kotlinx.coroutines.delay
@@ -94,7 +99,10 @@ fun ProductosCliente(
             onVolver = onVolver,
             onDetalle = { productoId = it.id },
             onAgregar = { producto, cantidad -> carritoViewModel.agregarProducto(producto, cantidad) },
-            unidadesDisponibles = { unidadesDisponibles(it) }
+            unidadesDisponibles = { unidadesDisponibles(it) },
+            cantidadEnCarrito = carrito.cantidadProductos,
+            totalCarrito = carrito.total,
+            onAbrirCarrito = onAbrirCarrito
         )
     }
 }
@@ -106,7 +114,10 @@ fun CatalogoClienteScreen(
     onVolver: () -> Unit,
     onDetalle: (ProductoInfo) -> Unit,
     onAgregar: (ProductoInfo, Int) -> Boolean,
-    unidadesDisponibles: (ProductoInfo) -> Int = { it.stock }
+    unidadesDisponibles: (ProductoInfo) -> Int = { it.stock },
+    cantidadEnCarrito: Int = 0,
+    totalCarrito: Long = 0L,
+    onAbrirCarrito: () -> Unit = {}
 ) {
     var productoParaAgregarId by rememberSaveable { mutableStateOf<Int?>(null) }
     var cantidad by rememberSaveable { mutableStateOf(1) }
@@ -124,15 +135,36 @@ fun CatalogoClienteScreen(
         modifier = Modifier.fillMaxSize().background(FondoCliente).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        Row {
-            TextButton(onClick = onVolver) { Text("‹", color = OscuroCliente) }
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onVolver) {
+                Icon(Icons.Default.ArrowBack, "Volver al inicio", tint = OscuroCliente)
+            }
             Text("Productos", color = OscuroCliente, fontSize = 22.sp,
-                fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            // El contador se dibuja dentro del botón para mantenerlo alineado.
+            Box(Modifier.size(56.dp)) {
+                FilledIconButton(onClick = onAbrirCarrito, modifier = Modifier.fillMaxSize(),
+                    colors = IconButtonDefaults.filledIconButtonColors(containerColor = OscuroCliente)) {
+                    Icon(Icons.Default.ShoppingCart, "Abrir carrito: $cantidadEnCarrito unidades", tint = Color.White)
+                }
+                if (cantidadEnCarrito > 0) {
+                    Badge(Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+                        containerColor = Color(0xFFB3261E), contentColor = Color.White) {
+                        Text(if (cantidadEnCarrito > 99) "99+" else "$cantidadEnCarrito")
+                    }
+                }
+            }
         }
         OutlinedTextField(
             value = busqueda,
             onValueChange = { busqueda = it },
             placeholder = { Text("Buscar productos...") },
+            leadingIcon = { Icon(Icons.Default.Search, null, tint = CafeCliente) },
+            trailingIcon = {
+                if (busqueda.isNotEmpty()) IconButton(onClick = { busqueda = "" }) {
+                    Icon(Icons.Default.Close, "Borrar búsqueda", tint = CafeCliente)
+                }
+            },
             singleLine = true,
             shape = RoundedCornerShape(50),
             colors = TextFieldDefaults.outlinedTextFieldColors(
@@ -144,20 +176,31 @@ fun CatalogoClienteScreen(
         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             items(categorias.size) { indice ->
                 val texto = categorias[indice]
-                Text(
-                    text = texto,
-                    color = if (categoria == texto) Color.White else CafeCliente,
-                    fontSize = 12.sp,
-                    modifier = Modifier.clip(RoundedCornerShape(50))
-                        .background(if (categoria == texto) OscuroCliente else Color.White)
-                        .clickable { categoria = texto }
-                        .padding(horizontal = 12.dp, vertical = 9.dp)
+                FilterChip(
+                    selected = categoria == texto,
+                    onClick = { categoria = texto },
+                    label = { Text(texto) },
+                    shape = RoundedCornerShape(50),
+                    colors = FilterChipDefaults.filterChipColors(
+                        containerColor = Color.White, labelColor = CafeCliente,
+                        selectedContainerColor = OscuroCliente, selectedLabelColor = Color.White
+                    )
                 )
             }
         }
-        if (filtrados.isEmpty()) Text("No se encontraron productos.", color = CafeCliente)
+        Text("${filtrados.size} ${if (filtrados.size == 1) "producto" else "productos"}",
+            color = CafeCliente, fontSize = 12.sp)
+        if (filtrados.isEmpty()) {
+            Column(Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                horizontalAlignment = Alignment.CenterHorizontally) {
+                Icon(Icons.Default.Search, null, tint = CafeCliente, modifier = Modifier.size(32.dp))
+                Text("No encontramos productos", color = OscuroCliente, fontWeight = FontWeight.Bold)
+                Text("Prueba otro nombre o categoría.", color = CafeCliente)
+                TextButton(onClick = { busqueda = ""; categoria = "Todos" }) { Text("Ver todos") }
+            }
+        }
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 140.dp),
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -175,7 +218,11 @@ fun CatalogoClienteScreen(
                         TextoTarjetaProducto(producto.presentacion, color = CafeCliente, fontSize = 12.sp)
                         TextoTarjetaProducto("$" + "%,d".format(producto.precio).replace(',', '.'),
                             color = OscuroCliente, fontWeight = FontWeight.Bold, lineas = 1)
-                        TextoTarjetaProducto(if (producto.stock <= 0) "Sin stock" else "", color = CafeCliente, fontSize = 12.sp, lineas = 1)
+                        TextoTarjetaProducto(when {
+                            producto.stock <= 0 -> "Sin stock"
+                            unidadesDisponibles(producto) <= 0 -> "Límite en carrito"
+                            else -> "Disponible"
+                        }, color = CafeCliente, fontSize = 12.sp, lineas = 1)
                         Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             OutlinedButton(
                                 onClick = { onDetalle(producto) },
@@ -195,6 +242,26 @@ fun CatalogoClienteScreen(
                 }
             }
         }
+        if (cantidadEnCarrito > 0) {
+            Surface(color = Color.White, shape = RoundedCornerShape(18.dp),
+                border = BorderStroke(1.dp, CafeCliente.copy(alpha = 0.15f))) {
+                Row(Modifier.fillMaxWidth().padding(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.weight(1f)) {
+                        Text("$cantidadEnCarrito ${if (cantidadEnCarrito == 1) "unidad" else "unidades"} en tu carrito",
+                            color = CafeCliente, fontSize = 12.sp)
+                        Text("$" + "%,d".format(totalCarrito).replace(',', '.'),
+                            color = OscuroCliente, fontWeight = FontWeight.Bold, fontSize = 20.sp)
+                    }
+                    Button(onClick = onAbrirCarrito, shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = OscuroCliente)) {
+                        Text("Ver carrito")
+                    }
+                }
+            }
+        }
+
     }
 
     if (productoParaAgregar != null) {
@@ -257,7 +324,11 @@ fun CatalogoClienteScreen(
 @Composable
 private fun CatalogoClientePreview() {
     MaterialTheme {
-        CatalogoClienteScreen(ProductosDatos.productos, {}, {}, { _, _ -> false })
+        CatalogoClienteScreen(
+            productos = ProductosDatos.productos,
+            onVolver = {}, onDetalle = {}, onAgregar = { _, _ -> false },
+            cantidadEnCarrito = 2, totalCarrito = 13980L
+        )
     }
 }
 

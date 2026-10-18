@@ -159,8 +159,14 @@ class PedidoRepository {
     }
 
     /**
-     * Genera pedidos ficticios para probar la interfaz.
-     * No utiliza información real de clientes.
+     * Crea pedidos de demostración utilizando los
+     * mismos IDs, nombres y precios del catálogo.
+     *
+     * Esto permite utilizar los códigos QR generados
+     * desde la administración de productos.
+     *
+     * Estos pedidos son datos iniciales de prueba;
+     * no representan compras nuevas ni descuentan stock.
      */
     private fun crearPedidosDemo(): List<Pedido> {
 
@@ -168,75 +174,82 @@ class PedidoRepository {
         val dia = 86_400_000L
 
         return listOf(
+
+            // Pedido con Almendras y Nueces.
             Pedido(
                 id = "PED-001",
                 usuarioId = "cliente-demo",
                 fecha = ahora - dia,
                 productos = listOf(
                     DetallePedido(
-                        productoId = "PROD-001",
+                        productoId = "1",
                         nombreProducto = "Almendras",
                         cantidad = 2,
-                        precioUnitario = 4500
+                        precioUnitario = 6990
                     ),
                     DetallePedido(
-                        productoId = "PROD-002",
+                        productoId = "2",
                         nombreProducto = "Nueces",
                         cantidad = 1,
-                        precioUnitario = 5200
+                        precioUnitario = 5990
                     )
                 ),
-                total = 14200,
+                total = 19970,
                 estado = EstadoPedido.CONFIRMADO
             ),
 
+            // Pedido entregado de Semillas de girasol.
             Pedido(
                 id = "PED-002",
                 usuarioId = "cliente-demo",
                 fecha = ahora - (3 * dia),
                 productos = listOf(
                     DetallePedido(
-                        productoId = "PROD-003",
-                        nombreProducto = "Semillas de Chia",
+                        productoId = "5",
+                        nombreProducto = "Semillas de girasol",
                         cantidad = 3,
-                        precioUnitario = 2300
+                        precioUnitario = 7990
                     )
                 ),
-                total = 6900,
+                total = 23970,
                 estado = EstadoPedido.ENTREGADO
             ),
 
+            // Pedido de otro cliente para probar
+            // la separación del historial por usuario.
             Pedido(
                 id = "PED-003",
                 usuarioId = "otro-cliente",
                 fecha = ahora - (2 * dia),
                 productos = listOf(
                     DetallePedido(
-                        productoId = "PROD-004",
-                        nombreProducto = "Castanas de Caju",
+                        productoId = "4",
+                        nombreProducto = "Mix de frutos secos",
                         cantidad = 1,
-                        precioUnitario = 6500
+                        precioUnitario = 16000
                     )
                 ),
-                total = 6500,
+                total = 16000,
                 estado = EstadoPedido.PENDIENTE_VALIDACION
             ),
 
+            // Pedido preparado de Pasas.
             Pedido(
                 id = "PED-004",
                 usuarioId = "cliente-demo",
                 fecha = ahora,
                 productos = listOf(
                     DetallePedido(
-                        productoId = "PROD-005",
+                        productoId = "3",
                         nombreProducto = "Pasas",
                         cantidad = 2,
-                        precioUnitario = 1900
+                        precioUnitario = 6000
                     )
                 ),
-                total = 3800,
+                total = 12000,
                 estado = EstadoPedido.PREPARADO
             )
         )
     }
+
 }

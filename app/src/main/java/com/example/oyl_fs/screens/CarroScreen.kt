@@ -2,7 +2,7 @@ package com.example.oyl_fs.screens
 
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
-
+import com.example.oyl_fs.model.ProductoInfo
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -50,21 +50,50 @@ fun CarroScreen(
     val estado by vm.uiState.collectAsState()
     val mensaje by vm.mensaje.collectAsState()
 
+
+    var mostrarConfirmacion by remember { mutableStateOf(false) }
+
+    var itemAEliminar by remember { mutableStateOf<ItemCarrito?>(null) }
+
     CarroContenido(
         estado = estado,
         mensaje = mensaje,
         onMensajeMostrado = vm::mensajeMostrado,
         onVolver = onVolver,
         onAumentar = vm::aumentar,
-        onDisminuir = vm::disminuir,
-        onQuitar = vm::quitar,
+        onDisminuir = { item ->
+            if (item.cantidad <= 1) itemAEliminar = item else vm.disminuir(item)
+        },
+        onQuitar = { item -> itemAEliminar = item },
         onConfirmar = {
-            if (vm.validarAntesDeConfirmar()) onConfirmar(estado.items)
+            if (vm.validarAntesDeConfirmar()) mostrarConfirmacion = true
         }
     )
+
+    if (mostrarConfirmacion) {
+        DialogoConfirmarCompra(
+            estado = estado,
+            onCancelar = { mostrarConfirmacion = false },
+            onAceptar = {
+                mostrarConfirmacion = false
+                onConfirmar(estado.items)
+            }
+        )
+    }
+
+    // mensaje para confirmar que se quita un producto
+    itemAEliminar?.let { item ->
+        DialogoQuitarProducto(
+            item = item,
+            onCancelar = { itemAEliminar = null },
+            onAceptar = {
+                vm.quitar(item)
+                itemAEliminar = null
+            }
+        )
+    }
 }
 
-// Solo dibuja, no conoce el ViewModel. Así se puede ver en el Preview
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CarroContenido(
@@ -137,11 +166,17 @@ private fun FilaCarrito(
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
 
-            // Foto pequeña (por ahora un ícono)
+            // Foto del producto (o un ícono si no tiene)
             Box(
-                Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)).background(FondoOYL),
+                Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)).background(FondoOYL),
                 contentAlignment = Alignment.Center
-            ) { Icon(Icons.Default.Inventory2, null, tint = PrincipalOYL) }
+            ) {
+                if (item.imagen != 0 || !item.imagenUri.isNullOrBlank()) {
+                    ImagenProducto(producto = item.comoProducto(), modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Default.Inventory2, null, tint = PrincipalOYL)
+                }
+            }
 
             Spacer(Modifier.width(12.dp))
 
@@ -225,7 +260,7 @@ private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
                 onClick = onConfirmar,
                 colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
             ) {
                 Text("Confirmar pedido")
             }
@@ -262,6 +297,94 @@ private fun formatoPrecio(valor: Long): String =
         .getIntegerInstance(Locale("es", "CL"))
         .format(valor)
 
+private fun ItemCarrito.comoProducto() = ProductoInfo(
+    id = productoId.toIntOrNull() ?: 0,
+    nombre = nombre,
+    codigo = "",
+    categoria = "",
+    descripcion = "",
+    presentacion = formato,
+    precio = precio,
+    stock = stockDisponible,
+    stockMinimo = 0,
+    disponible = true,
+    imagen = imagen,
+    imagenUri = imagenUri
+)
+
+@Composable
+private fun DialogoConfirmarCompra(
+    estado: CarritoUiState,
+    onCancelar: () -> Unit,
+    onAceptar: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancelar,   // tocar fuera o "atrás" = cancelar
+        containerColor = Color.White,
+        icon = {
+            Icon(Icons.Default.ShoppingCart, null, tint = SecundarioOYL)
+        },
+        title = {
+            Text("¿Deseas finalizar la compra?", fontWeight = FontWeight.Bold, color = SecundarioOYL)
+        },
+        text = {
+            Text(
+                "Vas a comprar ${estado.cantidadProductos} productos por un total de " +
+                        "${formatoPrecio(estado.total)}.",
+                color = PrincipalOYL
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onAceptar,
+                colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Finalizar compra") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelar) {
+                Text("Cancelar", color = PrincipalOYL)
+            }
+        }
+    )
+}
+@Composable
+private fun DialogoQuitarProducto(
+    item: ItemCarrito,
+    onCancelar: () -> Unit,
+    onAceptar: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancelar,
+        containerColor = Color.White,
+        icon = {
+            Icon(Icons.Default.Delete, null, tint = CriticoOYL)
+        },
+        title = {
+            Text("¿Quitar producto?", fontWeight = FontWeight.Bold, color = SecundarioOYL)
+        },
+        text = {
+            Text(
+                "Se quitará ${item.nombre} (${item.cantidad} " +
+                        "${if (item.cantidad == 1) "unidad" else "unidades"}) de tu carrito.",
+                color = PrincipalOYL
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onAceptar,
+                colors = ButtonDefaults.buttonColors(containerColor = CriticoOYL),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Quitar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelar) {
+                Text("Cancelar", color = PrincipalOYL)
+            }
+        }
+    )
+}
+
 // ---------- Preview (se ve sin emulador) ----------
 @Preview(showBackground = true)
 @Composable
@@ -269,9 +392,9 @@ private fun CarroPreview() {
     CarroContenido(
         estado = CarritoUiState(
             items = listOf(
-                ItemCarrito("P001", "Almendras", "500 g", 6990, 2, 10),
-                ItemCarrito("P002", "Nueces", "1 kg", 8490, 3, 2),
-                ItemCarrito("P003", "Pasas", "250 g", 2990, 1, 15)
+                ItemCarrito("1", "Almendras", "500 g", 6990, 2, 10, imagen = ProductosDatos.almendras.imagen),
+                ItemCarrito("2", "Nueces", "500 g", 5990, 3, 2, imagen = ProductosDatos.nueces.imagen),
+                ItemCarrito("3", "Pasas", "500 g", 6000, 1, 15, imagen = ProductosDatos.pasas.imagen)
             )
         ),
         mensaje = null,
