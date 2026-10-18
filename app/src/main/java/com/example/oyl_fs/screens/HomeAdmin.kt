@@ -314,43 +314,63 @@ fun HomeAdmin(
                         }
 
                         // ---------- PEDIDOS RECIENTES ----------
-                        Seccion(
-                            "Pedidos recientes",
-                            accion = "Ver todo",
-                            onAccion = onAbrirHistorial
+                        Column(
+                            Modifier.fillMaxWidth(),
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-
-                            pedidosRecientes.forEach { p ->
-
-                                Row(
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(vertical = 8.dp),
-
-                                    verticalAlignment = Alignment.CenterVertically
-                                ) {
-
-                                    Text(
-                                        "Pedido ${p.id}",
-                                        color = SecundarioOYL,
-                                        modifier = Modifier.weight(1f)
-                                    )
-
-                                    EstadoPedidoChip(estado = p.estado)
-
-                                    Spacer(Modifier.width(12.dp))
-
-                                    Text(
-                                        "$" + "%,d"
-                                            .format(p.total)
-                                            .replace(',', '.'),
-
-                                        fontWeight = FontWeight.Bold,
-                                        color = SecundarioOYL
-                                    )
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text("Pedidos recientes", color = SecundarioOYL,
+                                    fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                                    modifier = Modifier.weight(1f))
+                                TextButton(onClick = onAbrirHistorial) {
+                                    Text("Ver todo →", color = PrincipalOYL)
                                 }
-
-                                Divider(color = FondoOYL)
+                            }
+                            if (pedidosRecientes.isEmpty()) {
+                                Text("Todavía no hay pedidos.", color = PrincipalOYL)
+                            }
+                            pedidosRecientes.forEach { p ->
+                                // Mismo estilo que Mi último pedido del Home cliente.
+                                Card(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = CardDefaults.cardColors(containerColor = Color.White)
+                                ) {
+                                    Column(Modifier.padding(16.dp),
+                                        verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                                        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                            Text("Pedido", color = SecundarioOYL, fontWeight = FontWeight.Bold,
+                                                modifier = Modifier.weight(1f))
+                                            Text(p.id, color = PrincipalOYL, fontSize = 13.sp)
+                                        }
+                                        Text("$" + "%,d".format(p.total).replace(',', '.'),
+                                            color = SecundarioOYL, fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                                        EstadoPedidoChip(p.estado, Modifier.widthIn(max = 280.dp))
+                                        val indiceEstado = when (p.estado) {
+                                            EstadoPedido.PENDIENTE_VALIDACION -> 0
+                                            EstadoPedido.CONFIRMADO -> 1
+                                            EstadoPedido.PREPARADO -> 2
+                                            EstadoPedido.ENTREGADO -> 3
+                                        }
+                                        LinearProgressIndicator(
+                                            progress = (indiceEstado + 1) / 4f,
+                                            modifier = Modifier.fillMaxWidth().height(8.dp)
+                                                .clip(RoundedCornerShape(50)),
+                                            color = PrincipalOYL,
+                                            trackColor = FondoOYL
+                                        )
+                                        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                                            listOf("Pendiente", "Confirmado", "Preparado", "Entregado")
+                                                .forEachIndexed { indice, estado ->
+                                                    Text(estado, fontSize = 10.sp,
+                                                        textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                                                        modifier = Modifier.weight(1f),
+                                                        color = if (indice <= indiceEstado) SecundarioOYL
+                                                            else PrincipalOYL.copy(alpha = 0.4f))
+                                                }
+                                        }
+                                    }
+                                }
                             }
                         }
 
@@ -497,6 +517,7 @@ private fun Seccion(
 ) {
 
     Card(
+        modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
 
         colors = CardDefaults.cardColors(
@@ -509,6 +530,7 @@ private fun Seccion(
         ) {
 
             Row(
+                modifier = Modifier.fillMaxWidth(),
                 verticalAlignment = Alignment.CenterVertically
             ) {
 
