@@ -1,5 +1,12 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.text.input.ImeAction
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -32,10 +39,11 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
     var usuario by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+    val foco = LocalFocusManager.current
     val cafe = Color(0xFF4A2C1A)
     val rojo = Color(0xFFC0392B)
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    BoxWithConstraints(modifier = Modifier.fillMaxSize().imePadding()) {
 
         Image(
             painter = painterResource(R.drawable.login_main),
@@ -46,7 +54,9 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                .verticalScroll(rememberScrollState())
+                .heightIn(min = maxHeight)
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
@@ -58,11 +68,12 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
                     usuario = it
                     error = ""
                 },
+                keyboardActions = KeyboardActions(onNext = { foco.moveFocus(FocusDirection.Down) }),
                 label = { Text("Usuario") },
                 singleLine = true,
                 isError = error.isNotEmpty(),
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None
+                    capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Next
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
@@ -79,7 +90,8 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
                 singleLine = true,
                 isError = error.isNotEmpty(),
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { foco.clearFocus() }),
                 modifier = Modifier.fillMaxWidth()
             )
 
@@ -96,6 +108,7 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
 
             Button(
                 onClick = {
+                    foco.clearFocus()
                     val u = usuario.trim().lowercase()
                     val c = contrasena.trim()
                     when {

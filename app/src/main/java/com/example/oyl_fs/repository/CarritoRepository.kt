@@ -22,7 +22,11 @@ object CarritoRepository {
 
         val nuevaLista = if (existente != null) {
             actual.map {
-                if (it.productoId == item.productoId) it.copy(cantidad = nuevaCantidad)
+                if (it.productoId == item.productoId) it.copy(
+                    cantidad = nuevaCantidad,
+                    imagen = item.imagen,
+                    imagenUri = item.imagenUri
+                )
                 else it
             }
         } else {
@@ -88,7 +92,7 @@ object CarritoRepository {
             item.copy(
                 stockDisponible = stockActual,
                 imagen = producto?.imagen ?: item.imagen,
-                imagenUri = producto?.imagenUri ?: item.imagenUri
+                imagenUri = if (producto != null) producto.imagenUri else item.imagenUri
             )
         }
 

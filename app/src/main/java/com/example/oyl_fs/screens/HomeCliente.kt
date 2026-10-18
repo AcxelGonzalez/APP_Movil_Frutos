@@ -70,7 +70,9 @@ fun HomeCliente(
     perfilViewModel: PerfilViewModel,
     onLogout: () -> Unit,
     onAbrirHistorial: () -> Unit,
-    onAbrirCarrito: () -> Unit
+    onAbrirCarrito: () -> Unit,
+    pestanaSolicitada: Int? = null,
+    onPestanaAtendida: () -> Unit = {}
 ) {
     // Datos de prueba (luego vendrán del ViewModel / SQLite)
     val promos = listOf(
@@ -143,6 +145,15 @@ fun HomeCliente(
 
 
     var tab by rememberSaveable { mutableStateOf(0) }
+
+    // El historial puede solicitar una pestaña del mismo menú.
+    LaunchedEffect(pestanaSolicitada) {
+        if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
+            tab = pestanaSolicitada
+            onPestanaAtendida()
+        }
+    }
+
 
     // identificar producto
     var productoDetalleId by rememberSaveable {
@@ -658,7 +669,7 @@ private fun CategoriaChip(
 }
 
 @Composable
-private fun BarraCliente(
+fun BarraCliente(
     seleccion: Int,
     onSelect: (Int) -> Unit
 ) {

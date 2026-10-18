@@ -188,6 +188,7 @@ fun AgregarProductoScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(FondoAgregar)
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -199,6 +200,7 @@ fun AgregarProductoScreen(
 
             Text(
                 text = "Agregar producto",
+                modifier = Modifier.weight(1f),
                 color = OscuroAgregar,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold
@@ -305,8 +307,8 @@ fun AgregarProductoScreen(
             precio = it
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(modifier = Modifier.weight(1f)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 CampoAgregar(
                     titulo = "Stock inicial *",
                     valor = stock,
@@ -316,7 +318,7 @@ fun AgregarProductoScreen(
                 }
             }
 
-            Column(modifier = Modifier.weight(1f)) {
+            Column(modifier = Modifier.fillMaxWidth()) {
                 CampoAgregar(
                     titulo = "Stock mínimo *",
                     valor = stockMinimo,
@@ -357,10 +359,10 @@ fun AgregarProductoScreen(
             Text(mensaje.orEmpty(), color = Color(0xFFC0392B))
         }
 
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(
                 onClick = onVolver,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 enabled = !guardando,
                 colors = ButtonDefaults.outlinedButtonColors(
@@ -408,7 +410,7 @@ fun AgregarProductoScreen(
                         onGuardar(productoFormulario)
                     }
                 },
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
                 enabled = !guardando,
                 colors = ButtonDefaults.buttonColors(

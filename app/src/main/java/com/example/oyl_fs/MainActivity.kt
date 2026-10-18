@@ -1,6 +1,13 @@
 
 package com.example.oyl_fs
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
+import com.example.oyl_fs.repository.ProductoRoomRepository
+import kotlinx.coroutines.launch
+
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+
 import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
@@ -38,9 +45,13 @@ class MainActivity : ComponentActivity() {
         ]
 
         // ViewModel para gestionar los productos.
-        val productoViewModel = ViewModelProvider(this)[
-            ProductoViewModel::class.java
-        ]
+        val productoViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                require(modelClass.isAssignableFrom(ProductoViewModel::class.java))
+                @Suppress("UNCHECKED_CAST")
+                return ProductoViewModel(ProductoRoomRepository(applicationContext)) as T
+            }
+        })[ProductoViewModel::class.java]
 
         // ViewModel compartido entre HomeCliente y CarroScreen.
         // Evita que cada pantalla utilice un estado independiente.
@@ -102,6 +113,12 @@ class MainActivity : ComponentActivity() {
                 var mostrarRegistro by rememberSaveable {
                     mutableStateOf(false)
                 }
+
+                // Conserva catálogo, filtros y desplazamiento al volver del carrito.
+                val estadoHomeCliente = rememberSaveableStateHolder()
+
+                var procesandoCompra by remember { mutableStateOf(false) }
+                var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
 
                 // Navegación al carrito.
                 var mostrarCarrito by rememberSaveable {
@@ -274,6 +291,11 @@ class MainActivity : ComponentActivity() {
                             },
 
                             onConfirmar = { productos ->
+                                if (!procesandoCompra) {
+                                    procesandoCompra = true
+                                    lifecycleScope.launch {
+                                        try {
+
 
                                 // PASO 1: validar los datos del carrito contra
                                 // los productos actuales del catálogo.
@@ -304,7 +326,7 @@ class MainActivity : ComponentActivity() {
 
                                     // PASO 3: descontar las unidades compradas.
                                     val stockActualizado = productoViewModel
-                                        .descontarStockPorCompra(productos)
+                                        .descontarStockPorCompraPersistente(productos)
 
                                     if (!stockActualizado) {
 
@@ -346,7 +368,7 @@ class MainActivity : ComponentActivity() {
                                             // restauramos el stock previo.
                                             productosAnteriores.forEach { producto ->
                                                 productoViewModel
-                                                    .editarProducto(producto)
+                                                    .editarProductoPersistente(producto)
                                             }
 
                                             Toast.makeText(
@@ -354,6 +376,12 @@ class MainActivity : ComponentActivity() {
                                                 "No se pudo registrar el pedido",
                                                 Toast.LENGTH_LONG
                                             ).show()
+                                        }
+                                    }
+                                }
+                            
+                                        } finally {
+                                            procesandoCompra = false
                                         }
                                     }
                                 }
@@ -374,6 +402,10 @@ class MainActivity : ComponentActivity() {
 
                             esAdmin = esAdmin,
                             viewModel = historialViewModel,
+                            onNavegar = { indice ->
+                                pestanaDesdeHistorial = indice
+                                mostrarHistorial = false
+                            },
 
                             onVolver = {
                                 mostrarHistorial = false
@@ -407,6 +439,8 @@ class MainActivity : ComponentActivity() {
                     esAdmin -> {
 
                         HomeAdmin(
+                            pestanaSolicitada = pestanaDesdeHistorial,
+                            onPestanaAtendida = { pestanaDesdeHistorial = null },
                             onLogout = {
                                 mostrarHistorial = false
                                 mostrarCarrito = false
@@ -432,7 +466,10 @@ class MainActivity : ComponentActivity() {
                     // ---------- Home cliente ----------
                     else -> {
 
+                        estadoHomeCliente.SaveableStateProvider("cliente") {
                         HomeCliente(
+                            pestanaSolicitada = pestanaDesdeHistorial,
+                            onPestanaAtendida = { pestanaDesdeHistorial = null },
                             nombre = perfiles.find {
                                 it.id == "cliente-demo"
                             }?.nombre ?: "Cliente",
@@ -447,6 +484,7 @@ class MainActivity : ComponentActivity() {
                             perfilViewModel = perfilViewModel,
 
                             onLogout = {
+                                estadoHomeCliente.removeState("cliente")
                                 mostrarHistorial = false
                                 mostrarCarrito = false
                                 pedidoPrepararId = null
@@ -461,6 +499,7 @@ class MainActivity : ComponentActivity() {
                                 mostrarCarrito = true
                             }
                         )
+                        }
                     }
                 }
             }

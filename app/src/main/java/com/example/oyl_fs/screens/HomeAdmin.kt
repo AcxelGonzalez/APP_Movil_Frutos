@@ -53,7 +53,9 @@ fun HomeAdmin(
     viewModel: ProductoViewModel,
     historialViewModel: HistorialViewModel,
     perfilViewModel: PerfilViewModel,
-    nombre: String = "Administrador"
+    nombre: String = "Administrador",
+    pestanaSolicitada: Int? = null,
+    onPestanaAtendida: () -> Unit = {}
 ) {
 
     // Observa los productos actualizados del catálogo.
@@ -84,6 +86,15 @@ fun HomeAdmin(
 
     // Controla la pantalla seleccionada
     var tab by rememberSaveable { mutableStateOf(0) }
+
+    // El historial puede solicitar una pestaña del mismo menú.
+    LaunchedEffect(pestanaSolicitada) {
+        if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
+            tab = pestanaSolicitada
+            onPestanaAtendida()
+        }
+    }
+
 
     // Controla la animación inicial
     var visible by remember { mutableStateOf(false) }
@@ -531,7 +542,7 @@ private fun Seccion(
 
 // ---------- BARRA DE NAVEGACIÓN ----------
 @Composable
-private fun BarraAdmin(
+fun BarraAdmin(
     seleccion: Int,
     onSelect: (Int) -> Unit
 ) {

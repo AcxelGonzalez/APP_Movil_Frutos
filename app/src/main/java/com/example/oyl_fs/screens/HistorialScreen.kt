@@ -47,7 +47,8 @@ fun HistorialScreen(
     esAdmin: Boolean,
     viewModel: HistorialViewModel,
     onVolver: () -> Unit,
-    onPrepararPedido: (Pedido) -> Unit
+    onPrepararPedido: (Pedido) -> Unit,
+    onNavegar: (Int) -> Unit = { onVolver() }
 ) {
 
     // Configura el usuario al ingresar a la pantalla.
@@ -71,6 +72,17 @@ fun HistorialScreen(
     // Pantalla principal con encabezado y contenido.
     Scaffold(
         containerColor = FondoHistorial,
+        bottomBar = {
+            // Reutiliza la misma barra de los Home, con Pedidos seleccionado.
+            val navegar: (Int) -> Unit = { indice ->
+                if (indice != 3) onNavegar(indice)
+            }
+            if (esAdmin) {
+                BarraAdmin(seleccion = 3, onSelect = navegar)
+            } else {
+                BarraCliente(seleccion = 3, onSelect = navegar)
+            }
+        },
 
         topBar = {
             TopAppBar(

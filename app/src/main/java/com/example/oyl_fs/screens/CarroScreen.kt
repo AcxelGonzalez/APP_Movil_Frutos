@@ -168,7 +168,7 @@ private fun FilaCarrito(
 
             // Foto del producto (o un ícono si no tiene)
             Box(
-                Modifier.size(64.dp).clip(RoundedCornerShape(14.dp)).background(FondoOYL),
+                Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)).background(FondoOYL),
                 contentAlignment = Alignment.Center
             ) {
                 if (item.imagen != 0 || !item.imagenUri.isNullOrBlank()) {
@@ -260,7 +260,7 @@ private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
                 onClick = onConfirmar,
                 colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
                 shape = RoundedCornerShape(16.dp),
-                modifier = Modifier.fillMaxWidth().height(52.dp)
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
             ) {
                 Text("Confirmar pedido")
             }
@@ -392,9 +392,9 @@ private fun CarroPreview() {
     CarroContenido(
         estado = CarritoUiState(
             items = listOf(
-                ItemCarrito("P001", "Almendras", "500 g", 6990, 2, 10),
-                ItemCarrito("P002", "Nueces", "1 kg", 8490, 3, 2),
-                ItemCarrito("P003", "Pasas", "250 g", 2990, 1, 15)
+                ItemCarrito("1", "Almendras", "500 g", 6990, 2, 10, imagen = ProductosDatos.almendras.imagen),
+                ItemCarrito("2", "Nueces", "500 g", 5990, 3, 2, imagen = ProductosDatos.nueces.imagen),
+                ItemCarrito("3", "Pasas", "500 g", 6000, 1, 15, imagen = ProductosDatos.pasas.imagen)
             )
         ),
         mensaje = null,

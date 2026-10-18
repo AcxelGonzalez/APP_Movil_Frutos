@@ -1,6 +1,8 @@
 
 package com.example.oyl_fs.screens
 
+import kotlinx.coroutines.launch
+
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -36,6 +38,9 @@ fun InventarioScreen(
     viewModel: ProductoViewModel,
     onVolver: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var eliminando by remember { mutableStateOf(false) }
+
     // Observamos el catálogo actualizado.
     val productos by viewModel.productos.collectAsState()
     val error by viewModel.error.collectAsState()
@@ -96,12 +101,19 @@ fun InventarioScreen(
                         pantalla = "editar"
                     },
                     onEliminar = {
-                        if (viewModel.eliminarProducto(
-                                productoSeleccionado.id
-                            )
-                        ) {
-                            productoId = null
-                            pantalla = "inventario"
+                        if (!eliminando) {
+                            eliminando = true
+                            val idEliminar = productoSeleccionado.id
+                            scope.launch {
+                                try {
+                                    if (viewModel.eliminarProductoPersistente(idEliminar)) {
+                                        productoId = null
+                                        pantalla = "inventario"
+                                    }
+                                } finally {
+                                    eliminando = false
+                                }
+                            }
                         }
                     },
                     onGenerarQr = {

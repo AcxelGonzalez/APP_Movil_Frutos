@@ -40,6 +40,7 @@ fun RegistroScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -133,7 +134,7 @@ fun RegistroScreen(
                 if (error.isEmpty()) onRegistrado()
             },
             colors = ButtonDefaults.buttonColors(containerColor = cafe),
-            modifier = Modifier.fillMaxWidth().height(52.dp)
+            modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
         ) {
             Text("Registrarse")
         }

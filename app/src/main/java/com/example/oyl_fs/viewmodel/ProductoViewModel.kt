@@ -472,4 +472,24 @@ class ProductoViewModel(
         return true
     }
 
+    // La compra actualiza SQLite antes de confirmar el pedido de demostración.
+    suspend fun descontarStockPorCompraPersistente(items: List<ItemCarrito>): Boolean {
+        val repo = roomRepository ?: return descontarStockPorCompra(items)
+        limpiarError()
+        return try {
+            val actualizado = repo.descontarStockPorCompra(items)
+            if (actualizado) {
+                _productos.value = repo.cargarProductos()
+            } else {
+                _error.value = "El stock o el precio cambió. Revisa tu carrito."
+            }
+            actualizado
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _error.value = "No se pudo guardar el stock"
+            false
+        }
+    }
+
 }
