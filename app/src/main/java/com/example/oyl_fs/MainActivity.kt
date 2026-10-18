@@ -118,6 +118,7 @@ class MainActivity : ComponentActivity() {
                 val estadoHomeCliente = rememberSaveableStateHolder()
 
                 var procesandoCompra by remember { mutableStateOf(false) }
+                var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
 
                 // Navegación al carrito.
                 var mostrarCarrito by rememberSaveable {
@@ -401,6 +402,10 @@ class MainActivity : ComponentActivity() {
 
                             esAdmin = esAdmin,
                             viewModel = historialViewModel,
+                            onNavegar = { indice ->
+                                pestanaDesdeHistorial = indice
+                                mostrarHistorial = false
+                            },
 
                             onVolver = {
                                 mostrarHistorial = false
@@ -434,6 +439,8 @@ class MainActivity : ComponentActivity() {
                     esAdmin -> {
 
                         HomeAdmin(
+                            pestanaSolicitada = pestanaDesdeHistorial,
+                            onPestanaAtendida = { pestanaDesdeHistorial = null },
                             onLogout = {
                                 mostrarHistorial = false
                                 mostrarCarrito = false
@@ -461,6 +468,8 @@ class MainActivity : ComponentActivity() {
 
                         estadoHomeCliente.SaveableStateProvider("cliente") {
                         HomeCliente(
+                            pestanaSolicitada = pestanaDesdeHistorial,
+                            onPestanaAtendida = { pestanaDesdeHistorial = null },
                             nombre = perfiles.find {
                                 it.id == "cliente-demo"
                             }?.nombre ?: "Cliente",
