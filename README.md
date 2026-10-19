@@ -6,7 +6,7 @@ README PENDIENTEEEE
 
 - documentación pendiente de cargar: https://drive.google.com/drive/u/2/folders/1gvYt6zoJIpEe04vUb-BN5oHWqbpBh9BU
 
-- Se crea branch de desarrollo para no cargar directo al main.
+- Se crea branch de desarrollo para no cargar directo al main y a cada integrante para sus respectivos commits
 
 
 README PENDIENTEEEE
