@@ -12,8 +12,10 @@ import androidx.sqlite.db.SupportSQLiteDatabase
 import com.example.oyl_fs.screens.ProductosDatos
 
 /**
- * Base de datos SQLite compartida de
- * OYL Frutos Secos.
+ * Base local de OYL Frutos Secos
+ * SQLite compartida de OYL Frutos Secos.
+ * Versión 2:
+ * productos, pedidos y detalle_pedidos.
  *
  * Los productos iniciales se cargan solamente
  * cuando Room crea la base por primera vez.
@@ -23,14 +25,22 @@ import com.example.oyl_fs.screens.ProductosDatos
  */
 @Database(
     entities = [
-        ProductoEntity::class
+        ProductoEntity::class,
+        PedidoEntity::class,
+        DetallePedidoEntity::class
     ],
-    version = 1,
+    version = 2,
     exportSchema = false
 )
+
 abstract class OylDatabase : RoomDatabase() {
 
     abstract fun productoDao(): ProductoDao
+
+    /**
+     * Acceso a las operaciones de pedidos.
+     */
+    abstract fun pedidoDao(): PedidoDao
 
     companion object {
 
@@ -52,6 +62,9 @@ abstract class OylDatabase : RoomDatabase() {
                     OylDatabase::class.java,
                     "oyl_frutos_secos.db"
                 )
+                    // Permite actualizar bases existentes
+                    // sin perder los productos almacenados.
+                    .addMigrations(MIGRATION_1_2)
 
                     .addCallback(
                         crearCallbackInicializacion(contexto)
