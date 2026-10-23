@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.repository.PedidoRepository
+import com.example.oyl_fs.repository.PedidoRoomRepository
 import com.example.oyl_fs.model.ItemCarrito
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,19 +26,31 @@ import kotlinx.coroutines.flow.map
  * - Actualizar el estado de pedidos como administrador.
  * - Mantener la interfaz actualizada mediante StateFlow.
  */
-class HistorialViewModel : ViewModel() {
+
+class HistorialViewModel(
+    // Sin repositorio Room mantiene el
+    // comportamiento actual de demostración.
+    private val roomRepository: PedidoRoomRepository? = null
+) : ViewModel() {
 
     // Repositorio temporal con pedidos de demostración.
     private val repository = PedidoRepository()
 
-    // Permite mostrar los pedidos reales en el panel
-    // del administrador, sin aplicar los filtros
-    // utilizados por HistorialScreen.
-    //
-    // Se expone como StateFlow de solo lectura.
-    // La autorización definitiva corresponderá al backend.
+
+    /**
+     * Lista general de pedidos.
+     *
+     * En modo Room observa los registros SQLite.
+     * En modo demostración conserva el repositorio
+     * en memoria utilizado actualmente.
+     */
     val pedidosParaAdmin: StateFlow<List<Pedido>> =
-        repository.pedidos
+        roomRepository?.pedidos?.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.Eagerly,
+            initialValue = emptyList()
+        ) ?: repository.pedidos
+
 
     // Identificador del usuario que inició sesión.
     private val _usuarioId = MutableStateFlow("")
@@ -61,7 +74,7 @@ class HistorialViewModel : ViewModel() {
      */
     val pedidosVisibles: StateFlow<List<Pedido>> =
         combine(
-            repository.pedidos,
+            pedidosParaAdmin,
             _usuarioId,
             _esAdmin,
             _filtroEstado
@@ -135,7 +148,7 @@ class HistorialViewModel : ViewModel() {
         nuevoEstado: EstadoPedido
     ): Boolean {
 
-        if (!_esAdmin.value) {
+        if (!_esAdmin.value || roomRepository != null) {
             return false
         }
 
@@ -162,7 +175,7 @@ class HistorialViewModel : ViewModel() {
     ): Pedido? {
 
         // Validar que exista un cliente identificado.
-        if (usuarioId.isBlank()) {
+        if (usuarioId.isBlank() || roomRepository != null) {
             return null
         }
 
@@ -176,21 +189,76 @@ class HistorialViewModel : ViewModel() {
     /**
      * Observa el pedido más reciente de un cliente.
      *
-     * Solo devuelve pedidos pertenecientes al usuario
-     * indicado, sin depender de los filtros de Historial.
-     *
-     * Se actualiza cuando se crea un pedido o cambia
-     * su estado.
+     * Funciona con SQLite cuando Room está activo
+     * y con los datos demo en el modo anterior.
      */
     fun observarUltimoPedidoCliente(
         usuarioId: String
     ): Flow<Pedido?> {
 
-        return repository
-            .observarPedidosUsuario(usuarioId)
-            .map { pedidos ->
-                pedidos.firstOrNull()
-            }
+        val origen = roomRepository
+            ?.observarPedidosUsuario(usuarioId)
+            ?: repository.observarPedidosUsuario(usuarioId)
+
+        return origen.map { pedidos ->
+            pedidos.maxByOrNull { it.fecha }
+        }
+    }
+
+
+    /**
+     * Registra una compra utilizando Room.
+     *
+     * El repositorio se encarga de guardar el
+     * pedido, sus detalles y descontar stock.
+     *
+     * No debe llamarse junto al descuento antiguo
+     * de ProductoViewModel.
+     */
+    suspend fun registrarCompraPersistente(
+        usuarioId: String,
+        productos: List<ItemCarrito>
+    ): Pedido? {
+
+        val repo = roomRepository ?: return null
+
+        return repo.registrarCompraDesdeCarrito(
+            usuarioId = usuarioId,
+            items = productos
+        )
+    }
+
+    /**
+     * Actualiza el estado del pedido.
+     *
+     * Solo permite la operación al administrador.
+     * En modo Room espera la confirmación de SQLite.
+     */
+    suspend fun cambiarEstadoPedidoPersistente(
+        pedidoId: String,
+        nuevoEstado: EstadoPedido
+    ): Boolean {
+
+        if (!_esAdmin.value) {
+            return false
+        }
+
+        val repo = roomRepository
+
+        return if (repo != null) {
+
+            repo.actualizarEstadoPedido(
+                pedidoId = pedidoId,
+                nuevoEstado = nuevoEstado
+            )
+
+        } else {
+
+            repository.actualizarEstadoPedido(
+                pedidoId,
+                nuevoEstado
+            )
+        }
     }
 
 }
