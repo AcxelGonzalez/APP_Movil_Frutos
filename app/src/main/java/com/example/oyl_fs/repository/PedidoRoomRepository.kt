@@ -12,6 +12,10 @@ import com.example.oyl_fs.data.local.StockNoDisponibleException
 
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.model.DetallePedido
+import com.example.oyl_fs.model.ItemCarrito
+
+import java.util.UUID
 
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -276,6 +280,92 @@ class PedidoRoomRepository(
             // y cualquier descuento previo.
             false
         }
+    }
+
+    /**
+     * Registra una compra directamente desde el carrito.
+     *
+     * 1. Valida los artículos recibidos.
+     * 2. Calcula el total de forma segura.
+     * 3. Genera un identificador nuevo.
+     * 4. Guarda el pedido y descuenta stock
+     *    mediante una única transacción Room.
+     *
+     * Devuelve el pedido si fue confirmado.
+     * Devuelve null cuando los datos son inválidos
+     * o no existe stock suficiente.
+     *
+     * Los errores inesperados de SQLite se propagan.
+     */
+    suspend fun registrarCompraDesdeCarrito(
+        usuarioId: String,
+        items: List<ItemCarrito>
+    ): Pedido? {
+
+        if (usuarioId.isBlank() || items.isEmpty()) {
+            return null
+        }
+
+        val detalles = mutableListOf<DetallePedido>()
+
+        var totalSeguro = 0L
+
+        for (item in items) {
+
+            val productoId = item.productoId.toIntOrNull()
+                ?: return null
+
+            if (
+                productoId <= 0 ||
+                item.nombre.isBlank() ||
+                item.precio <= 0 ||
+                item.cantidad <= 0
+            ) {
+                return null
+            }
+
+            val subtotal =
+                item.precio.toLong() *
+                        item.cantidad.toLong()
+
+            if (
+                subtotal >
+                Int.MAX_VALUE.toLong() - totalSeguro
+            ) {
+                return null
+            }
+
+            totalSeguro += subtotal
+
+            detalles.add(
+                DetallePedido(
+                    productoId = productoId.toString(),
+                    nombreProducto = item.nombre,
+                    cantidad = item.cantidad,
+                    precioUnitario = item.precio
+                )
+            )
+        }
+
+        // UUID evita depender de contadores en memoria.
+        // La clave primaria de SQLite también protege
+        // frente a un eventual identificador duplicado.
+        val nuevoId = "PED-${UUID.randomUUID()}"
+
+        val pedido = Pedido(
+            id = nuevoId,
+            usuarioId = usuarioId.trim(),
+            fecha = System.currentTimeMillis(),
+            productos = detalles,
+            total = totalSeguro.toInt(),
+            estado = EstadoPedido.PENDIENTE_VALIDACION
+        )
+
+        // Utiliza la transacción ya probada.
+        // No vuelve a descontar el stock por separado.
+        val confirmado = registrarCompraConStock(pedido)
+
+        return if (confirmado) pedido else null
     }
 
     /**

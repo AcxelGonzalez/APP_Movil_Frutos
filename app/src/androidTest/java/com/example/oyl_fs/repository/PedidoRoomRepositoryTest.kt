@@ -9,6 +9,7 @@ import com.example.oyl_fs.data.local.OylDatabase
 import com.example.oyl_fs.model.DetallePedido
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.model.ItemCarrito
 
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
@@ -344,5 +345,123 @@ class PedidoRoomRepositoryTest {
                 contexto.deleteDatabase(nombreBase)
             }
         }
+
+    @Test
+    fun comprasDesdeCarritoGeneranIdsUnicos() = runBlocking {
+
+        val contexto = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+
+        val nombreBase = "oyl_compra_ids_prueba.db"
+
+        contexto.deleteDatabase(nombreBase)
+
+        fun crearBase(): OylDatabase {
+            return Room.databaseBuilder(
+                contexto,
+                OylDatabase::class.java,
+                nombreBase
+            )
+                .addCallback(
+                    OylDatabase.crearCallbackInicializacion(
+                        contexto
+                    )
+                )
+                .build()
+        }
+
+        var base = crearBase()
+
+        try {
+
+            var repo = PedidoRoomRepository(base)
+
+            val producto = base.productoDao()
+                .obtenerPorId(1)!!
+
+            val item = ItemCarrito(
+                productoId = producto.id.toString(),
+                nombre = producto.nombre,
+                formato = producto.presentacion,
+                precio = producto.precio,
+                cantidad = 1,
+                stockDisponible = producto.stock
+            )
+
+            // Primera compra.
+            val pedido1 = repo.registrarCompraDesdeCarrito(
+                usuarioId = "cliente-prueba",
+                items = listOf(item)
+            )
+
+            assertNotNull(pedido1)
+
+            // Segunda compra del mismo producto.
+            val pedido2 = repo.registrarCompraDesdeCarrito(
+                usuarioId = "cliente-prueba",
+                items = listOf(item)
+            )
+
+            assertNotNull(pedido2)
+
+            // Deben tener distintos identificadores.
+            assertNotEquals(pedido1!!.id, pedido2!!.id)
+
+            assertTrue(pedido1.id.startsWith("PED-"))
+            assertTrue(pedido2.id.startsWith("PED-"))
+
+            // Se registraron dos pedidos.
+            assertEquals(2, repo.contarPedidos())
+
+            // Se descontaron exactamente dos unidades.
+            assertEquals(
+                producto.stock - 2,
+                base.productoDao()
+                    .obtenerPorId(producto.id)?.stock
+            )
+
+            // Una compra sin stock debe rechazarse.
+            val compraInvalida =
+                repo.registrarCompraDesdeCarrito(
+                    usuarioId = "cliente-prueba",
+                    items = listOf(
+                        item.copy(cantidad = 999)
+                    )
+                )
+
+            assertNull(compraInvalida)
+            assertEquals(2, repo.contarPedidos())
+
+            // Cerrar y volver a abrir SQLite.
+            base.close()
+            base = crearBase()
+
+            repo = PedidoRoomRepository(base)
+
+            // Los pedidos siguen almacenados.
+            assertNotNull(
+                repo.obtenerPedidoPorId(pedido1.id)
+            )
+
+            assertNotNull(
+                repo.obtenerPedidoPorId(pedido2.id)
+            )
+
+            assertEquals(2, repo.contarPedidos())
+
+            // El inventario también mantiene el descuento.
+            assertEquals(
+                producto.stock - 2,
+                base.productoDao()
+                    .obtenerPorId(producto.id)?.stock
+            )
+
+        } finally {
+
+            base.close()
+            contexto.deleteDatabase(nombreBase)
+        }
+    }
 
 }
