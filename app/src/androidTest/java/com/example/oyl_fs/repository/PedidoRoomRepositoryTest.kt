@@ -158,4 +158,191 @@ class PedidoRoomRepositoryTest {
                 contexto.deleteDatabase(nombreBase)
             }
         }
+
+
+    @Test
+    fun compraYStockSeGuardanEnUnaSolaTransaccion() =
+        runBlocking {
+
+            val contexto = InstrumentationRegistry
+                .getInstrumentation()
+                .targetContext
+
+            val nombreBase = "oyl_compra_atomica_prueba.db"
+
+            contexto.deleteDatabase(nombreBase)
+
+            fun crearBase(): OylDatabase {
+                return Room.databaseBuilder(
+                    contexto,
+                    OylDatabase::class.java,
+                    nombreBase
+                )
+                    .addCallback(
+                        OylDatabase.crearCallbackInicializacion(
+                            contexto
+                        )
+                    )
+                    .build()
+            }
+
+            var base = crearBase()
+
+            try {
+
+                var repo = PedidoRoomRepository(base)
+                var productosDao = base.productoDao()
+
+                val almendras = productosDao.obtenerPorId(1)!!
+                val nueces = productosDao.obtenerPorId(2)!!
+
+                fun crearPedido(
+                    id: String,
+                    cantidadAlmendras: Int,
+                    cantidadNueces: Int
+                ): Pedido {
+
+                    val detalles = listOf(
+                        DetallePedido(
+                            productoId = "1",
+                            nombreProducto = almendras.nombre,
+                            cantidad = cantidadAlmendras,
+                            precioUnitario = almendras.precio
+                        ),
+                        DetallePedido(
+                            productoId = "2",
+                            nombreProducto = nueces.nombre,
+                            cantidad = cantidadNueces,
+                            precioUnitario = nueces.precio
+                        )
+                    )
+
+                    val total =
+                        cantidadAlmendras * almendras.precio +
+                                cantidadNueces * nueces.precio
+
+                    return Pedido(
+                        id = id,
+                        usuarioId = "cliente-prueba",
+                        fecha = System.currentTimeMillis(),
+                        productos = detalles,
+                        total = total,
+                        estado = EstadoPedido.PENDIENTE_VALIDACION
+                    )
+                }
+
+                // CASO 1:
+                // Comprar dos almendras y tres nueces.
+                val compraValida = crearPedido(
+                    id = "PED-COMPRA-001",
+                    cantidadAlmendras = 2,
+                    cantidadNueces = 3
+                )
+
+                assertTrue(
+                    repo.registrarCompraConStock(compraValida)
+                )
+
+                assertEquals(1, repo.contarPedidos())
+
+                assertNotNull(
+                    repo.obtenerPedidoPorId("PED-COMPRA-001")
+                )
+
+                assertEquals(
+                    almendras.stock - 2,
+                    productosDao.obtenerPorId(1)?.stock
+                )
+
+                assertEquals(
+                    nueces.stock - 3,
+                    productosDao.obtenerPorId(2)?.stock
+                )
+
+                // CASO 2:
+                // La segunda compra solicita más nueces
+                // de las disponibles.
+                val compraSinStock = crearPedido(
+                    id = "PED-COMPRA-002",
+                    cantidadAlmendras = 1,
+                    cantidadNueces = nueces.stock + 100
+                )
+
+                assertFalse(
+                    repo.registrarCompraConStock(compraSinStock)
+                )
+
+                // No se debe guardar el pedido fallido.
+                assertNull(
+                    repo.obtenerPedidoPorId("PED-COMPRA-002")
+                )
+
+                assertEquals(1, repo.contarPedidos())
+
+                // Tampoco debe descontarse parcialmente
+                // el inventario.
+                assertEquals(
+                    almendras.stock - 2,
+                    productosDao.obtenerPorId(1)?.stock
+                )
+
+                assertEquals(
+                    nueces.stock - 3,
+                    productosDao.obtenerPorId(2)?.stock
+                )
+
+                // CASO 3:
+                // Reutilizar el ID de un pedido existente.
+                // SQLite debe rechazarlo sin alterar stock.
+                val compraDuplicada = crearPedido(
+                    id = "PED-COMPRA-001",
+                    cantidadAlmendras = 1,
+                    cantidadNueces = 1
+                )
+
+                val errorDuplicado = runCatching {
+                    repo.registrarCompraConStock(
+                        compraDuplicada
+                    )
+                }.exceptionOrNull()
+
+                assertNotNull(errorDuplicado)
+
+                assertEquals(1, repo.contarPedidos())
+
+                assertEquals(
+                    almendras.stock - 2,
+                    productosDao.obtenerPorId(1)?.stock
+                )
+
+                // CASO 4:
+                // Cerrar y reabrir la misma base SQLite.
+                base.close()
+
+                base = crearBase()
+                repo = PedidoRoomRepository(base)
+                productosDao = base.productoDao()
+
+                // Pedido y stock deben persistir.
+                assertNotNull(
+                    repo.obtenerPedidoPorId("PED-COMPRA-001")
+                )
+
+                assertEquals(
+                    almendras.stock - 2,
+                    productosDao.obtenerPorId(1)?.stock
+                )
+
+                assertEquals(
+                    nueces.stock - 3,
+                    productosDao.obtenerPorId(2)?.stock
+                )
+
+            } finally {
+
+                base.close()
+                contexto.deleteDatabase(nombreBase)
+            }
+        }
+
 }
