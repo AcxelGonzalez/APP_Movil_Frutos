@@ -14,14 +14,21 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.ui.components.EstadoPedidoChip
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 
+import android.widget.Toast
+
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
+
 import java.util.Date
 import java.util.Locale
 
@@ -59,6 +66,17 @@ fun HistorialScreen(
     // Observa los cambios del ViewModel.
     val pedidos by viewModel.pedidosVisibles.collectAsState()
     val filtro by viewModel.filtroEstado.collectAsState()
+
+    val contexto = LocalContext.current
+
+    val scope = rememberCoroutineScope()
+
+    // Impide modificaciones simultáneas
+    // de estado desde esta pantalla.
+    var cambiandoEstado by remember {
+        mutableStateOf(false)
+    }
+
 
     // Identificador del pedido seleccionado para ver detalles.
     var pedidoSeleccionadoId by remember {
@@ -211,11 +229,48 @@ fun HistorialScreen(
                                 pedidoSeleccionadoId = pedido.id
                             },
 
+
                             onCambiarEstado = { nuevoEstado ->
-                                viewModel.cambiarEstadoPedido(
-                                    pedido.id,
-                                    nuevoEstado
-                                )
+
+                                if (!cambiandoEstado) {
+
+                                    cambiandoEstado = true
+
+                                    scope.launch {
+
+                                        try {
+
+                                            val actualizado = viewModel
+                                                .cambiarEstadoPedidoPersistente(
+                                                    pedidoId = pedido.id,
+                                                    nuevoEstado = nuevoEstado
+                                                )
+
+                                            if (!actualizado) {
+
+                                                Toast.makeText(
+                                                    contexto,
+                                                    "No se pudo actualizar el pedido",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+
+                                        } catch (e: CancellationException) {
+                                            throw e
+
+                                        } catch (e: Exception) {
+
+                                            Toast.makeText(
+                                                contexto,
+                                                "Error al actualizar el estado",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+
+                                        } finally {
+                                            cambiandoEstado = false
+                                        }
+                                    }
+                                }
                             },
 
                             // Abre la preparación del pedido seleccionado.

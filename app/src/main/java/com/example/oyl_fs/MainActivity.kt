@@ -1,20 +1,23 @@
-
 package com.example.oyl_fs
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
-import com.example.oyl_fs.repository.ProductoRoomRepository
+
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
 
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 
 import android.os.Bundle
+
 import android.widget.Toast
+
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.lifecycle.ViewModelProvider
 
 import com.example.oyl_fs.model.EstadoPedido
@@ -32,6 +35,9 @@ import com.example.oyl_fs.viewmodel.PerfilViewModel
 import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.viewmodel.PrepararPedidoViewModel
 
+import com.example.oyl_fs.repository.ProductoRoomRepository
+import com.example.oyl_fs.repository.PedidoRoomRepository
+
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
 class MainActivity : ComponentActivity() {
@@ -39,10 +45,66 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ViewModel para gestionar los pedidos.
-        val historialViewModel = ViewModelProvider(this)[
-            HistorialViewModel::class.java
-        ]
+
+        /**
+         * Repositorio compartido de pedidos.
+         *
+         * Gestiona la persistencia en SQLite.
+         */
+        val pedidoRoomRepository = PedidoRoomRepository(
+            applicationContext
+        )
+
+        /**
+         * HistorialViewModel utiliza los pedidos
+         * almacenados en Room.
+         */
+        val historialViewModel = ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>
+                ): T {
+
+                    require(
+                        modelClass.isAssignableFrom(
+                            HistorialViewModel::class.java
+                        )
+                    )
+
+                    @Suppress("UNCHECKED_CAST")
+                    return HistorialViewModel(
+                        pedidoRoomRepository
+                    ) as T
+                }
+            }
+        )[HistorialViewModel::class.java]
+
+        /**
+         * Carga los pedidos de demostración
+         * solamente cuando corresponde.
+         *
+         * No descuenta stock durante esta carga.
+         */
+        lifecycleScope.launch {
+            try {
+                pedidoRoomRepository
+                    .inicializarPedidosDemoUnaVez(
+                        applicationContext
+                    )
+
+            } catch (e: CancellationException) {
+                throw e
+
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "No se pudieron inicializar los pedidos",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
         // ViewModel para gestionar los productos.
         val productoViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
@@ -118,6 +180,9 @@ class MainActivity : ComponentActivity() {
                 val estadoHomeCliente = rememberSaveableStateHolder()
 
                 var procesandoCompra by remember { mutableStateOf(false) }
+                var procesandoPreparacion by remember {
+                    mutableStateOf(false)
+                }
                 var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
 
                 // Navegación al carrito.
@@ -213,55 +278,72 @@ class MainActivity : ComponentActivity() {
                                     mostrarHistorial = true
                                 },
 
+
                                 onConfirmarPreparacion = { pedidoId ->
 
-                                    // Comprueba que sea el pedido seleccionado,
-                                    // que esté confirmado y que todas las
-                                    // cantidades hayan sido verificadas.
                                     val puedeConfirmar =
                                         pedidoId == pedidoParaPreparar.id &&
                                                 pedidoParaPreparar.estado ==
                                                 EstadoPedido.CONFIRMADO &&
                                                 prepararPedidoViewModel.pedidoCompleto()
 
-                                    if (puedeConfirmar) {
-
-                                        // Registrar el nuevo estado del pedido.
-                                        val actualizado = historialViewModel
-                                            .cambiarEstadoPedido(
-                                                pedidoId = pedidoId,
-                                                nuevoEstado =
-                                                EstadoPedido.PREPARADO
-                                            )
-
-                                        if (actualizado) {
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "Pedido $pedidoId preparado correctamente",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-
-                                            // Regresar al historial.
-                                            pedidoPrepararId = null
-                                            mostrarHistorial = true
-
-                                        } else {
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "No se pudo actualizar el pedido",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-
-                                    } else {
+                                    if (!puedeConfirmar) {
 
                                         Toast.makeText(
                                             this@MainActivity,
                                             "El pedido no cumple los requisitos de preparación",
                                             Toast.LENGTH_LONG
                                         ).show()
+
+                                    } else if (!procesandoPreparacion) {
+
+                                        procesandoPreparacion = true
+
+                                        lifecycleScope.launch {
+
+                                            try {
+
+                                                val actualizado = historialViewModel
+                                                    .cambiarEstadoPedidoPersistente(
+                                                        pedidoId = pedidoId,
+                                                        nuevoEstado = EstadoPedido.PREPARADO
+                                                    )
+
+                                                if (actualizado) {
+
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "Pedido preparado correctamente",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+
+                                                    pedidoPrepararId = null
+                                                    mostrarHistorial = true
+
+                                                } else {
+
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "No se pudo actualizar el pedido",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
+
+                                            } catch (e: CancellationException) {
+                                                throw e
+
+                                            } catch (e: Exception) {
+
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Error al guardar la preparación",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+
+                                            } finally {
+                                                procesandoPreparacion = false
+                                            }
+                                        }
                                     }
                                 }
                             )
@@ -290,102 +372,87 @@ class MainActivity : ComponentActivity() {
                                 mostrarCarrito = false
                             },
 
+
                             onConfirmar = { productos ->
+
                                 if (!procesandoCompra) {
+
                                     procesandoCompra = true
+
                                     lifecycleScope.launch {
+
                                         try {
 
+                                            // Validación previa para mostrar
+                                            // errores claros al usuario.
+                                            val errorStock = productoViewModel
+                                                .validarStockParaCompra(productos)
 
-                                // PASO 1: validar los datos del carrito contra
-                                // los productos actuales del catálogo.
-                                val errorStock = productoViewModel
-                                    .validarStockParaCompra(productos)
+                                            if (errorStock != null) {
 
-                                if (errorStock != null) {
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    errorStock,
+                                                    Toast.LENGTH_LONG
+                                                ).show()
 
-                                    // La compra se rechaza y se conserva el carrito.
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        errorStock,
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                            } else {
 
-                                } else {
+                                                // Una única operación persistente:
+                                                // 1. Guardar pedido.
+                                                // 2. Guardar detalles.
+                                                // 3. Descontar stock.
+                                                val pedido = historialViewModel
+                                                    .registrarCompraPersistente(
+                                                        usuarioId = "cliente-demo",
+                                                        productos = productos
+                                                    )
 
-                                    // PASO 2: guardar el estado anterior de los
-                                    // productos para revertir cambios si falla
-                                    // el registro del pedido.
-                                    val productosAnteriores = productos
-                                        .mapNotNull { item ->
-                                            productoViewModel.obtenerProducto(
-                                                item.productoId.toInt()
-                                            )
-                                        }
-                                        .distinctBy { it.id }
+                                                if (pedido != null) {
 
-                                    // PASO 3: descontar las unidades compradas.
-                                    val stockActualizado = productoViewModel
-                                        .descontarStockPorCompraPersistente(productos)
+                                                    // Vaciar solamente después
+                                                    // de confirmar SQLite.
+                                                    carritoViewModel
+                                                        .vaciarDespuesDeConfirmar()
 
-                                    if (!stockActualizado) {
+                                                    mostrarCarrito = false
+                                                    mostrarHistorial = true
 
-                                        Toast.makeText(
-                                            this@MainActivity,
-                                            "No se pudo actualizar el stock",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "Pedido registrado correctamente",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
 
-                                    } else {
+                                                } else {
 
-                                        // PASO 4: registrar el nuevo pedido.
-                                        val pedido = historialViewModel
-                                            .registrarPedido(
-                                                usuarioId = "cliente-demo",
-                                                productos = productos
-                                            )
-
-                                        if (pedido != null) {
-
-                                            // PASO 5: vaciar el carrito solo después
-                                            // de completar el registro.
-                                            carritoViewModel
-                                                .vaciarDespuesDeConfirmar()
-
-                                            // PASO 6: abrir Historial.
-                                            mostrarCarrito = false
-                                            mostrarHistorial = true
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "Pedido ${pedido.id} registrado correctamente",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-
-                                        } else {
-
-                                            // Si el pedido no se pudo registrar,
-                                            // restauramos el stock previo.
-                                            productosAnteriores.forEach { producto ->
-                                                productoViewModel
-                                                    .editarProductoPersistente(producto)
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "Stock insuficiente o precio modificado. Revisa tu carrito.",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
                                             }
+
+                                        } catch (e: CancellationException) {
+                                            throw e
+
+                                        } catch (e: Exception) {
 
                                             Toast.makeText(
                                                 this@MainActivity,
                                                 "No se pudo registrar el pedido",
                                                 Toast.LENGTH_LONG
                                             ).show()
-                                        }
-                                    }
-                                }
-                            
+
                                         } finally {
+
                                             procesandoCompra = false
                                         }
                                     }
                                 }
                             }
+
                         )
                     }
 
