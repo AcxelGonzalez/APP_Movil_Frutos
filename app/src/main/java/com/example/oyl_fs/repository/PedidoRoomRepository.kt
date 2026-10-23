@@ -15,6 +15,8 @@ import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.model.DetallePedido
 import com.example.oyl_fs.model.ItemCarrito
 
+import com.example.oyl_fs.repository.PedidoRepository
+
 import java.util.UUID
 
 import kotlinx.coroutines.flow.Flow
@@ -389,4 +391,79 @@ class PedidoRoomRepository(
     suspend fun contarPedidos(): Int {
         return dao.contarPedidos()
     }
+
+    /**
+     * Inicializa los pedidos de demostración una
+     * sola vez para cada base de datos.
+     *
+     * Estos pedidos son históricos:
+     * NO deben descontar nuevamente el stock.
+     *
+     * Utiliza SharedPreferences únicamente para
+     * recordar que la carga inicial fue realizada.
+     * Los pedidos se almacenan realmente en Room.
+     */
+    suspend fun inicializarPedidosDemoUnaVez(
+        context: Context
+    ) {
+
+        val nombreBase = database.openHelper.databaseName
+            ?: error("La base de datos necesita un nombre")
+
+        val preferencias = context.applicationContext
+            .getSharedPreferences(
+                "oyl_demo_$nombreBase",
+                Context.MODE_PRIVATE
+            )
+
+        val claveInicializacion = "pedidos_cargados"
+
+        // Si ya se inicializó, no volver a agregar
+        // los pedidos aunque la aplicación reinicie.
+        if (
+            preferencias.getBoolean(
+                claveInicializacion,
+                false
+            )
+        ) {
+            return
+        }
+
+        // Recuperar los cuatro pedidos que ya utiliza
+        // la aplicación para la demostración.
+        val pedidosDemo = PedidoRepository().pedidos.value
+
+        database.withTransaction {
+
+            for (pedido in pedidosDemo) {
+
+                // Evita reemplazar pedidos que ya existan.
+                val existente = dao.obtenerPedidoPorId(
+                    pedido.id
+                )
+
+                if (existente == null) {
+
+                    dao.insertarPedido(
+                        pedido.aEntidad()
+                    )
+
+                    dao.insertarDetalles(
+                        pedido.aEntidadesDetalle()
+                    )
+                }
+            }
+        }
+
+        // Se marca como inicializado solo después
+        // de guardar correctamente los registros.
+        check(
+            preferencias.edit()
+                .putBoolean(claveInicializacion, true)
+                .commit()
+        ) {
+            "No se pudo registrar la inicializacion"
+        }
+    }
+
 }
