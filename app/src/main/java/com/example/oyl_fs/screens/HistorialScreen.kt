@@ -372,6 +372,35 @@ private fun TarjetaPedido(
         mutableStateOf(false)
     }
 
+    /**
+     * Opciones administrativas disponibles
+     * según el estado actual del pedido.
+     *
+     * PREPARADO no aparece aquí porque requiere
+     * la verificación de productos mediante QR.
+     */
+    val opcionesCambio = when (pedido.estado) {
+
+        EstadoPedido.PENDIENTE_VALIDACION -> {
+            listOf(EstadoPedido.CONFIRMADO)
+        }
+
+        EstadoPedido.CONFIRMADO -> {
+            // Se prepara exclusivamente mediante
+            // el flujo de lectura QR.
+            emptyList()
+        }
+
+        EstadoPedido.PREPARADO -> {
+            listOf(EstadoPedido.ENTREGADO)
+        }
+
+        EstadoPedido.ENTREGADO -> {
+            // Un pedido entregado está finalizado.
+            emptyList()
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -444,8 +473,9 @@ private fun TarjetaPedido(
                         Text("Ver detalle")
                     }
 
-                    // Solo el administrador puede modificar estados.
-                    if (esAdmin) {
+                    // Mostrar el menú solamente cuando el
+                    // administrador tenga acciones disponibles.
+                    if (esAdmin && opcionesCambio.isNotEmpty()) {
 
                         Box {
 
@@ -464,25 +494,21 @@ private fun TarjetaPedido(
                                 }
                             ) {
 
-                                // PREPARADO solo se podrá establecer
-                                // luego de completar la validación QR.
-                                EstadoPedido.values()
-                                    .filter {
-                                        it != EstadoPedido.PREPARADO
-                                    }
-                                    .forEach { estado ->
+                                // Mostrar únicamente las
+                                // transiciones permitidas.
+                                opcionesCambio.forEach { estado ->
 
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(estado.descripcion)
-                                            },
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(estado.descripcion)
+                                        },
 
-                                            onClick = {
-                                                menuAbierto = false
-                                                onCambiarEstado(estado)
-                                            }
-                                        )
-                                    }
+                                        onClick = {
+                                            menuAbierto = false
+                                            onCambiarEstado(estado)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }

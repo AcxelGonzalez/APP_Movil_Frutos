@@ -92,21 +92,29 @@ interface PedidoDao {
         detalles: List<DetallePedidoEntity>
     )
 
+
     /**
-     * Actualiza el estado de un pedido.
+     * Actualiza el estado únicamente si el
+     * pedido conserva el estado anterior esperado.
      *
-     * Devuelve la cantidad de filas
-     * que fueron modificadas.
+     * Esto evita saltos de estado y cambios
+     * simultáneos inconsistentes.
+     *
+     * Devuelve:
+     * 1 -> actualización realizada.
+     * 0 -> pedido inexistente o estado incorrecto.
      */
     @Query(
         """
-        UPDATE pedidos
-        SET estado = :nuevoEstado
-        WHERE id = :pedidoId
-        """
+    UPDATE pedidos
+    SET estado = :nuevoEstado
+    WHERE id = :pedidoId
+      AND estado = :estadoAnterior
+    """
     )
     suspend fun actualizarEstado(
         pedidoId: String,
+        estadoAnterior: String,
         nuevoEstado: String
     ): Int
 

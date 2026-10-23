@@ -370,19 +370,63 @@ class PedidoRoomRepository(
         return if (confirmado) pedido else null
     }
 
+
     /**
-     * Actualiza el estado de un pedido
-     * previamente almacenado.
+     * Actualiza el estado de un pedido respetando
+     * la secuencia definida para OYL Frutos Secos.
+     *
+     * Transiciones permitidas:
+     *
+     * PENDIENTE_VALIDACION -> CONFIRMADO
+     * CONFIRMADO          -> PREPARADO
+     * PREPARADO           -> ENTREGADO
+     *
+     * ENTREGADO es un estado final.
+     *
+     * Devuelve false si la transición no está
+     * permitida, el pedido no existe o ya cambió
+     * de estado durante otra operación.
      */
     suspend fun actualizarEstadoPedido(
         pedidoId: String,
         nuevoEstado: EstadoPedido
     ): Boolean {
 
-        return dao.actualizarEstado(
-            pedidoId,
-            nuevoEstado.name
-        ) == 1
+        if (pedidoId.isBlank()) {
+            return false
+        }
+
+        // Determinar el único estado anterior
+        // válido para el estado solicitado.
+        val estadoAnteriorEsperado = when (nuevoEstado) {
+
+            EstadoPedido.PENDIENTE_VALIDACION -> {
+                // Ningún pedido puede volver a pendiente.
+                return false
+            }
+
+            EstadoPedido.CONFIRMADO -> {
+                EstadoPedido.PENDIENTE_VALIDACION
+            }
+
+            EstadoPedido.PREPARADO -> {
+                EstadoPedido.CONFIRMADO
+            }
+
+            EstadoPedido.ENTREGADO -> {
+                EstadoPedido.PREPARADO
+            }
+        }
+
+        // El DAO comprueba el identificador y
+        // el estado anterior en un único UPDATE.
+        val filasActualizadas = dao.actualizarEstado(
+            pedidoId = pedidoId,
+            estadoAnterior = estadoAnteriorEsperado.name,
+            nuevoEstado = nuevoEstado.name
+        )
+
+        return filasActualizadas == 1
     }
 
     /**

@@ -464,4 +464,178 @@ class PedidoRoomRepositoryTest {
         }
     }
 
+    /**
+     * Comprueba que SQLite únicamente permita
+     * las transiciones correctas de los pedidos.
+     *
+     * También verifica que los estados se
+     * conserven después de reabrir la base.
+     */
+    @Test
+    fun estadosPedidoRespetanSecuencia() = runBlocking {
+
+        val contexto = InstrumentationRegistry
+            .getInstrumentation()
+            .targetContext
+
+        val nombreBase = "oyl_estados_prueba.db"
+
+        contexto.deleteDatabase(nombreBase)
+
+        // Base independiente de la aplicación.
+        fun crearBase(): OylDatabase {
+            return Room.databaseBuilder(
+                contexto,
+                OylDatabase::class.java,
+                nombreBase
+            ).build()
+        }
+
+        var base = crearBase()
+
+        try {
+
+            var repo = PedidoRoomRepository(base)
+
+            val pedido = Pedido(
+                id = "PED-ESTADOS-TEST",
+                usuarioId = "cliente-prueba",
+                fecha = System.currentTimeMillis(),
+
+                productos = listOf(
+                    DetallePedido(
+                        productoId = "1",
+                        nombreProducto = "Almendras",
+                        cantidad = 1,
+                        precioUnitario = 6990
+                    )
+                ),
+
+                total = 6990,
+                estado = EstadoPedido.PENDIENTE_VALIDACION
+            )
+
+            repo.guardarPedido(pedido)
+
+            // CASO 1:
+            // No se pueden saltar estados.
+            assertFalse(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.PREPARADO
+                )
+            )
+
+            assertFalse(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.ENTREGADO
+                )
+            )
+
+            // No puede actualizarse un pedido inexistente.
+            assertFalse(
+                repo.actualizarEstadoPedido(
+                    "PED-NO-EXISTE",
+                    EstadoPedido.CONFIRMADO
+                )
+            )
+
+            // CASO 2:
+            // Pendiente -> Confirmado.
+            assertTrue(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.CONFIRMADO
+                )
+            )
+
+            // Confirmar nuevamente no está permitido.
+            assertFalse(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.CONFIRMADO
+                )
+            )
+
+            // Tampoco se permite saltar a Entregado.
+            assertFalse(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.ENTREGADO
+                )
+            )
+
+            // CASO 3:
+            // Confirmado -> Preparado.
+            assertTrue(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.PREPARADO
+                )
+            )
+
+            // No puede retroceder a Confirmado.
+            assertFalse(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.CONFIRMADO
+                )
+            )
+
+            // CASO 4:
+            // Preparado -> Entregado.
+            assertTrue(
+                repo.actualizarEstadoPedido(
+                    pedido.id,
+                    EstadoPedido.ENTREGADO
+                )
+            )
+
+            // CASO 5:
+            // Entregado es un estado final.
+            for (estado in EstadoPedido.values()) {
+
+                assertFalse(
+                    repo.actualizarEstadoPedido(
+                        pedido.id,
+                        estado
+                    )
+                )
+            }
+
+            assertEquals(
+                EstadoPedido.ENTREGADO,
+                repo.obtenerPedidoPorId(
+                    pedido.id
+                )?.estado
+            )
+
+            // CASO 6:
+            // Comprobar persistencia después de
+            // cerrar y volver a abrir SQLite.
+            base.close()
+
+            base = crearBase()
+            repo = PedidoRoomRepository(base)
+
+            assertEquals(
+                EstadoPedido.ENTREGADO,
+                repo.obtenerPedidoPorId(
+                    pedido.id
+                )?.estado
+            )
+
+            assertEquals(
+                1,
+                repo.contarPedidos()
+            )
+
+        } finally {
+
+            base.close()
+            contexto.deleteDatabase(nombreBase)
+        }
+    }
+
 }
