@@ -253,4 +253,92 @@ class UsuarioRoomRepositoryTest {
             base.close()
         }
     }
+
+    /**
+     * Comprueba que un mismo RUT no permita
+     * crear varias cuentas con alias y correos
+     * diferentes.
+     */
+    @Test
+    fun rechazaRutDuplicadoEnDistintosFormatos() =
+        runBlocking {
+
+            val contexto = InstrumentationRegistry
+                .getInstrumentation()
+                .targetContext
+
+            val base = Room.inMemoryDatabaseBuilder(
+                contexto,
+                OylDatabase::class.java
+            ).build()
+
+            try {
+
+                val repo = UsuarioRoomRepository(base)
+
+                val primerCliente = DatosRegistroCliente(
+                    alias = "cliente_rut_a",
+                    nombre = "Ana Prueba",
+                    correo = "rut-a@example.com",
+                    clave = "ClaveSegura123!",
+                    rut = "12.345.678-5"
+                )
+
+                // Primera cuenta: registro válido.
+                val primero = repo.registrarCliente(
+                    primerCliente
+                )
+
+                assertTrue(
+                    primero is ResultadoRegistro.Exito
+                )
+
+                // Segundo usuario con el mismo RUT
+                // escrito sin puntos.
+                val segundo = repo.registrarCliente(
+                    primerCliente.copy(
+                        alias = "cliente_rut_b",
+                        correo = "rut-b@example.com",
+                        rut = "12345678-5"
+                    )
+                )
+
+                assertTrue(
+                    segundo is ResultadoRegistro.Error
+                )
+
+                // Tercer usuario con el mismo RUT
+                // escrito sin separadores.
+                val tercero = repo.registrarCliente(
+                    primerCliente.copy(
+                        alias = "cliente_rut_c",
+                        correo = "rut-c@example.com",
+                        rut = "123456785"
+                    )
+                )
+
+                assertTrue(
+                    tercero is ResultadoRegistro.Error
+                )
+
+                // Solo debe existir el primer usuario.
+                assertEquals(
+                    1,
+                    base.usuarioDao().contarUsuarios()
+                )
+
+                // El cliente original debe seguir
+                // pudiendo autenticarse.
+                val autenticado = repo.autenticarCliente(
+                    "cliente_rut_a",
+                    "ClaveSegura123!"
+                )
+
+                assertNotNull(autenticado)
+
+            } finally {
+                base.close()
+            }
+        }
+
 }

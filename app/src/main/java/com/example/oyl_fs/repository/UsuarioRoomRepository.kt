@@ -1,5 +1,6 @@
 package com.example.oyl_fs.repository
 
+import androidx.room.withTransaction
 import android.content.Context
 import android.database.sqlite.SQLiteConstraintException
 
@@ -64,7 +65,7 @@ data class ClienteAutenticado(
  * la cuenta de demostración preconfigurada.
  */
 class UsuarioRoomRepository(
-    database: OylDatabase
+    private val database: OylDatabase
 ) {
 
     constructor(context: Context) : this(
@@ -89,6 +90,17 @@ class UsuarioRoomRepository(
 
         val aliasNormalizado = alias.lowercase(Locale.ROOT)
         val correoNormalizado = correo.lowercase(Locale.ROOT)
+
+        // Representación utilizada para comparar RUT.
+        //
+        // 12.345.678-5 -> 123456785
+        // 12345678-5   -> 123456785
+        val rutNormalizado = datos.rut
+            .trim()
+            .replace(".", "")
+            .replace("-", "")
+            .replace(" ", "")
+            .uppercase(Locale.ROOT)
 
         // Alias permitido: letras, números,
         // puntos, guiones y guion bajo.
@@ -149,6 +161,26 @@ class UsuarioRoomRepository(
             )
         }
 
+        /**
+         * Impide utilizar el mismo RUT en
+         * cuentas de cliente diferentes.
+         *
+         * Se omite la comprobación cuando está
+         * vacío para conservar compatibilidad
+         * con las pruebas existentes del repositorio.
+         *
+         * El formulario visual ya exige un RUT
+         * válido y no vacío.
+         */
+        if (
+            rutNormalizado.isNotEmpty() &&
+            dao.existeRutNormalizado(rutNormalizado)
+        ) {
+            return ResultadoRegistro.Error(
+                "El RUT ya está registrado."
+            )
+        }
+
         // PBKDF2 es costoso; ejecutarlo fuera
         // del hilo principal y del despachador IO.
         val credencial = withContext(Dispatchers.Default) {
@@ -173,16 +205,46 @@ class UsuarioRoomRepository(
 
         return try {
 
-            dao.insertar(usuario)
+            // La comprobación final y la inserción
+            // se realizan en una misma transacción.
+            //
+            // Evita que dos registros simultáneos
+            // mediante este repositorio pasen la
+            // comprobación con el mismo RUT.
+            val insertado = database.withTransaction {
 
-            ResultadoRegistro.Exito(
-                usuarioId = usuario.id
-            )
+                val rutOcupado =
+                    rutNormalizado.isNotEmpty() &&
+                            dao.existeRutNormalizado(
+                                rutNormalizado
+                            )
+
+                if (rutOcupado) {
+
+                    false
+
+                } else {
+
+                    dao.insertar(usuario)
+                    true
+                }
+            }
+
+            if (insertado) {
+
+                ResultadoRegistro.Exito(
+                    usuarioId = usuario.id
+                )
+
+            } else {
+
+                ResultadoRegistro.Error(
+                    "El RUT ya está registrado."
+                )
+            }
 
         } catch (_: SQLiteConstraintException) {
 
-            // Protege también frente a dos registros
-            // simultáneos con el mismo alias o correo.
             ResultadoRegistro.Error(
                 "El alias o correo ya está registrado."
             )

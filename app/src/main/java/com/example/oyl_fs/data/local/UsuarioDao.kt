@@ -96,6 +96,40 @@ interface UsuarioDao {
     ): Boolean
 
     /**
+     * Comprueba si un RUT ya pertenece
+     * a un cliente registrado.
+     *
+     * Normaliza los RUT almacenados para
+     * comparar correctamente formatos como:
+     *
+     * 12.345.678-5
+     * 12345678-5
+     * 123456785
+     *
+     * Todos representan el mismo RUT.
+     */
+    @Query(
+        """
+    SELECT EXISTS(
+        SELECT 1
+        FROM usuarios
+        WHERE UPPER(
+            REPLACE(
+                REPLACE(
+                    REPLACE(TRIM(rut), '.', ''),
+                    '-', ''
+                ),
+                ' ', ''
+            )
+        ) = :rutNormalizado
+    )
+    """
+    )
+    suspend fun existeRutNormalizado(
+        rutNormalizado: String
+    ): Boolean
+
+    /**
      * Observa los datos de un usuario.
      *
      * Flow permite que Perfil se actualice

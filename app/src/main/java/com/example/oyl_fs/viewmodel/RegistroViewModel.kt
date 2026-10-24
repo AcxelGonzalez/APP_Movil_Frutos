@@ -254,6 +254,14 @@ class RegistroViewModel(
                         val mensaje = resultado.mensaje
 
                         val erroresRepositorio = when {
+
+                            mensaje.contains(
+                                "RUT",
+                                ignoreCase = true
+                            ) -> ErroresRegistro(
+                                rut = mensaje
+                            )
+
                             mensaje.contains(
                                 "alias", ignoreCase = true
                             ) && !mensaje.contains(
