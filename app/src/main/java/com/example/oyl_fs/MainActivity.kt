@@ -34,9 +34,11 @@ import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.PerfilViewModel
 import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.viewmodel.PrepararPedidoViewModel
+import com.example.oyl_fs.viewmodel.RegistroViewModel
 
 import com.example.oyl_fs.repository.ProductoRoomRepository
 import com.example.oyl_fs.repository.PedidoRoomRepository
+import com.example.oyl_fs.repository.UsuarioRoomRepository
 
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
@@ -125,6 +127,34 @@ class MainActivity : ComponentActivity() {
         val perfilViewModel = ViewModelProvider(this)[
             PerfilViewModel::class.java
         ]
+
+        /**
+         * ViewModel encargado del registro de clientes.
+         *
+         * Utiliza UsuarioRoomRepository, conectado
+         * a la base SQLite versión 3.
+         */
+        val registroViewModel = ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>
+                ): T {
+
+                    require(
+                        modelClass.isAssignableFrom(
+                            RegistroViewModel::class.java
+                        )
+                    )
+
+                    @Suppress("UNCHECKED_CAST")
+                    return RegistroViewModel(
+                        UsuarioRoomRepository(applicationContext)
+                    ) as T
+                }
+            }
+        )[RegistroViewModel::class.java]
 
         // ViewModel para verificar los productos de un pedido mediante QR.
         val prepararPedidoViewModel = ViewModelProvider(this)[
@@ -237,10 +267,20 @@ class MainActivity : ComponentActivity() {
 
                         if (mostrarRegistro) {
 
+
                             RegistroScreen(
+                                viewModel = registroViewModel,
+
                                 onRegistrado = {
                                     mostrarRegistro = false
+
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Cuenta creada correctamente. Ya puedes iniciar sesión cuando se habilite el nuevo Login.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 },
+
                                 onIrALogin = {
                                     mostrarRegistro = false
                                 }
