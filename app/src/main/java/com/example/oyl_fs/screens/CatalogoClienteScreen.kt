@@ -296,7 +296,24 @@ fun CatalogoClienteScreen(
                             }
                         }
                     }
-                    Text("Disponibles: $limite", color = CafeCliente, fontSize = 12.sp)
+
+                    Column(
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+
+                        Text(
+                            text = "Existencias en inventario: ${productoParaAgregar.stock}",
+                            color = CafeCliente,
+                            fontSize = 12.sp
+                        )
+
+                        Text(
+                            text = "Unidades adicionales que puedes agregar: $limite",
+                            color = CafeCliente,
+                            fontSize = 12.sp
+                        )
+                    }
+
                     Text("Subtotal: $" + "%,d".format(productoParaAgregar.precio.toLong() * if (limite > 0) cantidadActual else 0).replace(',', '.'),
                         color = OscuroCliente, fontWeight = FontWeight.Bold)
                 }

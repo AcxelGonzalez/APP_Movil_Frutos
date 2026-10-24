@@ -1,5 +1,8 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.viewmodel.LoginViewModel
+import com.example.oyl_fs.viewmodel.SesionIdentificada
+
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardActions
@@ -33,12 +36,25 @@ import com.example.oyl_fs.R
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
-                onIrARegistro:() -> Unit
+
+fun LoginScreen(
+    viewModel: LoginViewModel,
+    onLoginSuccess: (SesionIdentificada) -> Unit,
+    onIrARegistro: () -> Unit
 ) {
     var usuario by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf("") }
+
+    /**
+     * Estado de autenticación.
+     *
+     * LoginViewModel controla los errores
+     * y el indicador de procesamiento.
+     */
+    val estado by viewModel.estado.collectAsState()
+
+    val error = estado.error.orEmpty()
+
     val foco = LocalFocusManager.current
     val cafe = Color(0xFF4A2C1A)
     val rojo = Color(0xFFC0392B)
@@ -74,7 +90,7 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
                 value = usuario,
                 onValueChange = {
                     usuario = it
-                    error = ""
+                    viewModel.limpiarError()
                 },
                 keyboardActions = KeyboardActions(onNext = { foco.moveFocus(FocusDirection.Down) }),
                 label = { Text("Usuario") },
@@ -92,7 +108,7 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
                 value = contrasena,
                 onValueChange = {
                     contrasena = it
-                    error = ""
+                    viewModel.limpiarError()
                 },
                 label = { Text("Contraseña") },
                 singleLine = true,
@@ -114,23 +130,42 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
 
             Spacer(modifier = Modifier.height(32.dp))
 
+
             Button(
                 onClick = {
+
                     foco.clearFocus()
-                    val u = usuario.trim().lowercase()
-                    val c = contrasena.trim()
-                    when {
-                        u.isEmpty() || c.isEmpty() ->
-                            error = "Completa usuario y contraseña"
-                        u == "admin" && c == "admin" -> onLoginSuccess(true)
-                        u == "cliente" && c == "cliente" -> onLoginSuccess(false)
-                        else -> error = "Usuario o contraseña incorrectos"
-                    }
+
+                    // LoginViewModel identifica al cliente
+                    // y comprueba sus credenciales en Room.
+                    viewModel.iniciarSesion(
+                        usuario = usuario,
+                        contrasena = contrasena,
+                        onExito = onLoginSuccess
+                    )
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = cafe),
+
+                enabled = !estado.procesando,
+
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = cafe
+                ),
+
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Iniciar sesión")
+
+                if (estado.procesando) {
+
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(20.dp),
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        strokeWidth = 2.dp
+                    )
+
+                } else {
+
+                    Text("Iniciar sesión")
+                }
             }
 
             Spacer(modifier = Modifier.height(16.dp))
