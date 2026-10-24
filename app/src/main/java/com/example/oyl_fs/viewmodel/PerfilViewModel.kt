@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.data.local.UsuarioEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
@@ -61,4 +62,81 @@ class PerfilViewModel(application: Application) : AndroidViewModel(application) 
         _perfiles.value = _perfiles.value.map { if (it.id == perfil.id) guardado else it }
         return true
     }
+
+    /**
+     * Incorpora el perfil de un cliente
+     * autenticado mediante Room.
+     *
+     * El identificador es exclusivo de ese cliente.
+     *
+     * Si anteriormente editó sus datos, recupera
+     * las preferencias guardadas para ese ID.
+     */
+    fun activarClienteRegistrado(usuario: UsuarioEntity) {
+
+        val id = usuario.id
+
+        if (id.isBlank()) return
+
+        val perfil = PerfilUsuario(
+            id = id,
+            esAdmin = false,
+
+            nombre = preferencias.getString(
+                "$id.nombre",
+                usuario.nombre
+            ) ?: usuario.nombre,
+
+            apellido = preferencias.getString(
+                "$id.apellido",
+                usuario.apellido
+            ) ?: usuario.apellido,
+
+            rut = preferencias.getString(
+                "$id.rut",
+                usuario.rut
+            ) ?: usuario.rut,
+
+            correo = preferencias.getString(
+                "$id.correo",
+                usuario.correo
+            ) ?: usuario.correo,
+
+            telefono = preferencias.getString(
+                "$id.telefono",
+                usuario.telefono
+            ) ?: usuario.telefono,
+
+            direccion = preferencias.getString(
+                "$id.direccion",
+                usuario.direccion
+            ) ?: usuario.direccion
+        )
+
+        // Conservar los perfiles demo y únicamente
+        // el perfil registrado que inició sesión.
+        val perfilesDemo = _perfiles.value.filter {
+            it.id == "admin-demo" ||
+                    it.id == "cliente-demo"
+        }
+
+        _perfiles.value = perfilesDemo + perfil
+    }
+
+    /**
+     * Elimina de la memoria los perfiles
+     * de clientes registrados al cerrar sesión.
+     *
+     * No borra sus datos guardados.
+     */
+    fun limpiarSesionRegistrada() {
+
+        _perfiles.value = _perfiles.value.filter {
+            it.id == "admin-demo" ||
+                    it.id == "cliente-demo"
+        }
+
+        _error.value = null
+    }
+
 }
