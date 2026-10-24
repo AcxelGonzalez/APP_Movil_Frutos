@@ -20,7 +20,7 @@ import org.junit.runner.RunWith
 class MigrationRoomTest {
 
     @Test
-    fun migracionConservaProductos() = runBlocking {
+    fun migracionV1aV3ConservaProductos() = runBlocking {
 
         val contexto = InstrumentationRegistry
             .getInstrumentation()
@@ -96,7 +96,10 @@ class MigrationRoomTest {
             OylDatabase::class.java,
             nombreBase
         )
-            .addMigrations(MIGRATION_1_2)
+            .addMigrations(
+                MIGRATION_1_2,
+                MIGRATION_2_3
+            )
             .build()
 
         try {
@@ -114,6 +117,13 @@ class MigrationRoomTest {
             assertEquals(
                 0,
                 baseNueva.pedidoDao().contarPedidos()
+            )
+
+            // La migración encadenada también debe
+            // crear correctamente la tabla usuarios.
+            assertEquals(
+                0,
+                baseNueva.usuarioDao().contarUsuarios()
             )
 
             // 3. Insertar un pedido de prueba.
