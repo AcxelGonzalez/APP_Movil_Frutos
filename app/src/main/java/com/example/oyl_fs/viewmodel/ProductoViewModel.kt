@@ -88,29 +88,28 @@ class ProductoViewModel(
     }
 
     // Comprueba los datos antes de agregar o editar.
-    private fun validarProducto(producto: ProductoInfo): Boolean {
-        _error.value = when {
-            producto.nombre.isBlank() ->
-                "Escribe el nombre del producto"
+    private fun validarProducto(
+        producto: ProductoInfo
+    ): Boolean {
 
-            producto.codigo.isBlank() ->
-                "Escribe el código del producto"
+        val datos = DatosFormularioProducto(
+            nombre = producto.nombre,
+            codigo = producto.codigo,
+            categoria = producto.categoria,
+            precio = producto.precio.toString(),
+            stock = producto.stock.toString(),
+            stockMinimo = producto.stockMinimo.toString(),
+            imagenPresente = producto.imagen != 0 ||
+                    !producto.imagenUri.isNullOrBlank()
+        )
 
-            producto.categoria !in listOf(
-                "Frutos secos", "Semillas", "Deshidratados"
-            ) ->
-                "Selecciona una categoría válida"
+        val errores = ValidacionFormularioProducto.validar(
+            datos = datos
+        )
 
-            producto.precio <= 0 ->
-                "El precio debe ser mayor que cero"
+        _error.value = errores.primerError()
 
-            producto.stock < 0 || producto.stockMinimo < 0 ->
-                "El stock no puede ser negativo"
-
-            else -> null
-        }
-
-        return _error.value == null
+        return !errores.hayErrores
     }
 
     fun agregarProducto(producto: ProductoInfo): Boolean {

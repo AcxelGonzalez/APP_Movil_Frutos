@@ -32,6 +32,11 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Lock
+
 import com.example.oyl_fs.R
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -90,17 +95,37 @@ fun LoginScreen(
                 value = usuario,
                 onValueChange = {
                     usuario = it
-                    viewModel.limpiarError()
+                    viewModel.limpiarErrorUsuario()
                 },
-                keyboardActions = KeyboardActions(onNext = { foco.moveFocus(FocusDirection.Down) }),
+                keyboardActions = KeyboardActions(
+                    onNext = {
+                        foco.moveFocus(FocusDirection.Down)
+                    }
+                ),
                 label = { Text("Usuario") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Person,
+                        contentDescription = null
+                    )
+                },
                 singleLine = true,
-                isError = error.isNotEmpty(),
+                isError = estado.errorUsuario != null,
                 keyboardOptions = KeyboardOptions(
-                    capitalization = KeyboardCapitalization.None, imeAction = ImeAction.Next
+                    capitalization = KeyboardCapitalization.None,
+                    imeAction = ImeAction.Next
                 ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (estado.errorUsuario != null) {
+                Text(
+                    text = estado.errorUsuario.orEmpty(),
+                    color = rojo,
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -108,16 +133,36 @@ fun LoginScreen(
                 value = contrasena,
                 onValueChange = {
                     contrasena = it
-                    viewModel.limpiarError()
+                    viewModel.limpiarErrorContrasena()
                 },
                 label = { Text("Contraseña") },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Lock,
+                        contentDescription = null
+                    )
+                },
                 singleLine = true,
-                isError = error.isNotEmpty(),
+                isError = estado.errorContrasena != null,
                 visualTransformation = PasswordVisualTransformation(),
-                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
-                keyboardActions = KeyboardActions(onDone = { foco.clearFocus() }),
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Password,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = { foco.clearFocus() }
+                ),
                 modifier = Modifier.fillMaxWidth()
             )
+
+            if (estado.errorContrasena != null) {
+                Text(
+                    text = estado.errorContrasena.orEmpty(),
+                    color = rojo,
+                    fontSize = 13.sp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
 
             // Mensaje de error (ocupa lugar solo cuando hay algo que decir)
             AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),

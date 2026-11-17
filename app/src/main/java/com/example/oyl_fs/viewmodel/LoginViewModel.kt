@@ -42,9 +42,12 @@ sealed class ResultadoLogin {
 /**
  * Estado visual del formulario Login.
  */
+
 data class LoginUiState(
     val procesando: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val errorUsuario: String? = null,
+    val errorContrasena: String? = null
 )
 
 /**
@@ -63,9 +66,17 @@ class LoginViewModel(
 
     val estado = _estado.asStateFlow()
 
-    fun limpiarError() {
+    fun limpiarErrorUsuario() {
         _estado.value = _estado.value.copy(
-            error = null
+            error = null,
+            errorUsuario = null
+        )
+    }
+
+    fun limpiarErrorContrasena() {
+        _estado.value = _estado.value.copy(
+            error = null,
+            errorContrasena = null
         )
     }
 
@@ -143,7 +154,28 @@ class LoginViewModel(
         onExito: (SesionIdentificada) -> Unit
     ) {
 
+
         if (_estado.value.procesando) return
+
+        val errorUsuario = if (usuario.isBlank()) {
+            "Ingresa tu usuario."
+        } else {
+            null
+        }
+
+        val errorContrasena = if (contrasena.isEmpty()) {
+            "Ingresa tu contraseña."
+        } else {
+            null
+        }
+
+        if (errorUsuario != null || errorContrasena != null) {
+            _estado.value = LoginUiState(
+                errorUsuario = errorUsuario,
+                errorContrasena = errorContrasena
+            )
+            return
+        }
 
         _estado.value = LoginUiState(
             procesando = true
