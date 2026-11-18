@@ -27,6 +27,8 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.model.ErroresPerfil
+import kotlinx.coroutines.launch
 import com.example.oyl_fs.viewmodel.PerfilViewModel
 
 private val FondoPerfil = Color(0xFFFFF5E7)
@@ -41,7 +43,7 @@ fun PerfilUsuarioScreen(
     onLogout: () -> Unit
 ) {
     val perfiles by viewModel.perfiles.collectAsState()
-    val error by viewModel.error.collectAsState()
+    val errores by viewModel.errores.collectAsState()
     val perfil = perfiles.find { it.id == usuarioId } ?: return
     var pantalla by rememberSaveable(usuarioId) { mutableStateOf("perfil") }
 
@@ -56,7 +58,7 @@ fun PerfilUsuarioScreen(
     BackHandler { volver() }
 
     when (pantalla) {
-        "editar" -> EditarPerfilScreen(perfil, error, { volver() }) { editado ->
+        "editar" -> EditarPerfilScreen(perfil, errores, { volver() }) { editado ->
             if (viewModel.guardarPerfil(editado)) pantalla = "datos"
         }
         "datos" -> DatosPersonalesScreen(perfil, { volver() }) {
@@ -145,10 +147,12 @@ private fun DatoPerfil(titulo: String, valor: String) {
 @Composable
 private fun EditarPerfilScreen(
     perfil: PerfilUsuario,
-    error: String?,
+    errores: ErroresPerfil,
     onVolver: () -> Unit,
-    onGuardar: (PerfilUsuario) -> Unit
+    onGuardar: suspend (PerfilUsuario) -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var guardando by remember { mutableStateOf(false) }
     var nombre by rememberSaveable(perfil.id) { mutableStateOf(perfil.nombre) }
     var apellido by rememberSaveable(perfil.id) { mutableStateOf(perfil.apellido) }
     var rut by rememberSaveable(perfil.id) { mutableStateOf(perfil.rut) }
@@ -159,33 +163,40 @@ private fun EditarPerfilScreen(
         .imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onVolver) { Text("‹ Editar datos", color = OscuroPerfil) }
-        CampoPerfil("Nombre *", nombre) { nombre = it }
+        CampoPerfil("Nombre *", nombre, errores.nombre) { nombre = it }
         CampoPerfil("Apellido", apellido) { apellido = it }
-        CampoPerfil("RUT de prueba", rut) { rut = it }
-        CampoPerfil("Correo *", correo) { correo = it }
-        CampoPerfil("Teléfono", telefono) { telefono = it }
+        CampoPerfil("RUT de prueba", rut, errores.rut) { rut = it }
+        CampoPerfil("Correo *", correo, errores.correo) { correo = it }
+        CampoPerfil("Teléfono", telefono, errores.telefono) { telefono = it }
         if (!perfil.esAdmin) CampoPerfil("Dirección de prueba", direccion) { direccion = it }
-        AnimatedVisibility(visible = error != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
+        AnimatedVisibility(visible = errores.general != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
-            Text(error.orEmpty(), color = Color(0xFFC0392B))
+            Text(errores.general.orEmpty(), color = Color(0xFFC0392B))
         }
         Text("Utiliza únicamente datos ficticios para la demostración.", color = CafePerfil, fontSize = 12.sp)
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onVolver, modifier = Modifier.fillMaxWidth()) { Text("Cancelar") }
             Button(onClick = {
-                onGuardar(perfil.copy(nombre = nombre, apellido = apellido, rut = rut,
-                    correo = correo, telefono = telefono, direccion = direccion))
-            }, modifier = Modifier.fillMaxWidth(),
-                colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text("Guardar") }
+                if (!guardando) {
+                    guardando = true
+                    val editado = perfil.copy(nombre = nombre, apellido = apellido, rut = rut,
+                        correo = correo, telefono = telefono, direccion = direccion)
+                    scope.launch {
+                        try { onGuardar(editado) } finally { guardando = false }
+                    }
+                }
+            }, enabled = !guardando, modifier = Modifier.fillMaxWidth(),
+                colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text(if (guardando) "Guardando…" else "Guardar") }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun CampoPerfil(titulo: String, valor: String, onCambio: (String) -> Unit) {
+private fun CampoPerfil(titulo: String, valor: String, error: String? = null, onCambio: (String) -> Unit) {
     OutlinedTextField(value = valor, onValueChange = onCambio,
-        label = { Text(titulo) }, singleLine = true,
+        label = { Text(titulo) }, singleLine = true, isError = error != null,
+        supportingText = if (error != null) { { Text(error) } } else null,
         shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
         colors = TextFieldDefaults.outlinedTextFieldColors(
             textColor = OscuroPerfil, containerColor = Color.White,

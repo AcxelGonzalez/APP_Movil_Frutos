@@ -1,18 +1,17 @@
 package com.example.oyl_fs.viewmodel
 
-import androidx.lifecycle.ViewModel
+import android.app.Application
+import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.oyl_fs.model.ItemCarrito
 import com.example.oyl_fs.model.ProductoInfo
-import com.example.oyl_fs.repository.CarritoRepository
-import kotlinx.coroutines.ExperimentalCoroutinesApi
+import com.example.oyl_fs.repository.CarritoRoomRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.map as mapFlow
-import kotlinx.coroutines.flow.stateIn
 
 data class CarritoUiState(
     val items: List<ItemCarrito> = emptyList()
@@ -29,33 +28,37 @@ data class CarritoUiState(
     val sinStock: List<ItemCarrito> get() = items.filterNot { it.stockSuficiente }
 }
 
-@OptIn(ExperimentalCoroutinesApi::class)
-class CarritoViewModel : ViewModel() {
+class CarritoViewModel(application: Application) : AndroidViewModel(application) {
 
-    private val repo = CarritoRepository
+    private val repo = CarritoRoomRepository(application)
 
     private val clienteId = MutableStateFlow("")
 
     private val _mensaje = MutableStateFlow<String?>(null)
     val mensaje: StateFlow<String?> = _mensaje.asStateFlow()
 
-    val uiState: StateFlow<CarritoUiState> = clienteId
-        .flatMapLatest { id -> repo.obtenerCarrito(id) }
-        .mapFlow { lista -> CarritoUiState(items = lista) }
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), CarritoUiState())
+    private val _uiState = MutableStateFlow(CarritoUiState())
+    val uiState = _uiState.asStateFlow()
+    private var observacion: kotlinx.coroutines.Job? = null
 
     fun iniciar(id: String) {
+        if (clienteId.value == id && observacion?.isActive == true) return
+        observacion?.cancel()
         clienteId.value = id
-    }
-
-    fun sincronizarConCatalogo(
-        clienteId: String,
-        productos: List<ProductoInfo>
-    ) {
-        repo.sincronizarConCatalogo(
-            clienteId = clienteId,
-            catalogo = productos
-        )
+        _mensaje.value = null
+        _uiState.value = CarritoUiState()
+        if (id.isBlank()) return
+        observacion = viewModelScope.launch {
+            try {
+                repo.observar(id).collect { lista ->
+                    if (clienteId.value == id) _uiState.value = CarritoUiState(lista)
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (clienteId.value == id) _mensaje.value = "No se pudo recuperar el carrito"
+            }
+        }
     }
 
     /**
@@ -64,7 +67,7 @@ class CarritoViewModel : ViewModel() {
      * Comprueba que exista un producto esté disponible y que haya stock.
      * Devuelve true si el producto se agregó correctamente.
      */
-    fun agregarProducto(producto: ProductoInfo, cantidad: Int = 1): Boolean {
+    suspend fun agregarProducto(producto: ProductoInfo, cantidad: Int = 1): Boolean {
 
         val id = clienteId.value
 
@@ -85,22 +88,14 @@ class CarritoViewModel : ViewModel() {
             return false
         }
 
-        // Convierte el producto del catálogo
-        // al modelo utilizado por el carrito.
-        val item = ItemCarrito(
-            productoId = producto.id.toString(),
-            nombre = producto.nombre,
-            formato = producto.presentacion,
-            precio = producto.precio,
-            cantidad = cantidad,
-            stockDisponible = producto.stock,
-            imagen = producto.imagen,
-            imagenUri = producto.imagenUri
-        )
-
-        // El repositorio comprueba también que la cantidad
-        // acumulada no supere el stock disponible.
-        val agregado = repo.agregar(id, item)
+        val agregado = try {
+            repo.agregar(id, producto, cantidad)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            _mensaje.value = "No se pudo guardar el carrito"
+            return false
+        }
 
         // Mensaje para mostrar al usuario.
         _mensaje.value = if (agregado) {
@@ -112,21 +107,39 @@ class CarritoViewModel : ViewModel() {
         return agregado
     }
 
-    fun aumentar(item: ItemCarrito) {
-        if (item.cantidad >= item.stockDisponible) {
-            _mensaje.value = "Solo hay ${item.stockDisponible} unidades de ${item.nombre}"
-            return
-        }
-        repo.cambiarCantidad(clienteId.value, item.productoId, item.cantidad + 1)
-    }
+    fun aumentar(item: ItemCarrito) = ajustar(item, 1)
 
-    fun disminuir(item: ItemCarrito) {
-        repo.cambiarCantidad(clienteId.value, item.productoId, item.cantidad - 1)
+    fun disminuir(item: ItemCarrito) = ajustar(item, -1)
+
+    private fun ajustar(item: ItemCarrito, delta: Int) {
+        val id = clienteId.value
+        val productoId = item.productoId.toIntOrNull() ?: return
+        viewModelScope.launch {
+            try {
+                if (!repo.ajustar(id, productoId, delta) && clienteId.value == id) {
+                    _mensaje.value = "No hay unidades disponibles para este cambio"
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (clienteId.value == id) _mensaje.value = "No se pudo actualizar el carrito"
+            }
+        }
     }
 
     fun quitar(item: ItemCarrito) {
-        repo.quitar(clienteId.value, item.productoId)
-        _mensaje.value = "${item.nombre} se quitó del carrito"
+        val id = clienteId.value
+        val productoId = item.productoId.toIntOrNull() ?: return
+        viewModelScope.launch {
+            try {
+                repo.quitar(id, productoId)
+                if (clienteId.value == id) _mensaje.value = "${item.nombre} se quitó del carrito"
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                if (clienteId.value == id) _mensaje.value = "No se pudo quitar el producto"
+            }
+        }
     }
 
     fun validarAntesDeConfirmar(): Boolean {
@@ -140,27 +153,6 @@ class CarritoViewModel : ViewModel() {
             return false
         }
         return true
-    }
-
-    /**
-     * Vacía el carrito después de registrar
-     * correctamente un pedido.
-     *
-     * Se ejecuta únicamente cuando el registro
-     * de la compra fue exitoso.
-     */
-    fun vaciarDespuesDeConfirmar() {
-
-        // Identificar al cliente del carrito actual.
-        val id = clienteId.value
-
-        // Evitar operaciones sin un cliente identificado.
-        if (id.isBlank()) {
-            return
-        }
-
-        // Eliminar los productos del carrito.
-        repo.vaciar(id)
     }
 
     fun mensajeMostrado() {

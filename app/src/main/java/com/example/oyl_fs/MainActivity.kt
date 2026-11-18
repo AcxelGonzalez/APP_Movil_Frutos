@@ -11,6 +11,11 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 
 import android.os.Bundle
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.*
+import com.example.oyl_fs.viewmodel.SesionViewModel
 
 import android.widget.Toast
 
@@ -193,15 +198,12 @@ class MainActivity : ComponentActivity() {
             PrepararPedidoViewModel::class.java
         ]
 
+        val sesionViewModel = ViewModelProvider(this)[SesionViewModel::class.java]
+
         setContent {
             OYL_FSTheme {
 
                 val perfiles by perfilViewModel.perfiles.collectAsState()
-
-                // Observa los productos del catálogo compartido.
-                val productosActuales by productoViewModel
-                    .productos
-                    .collectAsState()
 
                 // Observa los pedidos del administrador.
                 // Permite actualizar el pedido si cambia su estado.
@@ -209,56 +211,20 @@ class MainActivity : ComponentActivity() {
                     .pedidosParaAdmin
                     .collectAsState()
 
-                /**
-                 * Sesión actual.
-                 *
-                 * Por ahora se conserva solamente en memoria.
-                 * Si Android termina el proceso, se solicitará
-                 * nuevamente el inicio de sesión.
-                 */
-                var sesionIniciada by remember {
-                    mutableStateOf(false)
-                }
+                val estadoSesion by sesionViewModel.estado.collectAsState()
+                val sesion = estadoSesion.sesion
+                val sesionIniciada = sesion != null
+                val esAdmin = sesion?.esAdmin ?: false
+                val usuarioSesionId = sesion?.usuarioId.orEmpty()
+                val nombreSesion = sesion?.nombre.orEmpty()
+                var datosSesionListos by remember(usuarioSesionId) { mutableStateOf(false) }
+                var errorPreparacion by remember(usuarioSesionId) { mutableStateOf<String?>(null) }
+                var reintentoSesion by remember { mutableStateOf(0) }
 
-                var esAdmin by remember {
-                    mutableStateOf(false)
-                }
-
-                /**
-                 * Identificador exclusivo del usuario
-                 * que inició sesión.
-                 */
-                var usuarioSesionId by remember {
-                    mutableStateOf("")
-                }
-
-                /**
-                 * Mantener actualizado el carrito
-                 * solamente del cliente autenticado.
-                 */
-                LaunchedEffect(
-                    productosActuales,
-                    usuarioSesionId,
-                    esAdmin
-                ) {
-
-                    if (
-                        usuarioSesionId.isNotBlank() &&
-                        !esAdmin
-                    ) {
-
-                        carritoViewModel.sincronizarConCatalogo(
-                            clienteId = usuarioSesionId,
-                            productos = productosActuales
-                        )
+                LaunchedEffect(estadoSesion.error) {
+                    estadoSesion.error?.let {
+                        Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
                     }
-                }
-
-                /**
-                 * Nombre visible del usuario autenticado.
-                 */
-                var nombreSesion by remember {
-                    mutableStateOf("")
                 }
 
                 // Navegación a historial.
@@ -330,42 +296,56 @@ class MainActivity : ComponentActivity() {
                  * las cuentas ni los carritos de otros clientes.
                  */
                 fun cerrarSesionActual() {
-
-                    val idAnterior = usuarioSesionId
-
-                    // Limpiar la selección del carrito.
-                    carritoViewModel.iniciar("")
-
-                    // El Historial deja de estar asociado
-                    // con el usuario anterior.
-                    historialViewModel.configurarSesion(
-                        usuarioId = "",
-                        esAdmin = false
-                    )
-
-                    // No mantener visibles los perfiles
-                    // registrados de la sesión anterior.
-                    perfilViewModel.limpiarSesionRegistrada()
-
-                    // Eliminar el estado visual guardado
-                    // para el cliente que cerró sesión.
-                    if (idAnterior.isNotBlank() && !esAdmin) {
-                        estadoHomeCliente.removeState(idAnterior)
+                    if (procesandoCompra || procesandoPreparacion) {
+                        Toast.makeText(this@MainActivity, "Espera a que termine la operación", Toast.LENGTH_SHORT).show()
+                        return
                     }
+                    sesionViewModel.cerrar()
+                }
 
-                    mostrarHistorial = false
-                    mostrarCarrito = false
-                    mostrarRegistro = false
-                    pedidoPrepararId = null
-                    pestanaDesdeHistorial = null
-
-                    usuarioSesionId = ""
-                    nombreSesion = ""
-                    esAdmin = false
-                    sesionIniciada = false
+                LaunchedEffect(sesion, reintentoSesion) {
+                    datosSesionListos = false
+                    errorPreparacion = null
+                    try {
+                        if (sesion != null) {
+                            if (!sesion.esDemo) {
+                                val usuario = usuarioRoomRepository.obtenerUsuario(sesion.usuarioId)
+                                    ?: error("No se encontró la cuenta")
+                                perfilViewModel.activarClienteRegistrado(usuario)
+                            }
+                            carritoViewModel.iniciar(if (sesion.esAdmin) "" else sesion.usuarioId)
+                            historialViewModel.configurarSesion(sesion.usuarioId, sesion.esAdmin)
+                            datosSesionListos = true
+                        } else {
+                            carritoViewModel.iniciar("")
+                            historialViewModel.configurarSesion("", false)
+                            perfilViewModel.limpiarSesionRegistrada()
+                            mostrarHistorial = false
+                            mostrarCarrito = false
+                            pedidoPrepararId = null
+                            pestanaDesdeHistorial = null
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        errorPreparacion = "No se pudieron recuperar los datos de la cuenta"
+                    }
                 }
 
                 when {
+                    estadoSesion.restaurando || estadoSesion.procesando || (sesionIniciada && !datosSesionListos) -> {
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                            if (errorPreparacion == null) {
+                                CircularProgressIndicator()
+                            } else {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(errorPreparacion.orEmpty())
+                                    Button(onClick = { reintentoSesion++ }) { Text("Reintentar") }
+                                    TextButton(onClick = { cerrarSesionActual() }) { Text("Cerrar sesión") }
+                                }
+                            }
+                        }
+                    }
 
                     // ---------- Login y registro ----------
                     !sesionIniciada -> {
@@ -397,78 +377,13 @@ class MainActivity : ComponentActivity() {
                             LoginScreen(
                                 viewModel = loginViewModel,
 
-                                onLoginSuccess = { sesion ->
-
-                                    lifecycleScope.launch {
-
-                                        try {
-
-                                            // Para clientes registrados, recuperar
-                                            // su perfil real antes de entrar.
-                                            if (!sesion.esDemo) {
-
-                                                val usuario = usuarioRoomRepository
-                                                    .obtenerUsuario(
-                                                        sesion.usuarioId
-                                                    )
-
-                                                if (usuario == null) {
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "No se encontró la cuenta registrada",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-
-                                                    return@launch
-                                                }
-
-                                                perfilViewModel
-                                                    .activarClienteRegistrado(usuario)
-                                            }
-
-                                            // Identificar el carrito correcto.
-                                            carritoViewModel.iniciar(
-                                                if (sesion.esAdmin) {
-                                                    ""
-                                                } else {
-                                                    sesion.usuarioId
-                                                }
-                                            )
-
-                                            // Asociar el historial con la cuenta
-                                            // y el rol que inició sesión.
-                                            historialViewModel.configurarSesion(
-                                                usuarioId = sesion.usuarioId,
-                                                esAdmin = sesion.esAdmin
-                                            )
-
-                                            usuarioSesionId = sesion.usuarioId
-                                            nombreSesion = sesion.nombre
-                                            esAdmin = sesion.esAdmin
-
-                                            mostrarHistorial = false
-                                            mostrarCarrito = false
-                                            pedidoPrepararId = null
-                                            pestanaDesdeHistorial = null
-                                            mostrarRegistro = false
-
-                                            // Ingresar solamente después
-                                            // de preparar los datos del usuario.
-                                            sesionIniciada = true
-
-                                        } catch (e: CancellationException) {
-                                            throw e
-
-                                        } catch (_: Exception) {
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "No se pudo iniciar la sesión",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-                                    }
+                                onLoginSuccess = { identificada ->
+                                    mostrarHistorial = false
+                                    mostrarCarrito = false
+                                    mostrarRegistro = false
+                                    pedidoPrepararId = null
+                                    pestanaDesdeHistorial = null
+                                    sesionViewModel.iniciar(identificada)
                                 },
 
                                 onIrARegistro = {
@@ -625,11 +540,8 @@ class MainActivity : ComponentActivity() {
 
                                                 if (pedido != null) {
 
-                                                    // Vaciar solamente después
-                                                    // de confirmar SQLite.
-                                                    carritoViewModel
-                                                        .vaciarDespuesDeConfirmar()
-
+                                                    // Room ya retiró los artículos de este cliente
+                                                    // dentro de la transacción de compra.
                                                     mostrarCarrito = false
                                                     mostrarHistorial = true
 

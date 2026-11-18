@@ -8,6 +8,7 @@ import com.example.oyl_fs.repository.ResultadoRegistro
 import com.example.oyl_fs.repository.UsuarioRoomRepository
 
 import java.util.Locale
+import com.example.oyl_fs.util.ValidacionContacto
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,9 +80,6 @@ object ValidacionRegistro {
             Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
                 .matches(correo)
 
-        val digitosTelefono = datos.telefono
-            .filter { it.isDigit() }
-
         return ErroresRegistro(
             alias = when {
                 !aliasValido ->
@@ -99,13 +97,13 @@ object ValidacionRegistro {
                 "Ingresa un correo electrónico válido."
             } else null,
 
-            rut = if (!rutValido(datos.rut)) {
+            rut = if (!ValidacionContacto.rutValido(datos.rut)) {
                 "Ingresa un RUT válido, por ejemplo 12.345.678-5."
             } else null,
 
             telefono = if (
                 datos.telefono.isNotBlank() &&
-                digitosTelefono.length !in 8..11
+                !ValidacionContacto.telefonoValido(datos.telefono)
             ) {
                 "Ingresa un teléfono válido."
             } else null,
@@ -122,42 +120,6 @@ object ValidacionRegistro {
         )
     }
 
-    /**
-     * Comprueba el dígito verificador del RUT chileno.
-     * Admite formatos con y sin puntos o guion.
-     */
-    private fun rutValido(rut: String): Boolean {
-
-        val limpio = rut.trim()
-            .replace(".", "")
-            .replace("-", "")
-            .uppercase(Locale.ROOT)
-
-        if (!Regex("^\\d{7,8}[\\dK]$").matches(limpio)) {
-            return false
-        }
-
-        val numero = limpio.dropLast(1)
-        val verificador = limpio.last()
-
-        var suma = 0
-        var factor = 2
-
-        for (digito in numero.reversed()) {
-            suma += digito.digitToInt() * factor
-            factor = if (factor == 7) 2 else factor + 1
-        }
-
-        val resto = 11 - (suma % 11)
-
-        val esperado = when (resto) {
-            11 -> '0'
-            10 -> 'K'
-            else -> resto.digitToChar()
-        }
-
-        return verificador == esperado
-    }
 }
 
 /**

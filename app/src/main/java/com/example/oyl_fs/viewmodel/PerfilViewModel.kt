@@ -2,15 +2,25 @@ package com.example.oyl_fs.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.lifecycle.AndroidViewModel
 import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.model.ErroresPerfil
+import com.example.oyl_fs.model.ValidacionPerfil
+import com.example.oyl_fs.repository.UsuarioRoomRepository
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import com.example.oyl_fs.data.local.UsuarioEntity
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 
-class PerfilViewModel(application: Application) : AndroidViewModel(application) {
-    // Guardado local sencillo; cada perfil utiliza su identificador.
-    private val preferencias = application.getSharedPreferences("perfiles_oyl", Context.MODE_PRIVATE)
+class PerfilViewModel @JvmOverloads constructor(
+    application: Application,
+    private val usuarios: UsuarioRoomRepository = UsuarioRoomRepository(application),
+    private val preferencias: SharedPreferences = application.getSharedPreferences("perfiles_oyl", Context.MODE_PRIVATE)
+) : AndroidViewModel(application) {
+    // Las cuentas demo conservan sus preferencias; los clientes usan Room.
     private val _perfiles = MutableStateFlow(
         listOf(cargarPerfil("admin-demo", true), cargarPerfil("cliente-demo", false))
     )
@@ -18,7 +28,10 @@ class PerfilViewModel(application: Application) : AndroidViewModel(application) 
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
 
-    fun limpiarError() { _error.value = null }
+    private val _errores = MutableStateFlow(ErroresPerfil())
+    val errores = _errores.asStateFlow()
+
+    fun limpiarError() { _error.value = null; _errores.value = ErroresPerfil() }
 
     private fun cargarPerfil(id: String, esAdmin: Boolean): PerfilUsuario {
         return PerfilUsuario(
@@ -33,34 +46,51 @@ class PerfilViewModel(application: Application) : AndroidViewModel(application) 
         )
     }
 
-    fun guardarPerfil(perfil: PerfilUsuario): Boolean {
+    suspend fun guardarPerfil(perfil: PerfilUsuario): Boolean {
         val actual = _perfiles.value.find { it.id == perfil.id }
-        _error.value = when {
-            actual == null || actual.esAdmin != perfil.esAdmin -> "El perfil no es válido"
-            perfil.nombre.isBlank() -> "Escribe el nombre"
-            !Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$").matches(perfil.correo.trim()) -> "Escribe un correo válido"
-            perfil.telefono.isNotBlank() &&
-                (perfil.telefono.count { it.isDigit() } !in 8..15 ||
-                    perfil.telefono.any { !it.isDigit() && it !in "+ -()" }) -> "Revisa el teléfono"
-            else -> null
+        if (actual == null || actual.esAdmin != perfil.esAdmin) {
+            _errores.value = ErroresPerfil(general = "El perfil no es válido")
+            _error.value = _errores.value.primerError()
+            return false
         }
+        val validacion = ValidacionPerfil.validar(perfil)
+        _errores.value = validacion
+        _error.value = validacion.primerError()
         if (_error.value != null) return false
         val guardado = perfil.copy(
             nombre = perfil.nombre.trim(), apellido = perfil.apellido.trim(),
             rut = perfil.rut.trim(), correo = perfil.correo.trim(),
             telefono = perfil.telefono.trim(), direccion = perfil.direccion.trim()
         )
-        // No guarda contraseñas ni cambia el funcionamiento del login.
-        preferencias.edit()
-            .putString("${perfil.id}.nombre", guardado.nombre)
-            .putString("${perfil.id}.apellido", guardado.apellido)
-            .putString("${perfil.id}.rut", guardado.rut)
-            .putString("${perfil.id}.correo", guardado.correo)
-            .putString("${perfil.id}.telefono", guardado.telefono)
-            .putString("${perfil.id}.direccion", guardado.direccion)
-            .apply()
-        _perfiles.value = _perfiles.value.map { if (it.id == perfil.id) guardado else it }
-        return true
+        return try {
+            if (perfil.id in setOf("admin-demo", "cliente-demo")) {
+                withContext(Dispatchers.IO) {
+                    check(preferencias.edit()
+                        .putString("${perfil.id}.nombre", guardado.nombre)
+                        .putString("${perfil.id}.apellido", guardado.apellido)
+                        .putString("${perfil.id}.rut", guardado.rut)
+                        .putString("${perfil.id}.correo", guardado.correo)
+                        .putString("${perfil.id}.telefono", guardado.telefono)
+                        .putString("${perfil.id}.direccion", guardado.direccion).commit())
+                }
+            } else {
+                val erroresRoom = usuarios.actualizarPerfil(guardado)
+                if (erroresRoom != null) {
+                    _errores.value = erroresRoom
+                    _error.value = erroresRoom.primerError()
+                    return false
+                }
+            }
+            _perfiles.value = _perfiles.value.map { if (it.id == perfil.id) guardado else it }
+            limpiarError()
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            _errores.value = ErroresPerfil(general = "No se pudo guardar el perfil")
+            _error.value = _errores.value.general
+            false
+        }
     }
 
     /**
@@ -69,58 +99,35 @@ class PerfilViewModel(application: Application) : AndroidViewModel(application) 
      *
      * El identificador es exclusivo de ese cliente.
      *
-     * Si anteriormente editó sus datos, recupera
-     * las preferencias guardadas para ese ID.
+     * Incorpora preferencias antiguas válidas una vez;
+     * después, Room es la única fuente de datos.
      */
-    fun activarClienteRegistrado(usuario: UsuarioEntity) {
-
-        val id = usuario.id
-
-        if (id.isBlank()) return
-
-        val perfil = PerfilUsuario(
-            id = id,
-            esAdmin = false,
-
-            nombre = preferencias.getString(
-                "$id.nombre",
-                usuario.nombre
-            ) ?: usuario.nombre,
-
-            apellido = preferencias.getString(
-                "$id.apellido",
-                usuario.apellido
-            ) ?: usuario.apellido,
-
-            rut = preferencias.getString(
-                "$id.rut",
-                usuario.rut
-            ) ?: usuario.rut,
-
-            correo = preferencias.getString(
-                "$id.correo",
-                usuario.correo
-            ) ?: usuario.correo,
-
-            telefono = preferencias.getString(
-                "$id.telefono",
-                usuario.telefono
-            ) ?: usuario.telefono,
-
-            direccion = preferencias.getString(
-                "$id.direccion",
-                usuario.direccion
-            ) ?: usuario.direccion
-        )
-
-        // Conservar los perfiles demo y únicamente
-        // el perfil registrado que inició sesión.
-        val perfilesDemo = _perfiles.value.filter {
-            it.id == "admin-demo" ||
-                    it.id == "cliente-demo"
+    suspend fun activarClienteRegistrado(usuario: UsuarioEntity) {
+        if (usuario.id.isBlank()) return
+        var actual = usuario
+        // Se migra una sola vez. El marcador vive en la misma cuenta de Room,
+        // para no volver a sobrescribirla aunque fallen las preferencias antiguas.
+        if (!usuario.perfilPreferenciasMigrado && preferencias.contains("${usuario.id}.nombre")) {
+            val anterior = PerfilUsuario(
+                usuario.id, false,
+                preferencias.getString("${usuario.id}.nombre", usuario.nombre).orEmpty(),
+                preferencias.getString("${usuario.id}.apellido", usuario.apellido).orEmpty(),
+                preferencias.getString("${usuario.id}.rut", usuario.rut).orEmpty(),
+                preferencias.getString("${usuario.id}.correo", usuario.correo).orEmpty(),
+                preferencias.getString("${usuario.id}.telefono", usuario.telefono).orEmpty(),
+                preferencias.getString("${usuario.id}.direccion", usuario.direccion).orEmpty()
+            )
+            val erroresMigracion = usuarios.actualizarPerfil(anterior)
+            if (erroresMigracion == null) {
+                actual = usuarios.obtenerUsuario(usuario.id) ?: error("La cuenta ya no existe")
+            } else {
+                _errores.value = erroresMigracion.copy(general = "Revisa los datos anteriores del perfil: no se pudieron incorporar a la cuenta")
+                _error.value = _errores.value.general
+            }
         }
-
-        _perfiles.value = perfilesDemo + perfil
+        val perfil = PerfilUsuario(actual.id, false, actual.nombre, actual.apellido,
+            actual.rut, actual.correo, actual.telefono, actual.direccion)
+        _perfiles.value = _perfiles.value.filter { it.id in setOf("admin-demo", "cliente-demo") } + perfil
     }
 
     /**
@@ -136,7 +143,7 @@ class PerfilViewModel(application: Application) : AndroidViewModel(application) 
                     it.id == "cliente-demo"
         }
 
-        _error.value = null
+        limpiarError()
     }
 
 }

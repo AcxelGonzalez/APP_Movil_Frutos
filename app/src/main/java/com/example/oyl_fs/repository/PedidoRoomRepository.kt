@@ -272,6 +272,15 @@ class PedidoRoomRepository(
                     .descontarStockLote(
                         descuentos.values.toList()
                     )
+
+                // Descontar solo los artículos comprados del carrito del dueño.
+                // Forma parte de la misma transacción que pedido y stock.
+                for (detalle in pedido.productos) {
+                    database.carritoDao().descontarComprados(
+                        pedido.usuarioId, detalle.productoId.toInt(), detalle.cantidad
+                    )
+                }
+                database.carritoDao().quitarVacios(pedido.usuarioId)
             }
 
             true

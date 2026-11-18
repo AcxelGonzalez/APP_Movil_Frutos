@@ -7,6 +7,10 @@ import android.database.sqlite.SQLiteConstraintException
 import com.example.oyl_fs.data.local.HashContrasena
 import com.example.oyl_fs.data.local.OylDatabase
 import com.example.oyl_fs.data.local.UsuarioEntity
+import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.model.ErroresPerfil
+import com.example.oyl_fs.model.ValidacionPerfil
+import com.example.oyl_fs.util.ValidacionContacto
 
 import java.util.Locale
 import java.util.UUID
@@ -290,6 +294,38 @@ class UsuarioRoomRepository(
             alias = usuario.alias,
             nombre = usuario.nombre
         )
+    }
+
+    /** Actualiza la misma cuenta que utiliza el login, sin modificar sus credenciales. */
+    suspend fun actualizarPerfil(perfil: PerfilUsuario): ErroresPerfil? {
+        val errores = ValidacionPerfil.validar(perfil)
+        if (errores.primerError() != null) return errores
+        if (perfil.esAdmin) return ErroresPerfil(general = "El perfil no es válido")
+        return try {
+            database.withTransaction {
+                val anterior = dao.obtenerPorId(perfil.id)
+                    ?: return@withTransaction ErroresPerfil(general = "La cuenta ya no existe")
+                val correo = perfil.correo.trim()
+                val correoNormalizado = correo.lowercase(Locale.ROOT)
+                if (correoNormalizado != anterior.correoNormalizado && dao.existeCorreo(correoNormalizado)) {
+                    return@withTransaction ErroresPerfil(correo = "El correo ya está registrado")
+                }
+                val rut = ValidacionContacto.normalizarRut(perfil.rut)
+                val rutAnterior = ValidacionContacto.normalizarRut(anterior.rut)
+                if (rut.isNotEmpty() && rut != rutAnterior && dao.existeRutNormalizado(rut)) {
+                    return@withTransaction ErroresPerfil(rut = "El RUT ya está registrado")
+                }
+                dao.actualizar(anterior.copy(
+                    nombre = perfil.nombre.trim(), apellido = perfil.apellido.trim(),
+                    rut = perfil.rut.trim(), correo = correo, correoNormalizado = correoNormalizado,
+                    telefono = perfil.telefono.trim(), direccion = perfil.direccion.trim(),
+                    perfilPreferenciasMigrado = true
+                ))
+                null
+            }
+        } catch (_: SQLiteConstraintException) {
+            ErroresPerfil(correo = "El correo ya está registrado")
+        }
     }
 
     /**

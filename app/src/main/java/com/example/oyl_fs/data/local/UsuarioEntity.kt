@@ -1,5 +1,6 @@
 package com.example.oyl_fs.data.local
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -65,5 +66,8 @@ data class UsuarioEntity(
     val claveSalt: String,
 
     // Fecha de creación en milisegundos.
-    val creadoEn: Long
+    val creadoEn: Long,
+
+    @ColumnInfo(defaultValue = "0")
+    val perfilPreferenciasMigrado: Boolean = false
 )

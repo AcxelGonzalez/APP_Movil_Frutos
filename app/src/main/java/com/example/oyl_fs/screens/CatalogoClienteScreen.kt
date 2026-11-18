@@ -113,12 +113,15 @@ fun CatalogoClienteScreen(
     productos: List<ProductoInfo>,
     onVolver: () -> Unit,
     onDetalle: (ProductoInfo) -> Unit,
-    onAgregar: (ProductoInfo, Int) -> Boolean,
+    onAgregar: suspend (ProductoInfo, Int) -> Boolean,
     unidadesDisponibles: (ProductoInfo) -> Int = { it.stock },
     cantidadEnCarrito: Int = 0,
     totalCarrito: Long = 0L,
     onAbrirCarrito: () -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
+    var guardando by remember { mutableStateOf(false) }
+
     var productoParaAgregarId by rememberSaveable { mutableStateOf<Int?>(null) }
     var cantidad by rememberSaveable { mutableStateOf(1) }
     var confirmacion by rememberSaveable { mutableStateOf<String?>(null) }
@@ -320,10 +323,18 @@ fun CatalogoClienteScreen(
             },
             confirmButton = {
                 Button(colors = ButtonDefaults.buttonColors(containerColor = OscuroCliente),
-                    shape = RoundedCornerShape(12.dp), enabled = limite > 0, onClick = {
-                    if (onAgregar(productoParaAgregar, cantidadActual)) {
-                        confirmacion = "${productoParaAgregar.nombre} · $cantidadActual ${if (cantidadActual == 1) "unidad" else "unidades"} en tu carrito."
-                        productoParaAgregarId = null
+                    shape = RoundedCornerShape(12.dp), enabled = limite > 0 && !guardando, onClick = {
+                    if (!guardando) {
+                        guardando = true
+                        val solicitada = cantidadActual
+                        scope.launch {
+                            try {
+                                if (onAgregar(productoParaAgregar, solicitada)) {
+                                    confirmacion = "${productoParaAgregar.nombre} · $solicitada en tu carrito."
+                                    productoParaAgregarId = null
+                                }
+                            } finally { guardando = false }
+                        }
                     }
                 }) { Text("Agregar") }
             },

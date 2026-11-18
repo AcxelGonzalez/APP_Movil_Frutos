@@ -39,9 +39,11 @@ fun DetalleProductoClienteScreen(
     producto: ProductoInfo,
     disponibleParaAgregar: Int,
     onVolver: () -> Unit,
-    onAgregar: (Int) -> Boolean,
+    onAgregar: suspend (Int) -> Boolean,
     onAbrirCarrito: () -> Unit
 ) {
+    val scope = rememberCoroutineScope()
+    var guardando by remember { mutableStateOf(false) }
     val entrada = remember(producto.id) { Animatable(0f) }
     val desplazamiento = with(LocalDensity.current) { 18.dp.toPx() }
     LaunchedEffect(producto.id) {
@@ -99,12 +101,20 @@ fun DetalleProductoClienteScreen(
         )
         Button(
             onClick = {
-                if (onAgregar(cantidadActual)) {
-                    cantidadAgregada = cantidadActual
-                    agregado = true
+                if (!guardando) {
+                    guardando = true
+                    val solicitada = cantidadActual
+                    scope.launch {
+                        try {
+                            if (onAgregar(solicitada)) {
+                                cantidadAgregada = solicitada
+                                agregado = true
+                            }
+                        } finally { guardando = false }
+                    }
                 }
             },
-            enabled = limite > 0,
+            enabled = limite > 0 && !guardando,
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = oscuro)
