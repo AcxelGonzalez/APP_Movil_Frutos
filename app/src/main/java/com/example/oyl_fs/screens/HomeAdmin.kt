@@ -7,6 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.painterResource
 import com.example.oyl_fs.R
 
+import com.example.oyl_fs.util.LanzadorQr
+import com.example.oyl_fs.util.escanearQr
 import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.model.EstadoPedido
@@ -55,7 +57,8 @@ fun HomeAdmin(
     perfilViewModel: PerfilViewModel,
     nombre: String = "Administrador",
     pestanaSolicitada: Int? = null,
-    onPestanaAtendida: () -> Unit = {}
+    onPestanaAtendida: () -> Unit = {},
+    lanzarEscaner: LanzadorQr = ::escanearQr
 ) {
 
     // Observa los productos actualizados del catálogo.
@@ -87,6 +90,15 @@ fun HomeAdmin(
     // Controla la pantalla seleccionada
     var tab by rememberSaveable { mutableStateOf(0) }
 
+    var productoInventarioId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var inventarioDesdeEscaner by rememberSaveable { mutableStateOf(false) }
+
+    fun volverInventario() {
+        productoInventarioId = null
+        tab = if (inventarioDesdeEscaner) 6 else 0
+        inventarioDesdeEscaner = false
+    }
+
     // El historial puede solicitar una pestaña del mismo menú.
     LaunchedEffect(pestanaSolicitada) {
         if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
@@ -103,7 +115,9 @@ fun HomeAdmin(
         visible = true
     }
 
-    BackHandler(enabled = tab != 0) { tab = 0 }
+    BackHandler(enabled = tab != 0) {
+        if (tab == 2) volverInventario() else tab = 0
+    }
 
     Scaffold(
         containerColor = FondoOYL,
@@ -119,7 +133,8 @@ fun HomeAdmin(
 
                 } else {
 
-                    // Cambia la pantalla seleccionada
+                    inventarioDesdeEscaner = false
+                    productoInventarioId = null
                     tab = indice
                 }
             }
@@ -129,6 +144,21 @@ fun HomeAdmin(
 
         // Mostramos el contenido según la opción seleccionada
         when (tab) {
+            6 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                EscanerScreen(
+                    viewModel = viewModel, esAdmin = true,
+                    onVolver = { tab = 0 },
+                    onAbrirProducto = { id ->
+                        if (viewModel.obtenerProducto(id) != null) {
+                            productoInventarioId = id
+                            inventarioDesdeEscaner = true
+                            tab = 2
+                        }
+                    },
+                    lanzarEscaner = lanzarEscaner
+                )
+            }
+
 
             // ---------- INICIO ----------
             0 -> {
@@ -161,6 +191,12 @@ fun HomeAdmin(
                                 }
                             }
                         }
+                    }
+
+                    OutlinedButton(onClick = { tab = 6 }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Escanear producto")
                     }
 
                     // ---------- INDICADORES ----------
@@ -405,9 +441,9 @@ fun HomeAdmin(
                 ) {
                     InventarioScreen(
                         viewModel = viewModel,
-                        onVolver = {
-                            tab = 0
-                        }
+                        onVolver = { volverInventario() },
+                        productoInicialId = productoInventarioId,
+                        onProductoInicialAtendido = { productoInventarioId = null }
                     )
                 }
             }

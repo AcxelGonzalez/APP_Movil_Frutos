@@ -51,6 +51,8 @@ import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.ProductoInfo
+import com.example.oyl_fs.util.LanzadorQr
+import com.example.oyl_fs.util.escanearQr
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
@@ -72,7 +74,8 @@ fun HomeCliente(
     onAbrirHistorial: () -> Unit,
     onAbrirCarrito: () -> Unit,
     pestanaSolicitada: Int? = null,
-    onPestanaAtendida: () -> Unit = {}
+    onPestanaAtendida: () -> Unit = {},
+    lanzarEscaner: LanzadorQr = ::escanearQr
 ) {
     // Datos de prueba (luego vendrán del ViewModel / SQLite)
     val promos = listOf(
@@ -161,17 +164,19 @@ fun HomeCliente(
     }
 
 
+    var detalleDesdeEscaner by rememberSaveable { mutableStateOf(false) }
+    fun volverDetalle() {
+        productoDetalleId = null
+        tab = if (detalleDesdeEscaner) 6 else 0
+        detalleDesdeEscaner = false
+    }
+
     var visible by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) { visible = true }
 
     BackHandler(enabled = tab != 0) {
-        if (tab == 5) {
-            // Salimos del detalle y volvemos al inicio.
-            productoDetalleId = null
-        }
-
-        tab = 0
+        if (tab == 5) volverDetalle() else tab = 0
     }
 
     Scaffold(
@@ -187,7 +192,7 @@ fun HomeCliente(
                 if (indice == 3) {
                     onAbrirHistorial()
                 } else {
-                    // Las demás pestañas conservan su comportamiento.
+                    detalleDesdeEscaner = false
                     tab = indice
                 }
             }
@@ -195,6 +200,21 @@ fun HomeCliente(
     ) { padding ->
 
         when (tab) {
+            6 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                EscanerScreen(
+                    viewModel = productoViewModel, esAdmin = false,
+                    onVolver = { tab = 0 },
+                    onAbrirProducto = { id ->
+                        if (productoViewModel.obtenerProducto(id)?.disponible == true) {
+                            productoDetalleId = id
+                            detalleDesdeEscaner = true
+                            tab = 5
+                        }
+                    },
+                    lanzarEscaner = lanzarEscaner
+                )
+            }
+
             /*
              * PESTAÑA TIENDAS
              *
@@ -249,8 +269,7 @@ fun HomeCliente(
                         disponibleParaAgregar = unidadesDisponibles,
 
                         onVolver = {
-                            productoDetalleId = null
-                            tab = 0
+                            volverDetalle()
                         },
 
                         onAgregar = { cantidad ->
@@ -265,8 +284,7 @@ fun HomeCliente(
 
                 } else {
                     LaunchedEffect(productoDetalleId) {
-                        productoDetalleId = null
-                        tab = 0
+                        volverDetalle()
                     }
                 }
             }
@@ -310,6 +328,12 @@ fun HomeCliente(
                                 }
                             }
                         }
+                    }
+
+                    OutlinedButton(onClick = { tab = 6 }, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Escanear producto")
                     }
 
                     // ---------- abrir catalogo ----------
@@ -493,6 +517,7 @@ fun HomeCliente(
                                                 .background(SecundarioOYL)
                                                 .clickable {
                                                     productoDetalleId = p.id
+                                                    detalleDesdeEscaner = false
                                                     tab = 5
                                                 },
                                             contentAlignment = Alignment.Center

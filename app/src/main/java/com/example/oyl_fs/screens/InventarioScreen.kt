@@ -36,7 +36,9 @@ private val RojoInventario = Color(0xFFC0392B)
 @Composable
 fun InventarioScreen(
     viewModel: ProductoViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    productoInicialId: Int? = null,
+    onProductoInicialAtendido: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var eliminando by remember { mutableStateOf(false) }
@@ -44,6 +46,8 @@ fun InventarioScreen(
     // Observamos el catálogo actualizado.
     val productos by viewModel.productos.collectAsState()
     val error by viewModel.error.collectAsState()
+    val cargando by viewModel.cargandoProductos.collectAsState()
+    var abiertoDesdeQr by rememberSaveable { mutableStateOf(false) }
 
     // Controlamos la navegación dentro del inventario.
     var pantalla by rememberSaveable {
@@ -59,6 +63,27 @@ fun InventarioScreen(
         it.id == productoId
     }
 
+    // Un solo efecto coordina la selección inicial y las eliminaciones. Dos
+    // efectos separados podían interpretar la selección inicial como inexistente.
+    LaunchedEffect(productoInicialId, productos, cargando, productoId, pantalla) {
+        if (cargando) return@LaunchedEffect
+        if (productoInicialId != null) {
+            val existe = productos.any { it.id == productoInicialId }
+            if (existe) {
+                viewModel.limpiarError()
+                productoId = productoInicialId
+                abiertoDesdeQr = true
+                pantalla = "editar"
+            }
+            onProductoInicialAtendido()
+            if (!existe) onVolver()
+        } else if (pantalla != "inventario" && productos.none { it.id == productoId }) {
+            productoId = null
+            pantalla = "inventario"
+            if (abiertoDesdeQr) onVolver()
+        }
+    }
+
     // Regresamos a la pantalla anterior.
     fun volver() {
         viewModel.limpiarError()
@@ -68,6 +93,7 @@ fun InventarioScreen(
             "detalle" -> {
                 productoId = null
                 pantalla = "inventario"
+                if (abiertoDesdeQr) onVolver()
             }
             else -> onVolver()
         }
@@ -76,16 +102,6 @@ fun InventarioScreen(
     // Maneja el botón Atrás del dispositivo.
     BackHandler(enabled = pantalla != "inventario") {
         volver()
-    }
-
-    // Si se elimina un producto, regresamos al listado.
-    LaunchedEffect(productos, productoId, pantalla) {
-        if (pantalla != "inventario" &&
-            productoSeleccionado == null
-        ) {
-            productoId = null
-            pantalla = "inventario"
-        }
     }
 
     when (pantalla) {
@@ -109,6 +125,7 @@ fun InventarioScreen(
                                     if (viewModel.eliminarProductoPersistente(idEliminar)) {
                                         productoId = null
                                         pantalla = "inventario"
+                                        if (abiertoDesdeQr) onVolver()
                                     }
                                 } finally {
                                     eliminando = false
