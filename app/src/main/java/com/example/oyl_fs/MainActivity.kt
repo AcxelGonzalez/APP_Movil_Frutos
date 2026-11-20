@@ -16,6 +16,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.material3.*
 import com.example.oyl_fs.viewmodel.SesionViewModel
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoViewModel
 
 import android.widget.Toast
 
@@ -199,6 +200,7 @@ class MainActivity : ComponentActivity() {
         ]
 
         val sesionViewModel = ViewModelProvider(this)[SesionViewModel::class.java]
+        val confirmacionPedidoViewModel = ViewModelProvider(this)[ConfirmacionPedidoViewModel::class.java]
 
         setContent {
             OYL_FSTheme {
@@ -240,7 +242,8 @@ class MainActivity : ComponentActivity() {
                 // Conserva catálogo, filtros y desplazamiento al volver del carrito.
                 val estadoHomeCliente = rememberSaveableStateHolder()
 
-                var procesandoCompra by remember { mutableStateOf(false) }
+                val estadoCompra by confirmacionPedidoViewModel.estado.collectAsState()
+                val procesandoCompra = estadoCompra.procesando
                 var procesandoPreparacion by remember {
                     mutableStateOf(false)
                 }
@@ -503,81 +506,11 @@ class MainActivity : ComponentActivity() {
                             },
 
 
-                            onConfirmar = { productos ->
-
-                                if (!procesandoCompra) {
-
-                                    procesandoCompra = true
-
-                                    lifecycleScope.launch {
-
-                                        try {
-
-                                            // Validación previa para mostrar
-                                            // errores claros al usuario.
-                                            val errorStock = productoViewModel
-                                                .validarStockParaCompra(productos)
-
-                                            if (errorStock != null) {
-
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    errorStock,
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-
-                                            } else {
-
-                                                // Una única operación persistente:
-                                                // 1. Guardar pedido.
-                                                // 2. Guardar detalles.
-                                                // 3. Descontar stock.
-                                                val pedido = historialViewModel
-                                                    .registrarCompraPersistente(
-                                                        usuarioId = usuarioSesionId,
-                                                        productos = productos
-                                                    )
-
-                                                if (pedido != null) {
-
-                                                    // Room ya retiró los artículos de este cliente
-                                                    // dentro de la transacción de compra.
-                                                    mostrarCarrito = false
-                                                    mostrarHistorial = true
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "Pedido registrado correctamente",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-
-                                                } else {
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "Stock insuficiente o precio modificado. Revisa tu carrito.",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
-                                            }
-
-                                        } catch (e: CancellationException) {
-                                            throw e
-
-                                        } catch (e: Exception) {
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "No se pudo registrar el pedido",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-
-                                        } finally {
-
-                                            procesandoCompra = false
-                                        }
-                                    }
-                                }
+                            perfil = perfiles.find { it.id == usuarioSesionId },
+                            confirmacionVm = confirmacionPedidoViewModel,
+                            onMisPedidos = {
+                                mostrarCarrito = false
+                                mostrarHistorial = true
                             }
 
                         )

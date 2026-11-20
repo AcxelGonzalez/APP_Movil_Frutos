@@ -11,6 +11,8 @@ import com.example.oyl_fs.data.local.DescuentoStock
 import com.example.oyl_fs.data.local.StockNoDisponibleException
 
 import com.example.oyl_fs.model.EstadoPedido
+import com.example.oyl_fs.model.EntregaPedido
+import com.example.oyl_fs.model.ValidacionEntregaPedido
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.model.DetallePedido
 import com.example.oyl_fs.model.ItemCarrito
@@ -310,12 +312,17 @@ class PedidoRoomRepository(
      */
     suspend fun registrarCompraDesdeCarrito(
         usuarioId: String,
-        items: List<ItemCarrito>
+        items: List<ItemCarrito>,
+        entrega: EntregaPedido? = null
     ): Pedido? {
 
         if (usuarioId.isBlank() || items.isEmpty()) {
             return null
         }
+
+        val puntos = PuntoRetiroRepository.obtenerPuntos()
+        if (entrega != null && ValidacionEntregaPedido.validar(entrega, puntos).hayErrores()) return null
+        val entregaConfirmada = entrega?.let { ValidacionEntregaPedido.normalizar(it, puntos) }
 
         val detalles = mutableListOf<DetallePedido>()
 
@@ -369,7 +376,8 @@ class PedidoRoomRepository(
             fecha = System.currentTimeMillis(),
             productos = detalles,
             total = totalSeguro.toInt(),
-            estado = EstadoPedido.PENDIENTE_VALIDACION
+            estado = EstadoPedido.PENDIENTE_VALIDACION,
+            entrega = entregaConfirmada
         )
 
         // Utiliza la transacción ya probada.

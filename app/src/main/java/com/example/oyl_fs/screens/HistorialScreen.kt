@@ -2,6 +2,8 @@
 package com.example.oyl_fs.screens
 
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -298,8 +300,8 @@ fun HistorialScreen(
 
             text = {
                 Column(
-                    verticalArrangement =
-                    Arrangement.spacedBy(8.dp)
+                    modifier = Modifier.verticalScroll(rememberScrollState()),
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         "Fecha: ${formatearFecha(pedidoSeleccionado.fecha)}"
@@ -308,6 +310,8 @@ fun HistorialScreen(
                     Text(
                         "Estado: ${pedidoSeleccionado.estado.descripcion}"
                     )
+
+                    DatosEntregaResumen(pedidoSeleccionado.entrega)
 
                     Divider()
 

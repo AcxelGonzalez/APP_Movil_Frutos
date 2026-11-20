@@ -14,7 +14,7 @@ import com.example.oyl_fs.screens.ProductosDatos
 /**
  * Base de datos local OYL Frutos Secos.
  *
- * Versión 4:
+ * Versión 5:
  * - productos
  * - pedidos
  * - detalle_pedidos
@@ -29,7 +29,7 @@ import com.example.oyl_fs.screens.ProductosDatos
         UsuarioEntity::class,
         CarritoEntity::class
     ],
-    version = 4,
+    version = 5,
     exportSchema = false
 )
 
@@ -72,14 +72,15 @@ abstract class OylDatabase : RoomDatabase() {
 
                     // Permite actualizar instalaciones antiguas:
                     //
-                    // v1 -> v2 -> v3 -> v4
-                    // v2 -> v3 -> v4
+                    // v1 -> v2 -> v3 -> v4 -> v5
+                    // v2 -> v3 -> v4 -> v5
                     //
                     // No elimina registros anteriores.
                     .addMigrations(
                         MIGRATION_1_2,
                         MIGRATION_2_3,
-                        MIGRATION_3_4
+                        MIGRATION_3_4,
+                        MIGRATION_4_5
                     )
 
                     .addCallback(
