@@ -15,6 +15,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoViewModel
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoUiState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,16 +47,37 @@ private val CriticoOYL = Color(0xFFC0392B)
 fun CarroScreen(
     clienteId: String,
     onVolver: () -> Unit,
-    onConfirmar: (List<ItemCarrito>) -> Unit,
-    vm: CarritoViewModel = viewModel()
+    onMisPedidos: () -> Unit,
+    perfil: PerfilUsuario? = null,
+    vm: CarritoViewModel = viewModel(),
+    confirmacionVm: ConfirmacionPedidoViewModel = viewModel()
 ) {
-    LaunchedEffect(clienteId) { vm.iniciar(clienteId) }
+    LaunchedEffect(clienteId) { vm.iniciar(clienteId); confirmacionVm.iniciar(clienteId) }
+    val confirmacionActual by confirmacionVm.estado.collectAsState()
+    val confirmacion = confirmacionActual.takeIf { it.usuarioId == clienteId } ?: ConfirmacionPedidoUiState()
 
     val estado by vm.uiState.collectAsState()
     val mensaje by vm.mensaje.collectAsState()
 
 
-    var mostrarConfirmacion by remember { mutableStateOf(false) }
+    var mostrarConfirmacion by rememberSaveable(clienteId) { mutableStateOf(false) }
+    fun abrirMisPedidos() { confirmacionVm.limpiar(); onMisPedidos() }
+    BackHandler(enabled = mostrarConfirmacion || confirmacion.pedido != null || confirmacion.procesando) {
+        if (!confirmacion.procesando) {
+            if (confirmacion.pedido != null) abrirMisPedidos() else mostrarConfirmacion = false
+        }
+    }
+    val pedido = confirmacion.pedido
+    if (pedido != null) {
+        PedidoConfirmadoScreen(pedido, ::abrirMisPedidos)
+        return
+    }
+    if (mostrarConfirmacion) {
+        ConfirmacionPedidoScreen(estado.items, perfil, confirmacion.procesando, confirmacion.error,
+            onVolver = { mostrarConfirmacion = false; confirmacionVm.limpiar() },
+            onConfirmar = { confirmacionVm.confirmar(clienteId, estado.items, it) })
+        return
+    }
 
     var itemAEliminar by remember { mutableStateOf<ItemCarrito?>(null) }
 
@@ -69,17 +95,6 @@ fun CarroScreen(
             if (vm.validarAntesDeConfirmar()) mostrarConfirmacion = true
         }
     )
-
-    if (mostrarConfirmacion) {
-        DialogoConfirmarCompra(
-            estado = estado,
-            onCancelar = { mostrarConfirmacion = false },
-            onAceptar = {
-                mostrarConfirmacion = false
-                onConfirmar(estado.items)
-            }
-        )
-    }
 
     // mensaje para confirmar que se quita un producto
     itemAEliminar?.let { item ->
@@ -312,42 +327,6 @@ private fun ItemCarrito.comoProducto() = ProductoInfo(
     imagenUri = imagenUri
 )
 
-@Composable
-private fun DialogoConfirmarCompra(
-    estado: CarritoUiState,
-    onCancelar: () -> Unit,
-    onAceptar: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onCancelar,   // tocar fuera o "atrás" = cancelar
-        containerColor = Color.White,
-        icon = {
-            Icon(Icons.Default.ShoppingCart, null, tint = SecundarioOYL)
-        },
-        title = {
-            Text("¿Deseas finalizar la compra?", fontWeight = FontWeight.Bold, color = SecundarioOYL)
-        },
-        text = {
-            Text(
-                "Vas a comprar ${estado.cantidadProductos} productos por un total de " +
-                        "${formatoPrecio(estado.total)}.",
-                color = PrincipalOYL
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onAceptar,
-                colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("Finalizar compra") }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancelar) {
-                Text("Cancelar", color = PrincipalOYL)
-            }
-        }
-    )
-}
 @Composable
 private fun DialogoQuitarProducto(
     item: ItemCarrito,

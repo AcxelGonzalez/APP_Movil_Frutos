@@ -3,6 +3,8 @@ package com.example.oyl_fs.data.local
 import com.example.oyl_fs.model.DetallePedido
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.model.EntregaPedido
+import com.example.oyl_fs.model.ModalidadEntrega
 
 /**
  * Convierte un pedido de la aplicación
@@ -15,7 +17,13 @@ fun Pedido.aEntidad(): PedidoEntity {
         usuarioId = usuarioId,
         fecha = fecha,
         total = total,
-        estado = estado.name
+        estado = estado.name,
+        modalidadEntrega = entrega?.modalidad?.name,
+        nombreContacto = entrega?.nombreContacto,
+        telefonoContacto = entrega?.telefonoContacto,
+        direccionEntrega = entrega?.direccion,
+        puntoRetiroId = entrega?.puntoRetiroId,
+        puntoRetiroNombre = entrega?.puntoRetiroNombre
     )
 }
 
@@ -63,6 +71,11 @@ fun PedidoConDetalles.aModeloPedido(): Pedido {
 
         estado = EstadoPedido.valueOf(
             pedido.estado
-        )
+        ),
+        entrega = pedido.modalidadEntrega?.let { modalidad ->
+            EntregaPedido(ModalidadEntrega.valueOf(modalidad),
+                pedido.nombreContacto.orEmpty(), pedido.telefonoContacto.orEmpty(),
+                pedido.direccionEntrega.orEmpty(), pedido.puntoRetiroId.orEmpty(), pedido.puntoRetiroNombre.orEmpty())
+        }
     )
 }

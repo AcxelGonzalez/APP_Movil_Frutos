@@ -173,7 +173,7 @@ class UsuarioMigrationTest {
                 OylDatabase::class.java,
                 nombreBase
             )
-                .addMigrations(MIGRATION_2_3, com.example.oyl_fs.data.local.MIGRATION_3_4)
+                .addMigrations(MIGRATION_2_3, com.example.oyl_fs.data.local.MIGRATION_3_4, com.example.oyl_fs.data.local.MIGRATION_4_5)
                 .build()
         }
 

@@ -38,5 +38,11 @@ data class PedidoEntity(
 
     // Nombre del enum EstadoPedido.
     // Ejemplo: PENDIENTE_VALIDACION.
-    val estado: String
+    val estado: String,
+    val modalidadEntrega: String? = null,
+    val nombreContacto: String? = null,
+    val telefonoContacto: String? = null,
+    val direccionEntrega: String? = null,
+    val puntoRetiroId: String? = null,
+    val puntoRetiroNombre: String? = null
 )
