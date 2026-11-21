@@ -1,24 +1,27 @@
+
 package com.example.oyl_fs.screens
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.expandVertically
-import androidx.compose.animation.shrinkVertically
-import androidx.compose.animation.core.tween
-
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.network.RegistroRequest
@@ -26,9 +29,25 @@ import com.example.oyl_fs.network.mensajeApi
 import com.example.oyl_fs.repository.SesionRepository
 import kotlinx.coroutines.launch
 
+import com.example.oyl_fs.viewmodel.CampoRegistro
+import com.example.oyl_fs.viewmodel.FormularioRegistro
+import com.example.oyl_fs.viewmodel.RegistroViewModel
+
+
+/**
+ * Formulario para registrar clientes en Room.
+ *
+ * Las validaciones se realizan desde
+ * RegistroViewModel y no desde Compose.
+ *
+ * ExperimentalMaterial3Api permite utilizar
+ * OutlinedTextField con la versión actual
+ * de Material 3 del proyecto.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RegistroScreen(
+    viewModel: RegistroViewModel,
     onRegistrado: () -> Unit,
     onIrALogin: () -> Unit
 ) {
@@ -39,7 +58,6 @@ fun RegistroScreen(
     var direccion by remember { mutableStateOf("") }
     var clave by remember { mutableStateOf("") }
     var confirmacion by remember { mutableStateOf("") }
-    var error by remember { mutableStateOf("") }
 
     // Mientras se espera la respuesta del servidor
     var cargando by remember { mutableStateOf(false) }
@@ -52,23 +70,58 @@ fun RegistroScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Text("Crear cuenta", fontSize = 28.sp, fontWeight = FontWeight.Bold, color = cafe)
-        Text("Completa tus datos para registrarte", fontSize = 13.sp, color = cafe)
+        Text(
+            text = "Crear cuenta",
+            fontSize = 28.sp,
+            fontWeight = FontWeight.Bold,
+            color = cafe
+        )
+
+        Text(
+            text = "Registra tus datos para acceder a OYL Frutos Secos",
+            fontSize = 13.sp,
+            color = cafe
+        )
 
         Spacer(Modifier.height(24.dp))
 
         OutlinedTextField(
-            value = nombre,
-            onValueChange = { nombre = it },
-            label = { Text("Nombre completo") },
+            value = alias,
+            onValueChange = {
+                alias = it
+                viewModel.limpiarError(CampoRegistro.ALIAS)
+            },
+            label = { Text("Alias de usuario *") },
+            leadingIcon = { Icon(Icons.Default.Person, null) },
+            isError = errores.alias != null,
+            enabled = !estado.procesando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        ErrorRegistroCampo(errores.alias)
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = nombre,
+            onValueChange = {
+                nombre = it
+                viewModel.limpiarError(CampoRegistro.NOMBRE)
+            },
+            label = { Text("Nombre completo *") },
+            leadingIcon = { Icon(Icons.Default.AccountCircle, null) },
+            isError = errores.nombre != null,
+            enabled = !estado.procesando,
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+        ErrorRegistroCampo(errores.nombre)
 
         Spacer(Modifier.height(12.dp))
 
@@ -80,6 +133,7 @@ fun RegistroScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        ErrorRegistroCampo(errores.correo)
 
         Spacer(Modifier.height(12.dp))
 
@@ -90,16 +144,27 @@ fun RegistroScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        ErrorRegistroCampo(errores.rut)
 
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
             value = telefono,
-            onValueChange = { telefono = it },
+            onValueChange = {
+                telefono = it
+                viewModel.limpiarError(CampoRegistro.TELEFONO)
+            },
             label = { Text("Teléfono (opcional)") },
+            leadingIcon = { Icon(Icons.Default.Phone, null) },
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Phone
+            ),
+            isError = errores.telefono != null,
+            enabled = !estado.procesando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        ErrorRegistroCampo(errores.telefono)
 
         Spacer(Modifier.height(12.dp))
 
@@ -115,23 +180,43 @@ fun RegistroScreen(
 
         OutlinedTextField(
             value = clave,
-            onValueChange = { clave = it },
-            label = { Text("Contraseña") },
-            singleLine = true,
+            onValueChange = {
+                clave = it
+                viewModel.limpiarError(CampoRegistro.CLAVE)
+            },
+            label = { Text("Contraseña *") },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
             visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password
+            ),
+            isError = errores.clave != null,
+            enabled = !estado.procesando,
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        ErrorRegistroCampo(errores.clave)
 
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
             value = confirmacion,
-            onValueChange = { confirmacion = it },
-            label = { Text("Confirmar contraseña") },
-            singleLine = true,
+            onValueChange = {
+                confirmacion = it
+                viewModel.limpiarError(CampoRegistro.CONFIRMACION)
+            },
+            label = { Text("Confirmar contraseña *") },
+            leadingIcon = { Icon(Icons.Default.Lock, null) },
             visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(
+                keyboardType = KeyboardType.Password
+            ),
+            isError = errores.confirmacion != null,
+            enabled = !estado.procesando,
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+        ErrorRegistroCampo(errores.confirmacion)
 
         AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
@@ -193,8 +278,19 @@ fun RegistroScreen(
             Text(if (cargando) "Creando cuenta..." else "Registrarse")
         }
 
-        TextButton(onClick = onIrALogin) {
-            Text("¿Ya tienes cuenta? Iniciar Sesión", color = cafe)
+        Spacer(Modifier.height(8.dp))
+
+        TextButton(
+            onClick = {
+                viewModel.reiniciar()
+                onIrALogin()
+            },
+            enabled = !estado.procesando
+        ) {
+            Text(
+                "¿Ya tienes cuenta? Iniciar sesión",
+                color = cafe
+            )
         }
     }
 }

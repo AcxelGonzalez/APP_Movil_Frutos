@@ -24,7 +24,12 @@ import kotlinx.coroutines.launch
  * - El administrador recibe todos los pedidos.
  * - El cliente recibe solo los suyos (el servidor los filtra por su id).
  */
-class HistorialViewModel : ViewModel() {
+
+class HistorialViewModel(
+    // Sin repositorio Room mantiene el
+    // comportamiento actual de demostración.
+    private val roomRepository: PedidoRoomRepository? = null
+) : ViewModel() {
 
     // Pedidos cargados desde el backend.
     private val _pedidos = MutableStateFlow<List<Pedido>>(emptyList())

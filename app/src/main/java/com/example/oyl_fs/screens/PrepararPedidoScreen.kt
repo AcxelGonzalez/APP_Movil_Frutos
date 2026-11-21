@@ -17,6 +17,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.util.escanearQr
 import com.example.oyl_fs.viewmodel.PrepararPedidoViewModel
 
@@ -33,20 +34,47 @@ fun PrepararPedidoScreen(
 ) {
     val contexto = LocalContext.current
 
+
     val cantidades by viewModel.cantidadesEscaneadas.collectAsState()
+
+    val productosPreparacion by viewModel
+        .productosPreparacion
+        .collectAsState()
+
+    val pedidoActual by viewModel.pedido.collectAsState()
+
     val mensaje by viewModel.mensaje.collectAsState()
+
 
     var escaneando by remember { mutableStateOf(false) }
 
     // Cargar el pedido seleccionado.
-    LaunchedEffect(pedido.id) {
+    LaunchedEffect(pedido) {
         viewModel.cargarPedido(pedido)
     }
 
-    val completo = pedido.productos.isNotEmpty() &&
-            pedido.productos.all { producto ->
-                (cantidades[producto.productoId] ?: 0) == producto.cantidad
-            }
+
+    /**
+     * Verificar que la pantalla esté utilizando
+     * el pedido correcto y que esté confirmado.
+     */
+    val pedidoListo =
+        pedidoActual == pedido &&
+                pedido.estado == EstadoPedido.CONFIRMADO
+
+    /**
+     * Comprobar todas las cantidades agrupadas.
+     */
+    val completo =
+        pedidoListo &&
+                productosPreparacion.isNotEmpty() &&
+                productosPreparacion.all { producto ->
+
+                    val verificadas =
+                        cantidades[producto.productoId] ?: 0
+
+                    verificadas == producto.cantidad
+                }
 
     Column(
         modifier = Modifier
@@ -88,7 +116,7 @@ fun PrepararPedidoScreen(
         )
 
         // ---------- Productos del pedido ----------
-        pedido.productos.forEach { producto ->
+        productosPreparacion.forEach { producto ->
 
             val verificadas = cantidades[producto.productoId] ?: 0
             val completado = verificadas == producto.cantidad
@@ -149,13 +177,20 @@ fun PrepararPedidoScreen(
                             escaneando = false
                             viewModel.validarQr(texto)
                         },
-                        alFallar = {
+
+                        alFallar = { motivo ->
+
                             escaneando = false
+
+                            viewModel.informarFalloEscaneo(
+                                motivo
+                            )
                         }
+
                     )
                 }
             },
-            enabled = !completo && !escaneando,
+            enabled = pedidoListo && !completo && !escaneando,
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp),

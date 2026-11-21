@@ -1,12 +1,23 @@
 package com.example.oyl_fs
 
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.lifecycleScope
+
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+
 import android.os.Bundle
+
 import android.widget.Toast
+
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
-import androidx.compose.runtime.*
-import androidx.compose.runtime.saveable.rememberSaveable
+
 import androidx.lifecycle.ViewModelProvider
 
 import com.example.oyl_fs.model.EstadoPedido
@@ -23,6 +34,12 @@ import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.PerfilViewModel
 import com.example.oyl_fs.viewmodel.CarritoViewModel
 import com.example.oyl_fs.viewmodel.PrepararPedidoViewModel
+import com.example.oyl_fs.viewmodel.RegistroViewModel
+import com.example.oyl_fs.viewmodel.LoginViewModel
+
+import com.example.oyl_fs.repository.UsuarioRoomRepository
+import com.example.oyl_fs.repository.ProductoRoomRepository
+import com.example.oyl_fs.repository.PedidoRoomRepository
 
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
@@ -34,15 +51,72 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        // ViewModel para gestionar los pedidos.
-        val historialViewModel = ViewModelProvider(this)[
-            HistorialViewModel::class.java
-        ]
+
+        /**
+         * Repositorio compartido de pedidos.
+         *
+         * Gestiona la persistencia en SQLite.
+         */
+        val pedidoRoomRepository = PedidoRoomRepository(
+            applicationContext
+        )
+
+        /**
+         * HistorialViewModel utiliza los pedidos
+         * almacenados en Room.
+         */
+        val historialViewModel = ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>
+                ): T {
+
+                    require(
+                        modelClass.isAssignableFrom(
+                            HistorialViewModel::class.java
+                        )
+                    )
+
+                    @Suppress("UNCHECKED_CAST")
+                    return HistorialViewModel(
+                        pedidoRoomRepository
+                    ) as T
+                }
+            }
+        )[HistorialViewModel::class.java]
+
+        /**
+         * Carga los pedidos de demostración
+         * solamente cuando corresponde.
+         *
+         * No descuenta stock durante esta carga.
+         */
+        lifecycleScope.launch {
+            try {
+                pedidoRoomRepository
+                    .inicializarPedidosDemoUnaVez(
+                        applicationContext
+                    )
+
+            } catch (e: CancellationException) {
+                throw e
+
+            } catch (e: Exception) {
+                Toast.makeText(
+                    this@MainActivity,
+                    "No se pudieron inicializar los pedidos",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
+        }
 
         // ViewModel para gestionar los productos.
         val productoViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
-            @Suppress("UNCHECKED_CAST")
-            override fun <T : androidx.lifecycle.ViewModel> create(modelClass: Class<T>): T {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                require(modelClass.isAssignableFrom(ProductoViewModel::class.java))
+                @Suppress("UNCHECKED_CAST")
                 return ProductoViewModel(
                     remoteRepository = ProductoRemoteRepository(applicationContext)
                 ) as T
@@ -59,6 +133,65 @@ class MainActivity : ComponentActivity() {
         val perfilViewModel = ViewModelProvider(this)[
             PerfilViewModel::class.java
         ]
+
+        /**
+         * ViewModel encargado del registro de clientes.
+         *
+         * Utiliza UsuarioRoomRepository, conectado
+         * a la base SQLite versión 3.
+         */
+        val registroViewModel = ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>
+                ): T {
+
+                    require(
+                        modelClass.isAssignableFrom(
+                            RegistroViewModel::class.java
+                        )
+                    )
+
+                    @Suppress("UNCHECKED_CAST")
+                    return RegistroViewModel(
+                        UsuarioRoomRepository(applicationContext)
+                    ) as T
+                }
+            }
+        )[RegistroViewModel::class.java]
+
+        /**
+         * Repositorio de usuarios registrados.
+         */
+        val usuarioRoomRepository =
+            UsuarioRoomRepository(applicationContext)
+
+        /**
+         * ViewModel del inicio de sesión.
+         */
+        val loginViewModel = ViewModelProvider(
+            this,
+            object : ViewModelProvider.Factory {
+
+                override fun <T : ViewModel> create(
+                    modelClass: Class<T>
+                ): T {
+
+                    require(
+                        modelClass.isAssignableFrom(
+                            LoginViewModel::class.java
+                        )
+                    )
+
+                    @Suppress("UNCHECKED_CAST")
+                    return LoginViewModel(
+                        usuarioRoomRepository
+                    ) as T
+                }
+            }
+        )[LoginViewModel::class.java]
 
         // ViewModel para verificar los productos de un pedido mediante QR.
         val prepararPedidoViewModel = ViewModelProvider(this)[
@@ -82,23 +215,56 @@ class MainActivity : ComponentActivity() {
                     .pedidosParaAdmin
                     .collectAsState()
 
-                // Cada vez que cambia el catálogo, actualiza
-                // las existencias disponibles en el carrito.
-                LaunchedEffect(productosActuales) {
-                    carritoViewModel.sincronizarConCatalogo(
-                        clienteId = "cliente-demo",
-                        productos = productosActuales
-                    )
-                }
-
-                // Controla si existe una sesión iniciada.
-                var sesionIniciada by rememberSaveable {
+                /**
+                 * Sesión actual.
+                 *
+                 * Por ahora se conserva solamente en memoria.
+                 * Si Android termina el proceso, se solicitará
+                 * nuevamente el inicio de sesión.
+                 */
+                var sesionIniciada by remember {
                     mutableStateOf(false)
                 }
 
-                // Identificamos si es administrador.
-                var esAdmin by rememberSaveable {
+                var esAdmin by remember {
                     mutableStateOf(false)
+                }
+
+                /**
+                 * Identificador exclusivo del usuario
+                 * que inició sesión.
+                 */
+                var usuarioSesionId by remember {
+                    mutableStateOf("")
+                }
+
+                /**
+                 * Mantener actualizado el carrito
+                 * solamente del cliente autenticado.
+                 */
+                LaunchedEffect(
+                    productosActuales,
+                    usuarioSesionId,
+                    esAdmin
+                ) {
+
+                    if (
+                        usuarioSesionId.isNotBlank() &&
+                        !esAdmin
+                    ) {
+
+                        carritoViewModel.sincronizarConCatalogo(
+                            clienteId = usuarioSesionId,
+                            productos = productosActuales
+                        )
+                    }
+                }
+
+                /**
+                 * Nombre visible del usuario autenticado.
+                 */
+                var nombreSesion by remember {
+                    mutableStateOf("")
                 }
 
                 // Navegación a historial.
@@ -110,6 +276,15 @@ class MainActivity : ComponentActivity() {
                 var mostrarRegistro by rememberSaveable {
                     mutableStateOf(false)
                 }
+
+                // Conserva catálogo, filtros y desplazamiento al volver del carrito.
+                val estadoHomeCliente = rememberSaveableStateHolder()
+
+                var procesandoCompra by remember { mutableStateOf(false) }
+                var procesandoPreparacion by remember {
+                    mutableStateOf(false)
+                }
+                var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
 
                 // Navegación al carrito.
                 var mostrarCarrito by rememberSaveable {
@@ -156,6 +331,46 @@ class MainActivity : ComponentActivity() {
                     mostrarRegistro = false
                 }
 
+                /**
+                 * Cierra la sesión sin eliminar los pedidos,
+                 * las cuentas ni los carritos de otros clientes.
+                 */
+                fun cerrarSesionActual() {
+
+                    val idAnterior = usuarioSesionId
+
+                    // Limpiar la selección del carrito.
+                    carritoViewModel.iniciar("")
+
+                    // El Historial deja de estar asociado
+                    // con el usuario anterior.
+                    historialViewModel.configurarSesion(
+                        usuarioId = "",
+                        esAdmin = false
+                    )
+
+                    // No mantener visibles los perfiles
+                    // registrados de la sesión anterior.
+                    perfilViewModel.limpiarSesionRegistrada()
+
+                    // Eliminar el estado visual guardado
+                    // para el cliente que cerró sesión.
+                    if (idAnterior.isNotBlank() && !esAdmin) {
+                        estadoHomeCliente.removeState(idAnterior)
+                    }
+
+                    mostrarHistorial = false
+                    mostrarCarrito = false
+                    mostrarRegistro = false
+                    pedidoPrepararId = null
+                    pestanaDesdeHistorial = null
+
+                    usuarioSesionId = ""
+                    nombreSesion = ""
+                    esAdmin = false
+                    sesionIniciada = false
+                }
+
                 when {
 
                     // ---------- Login y registro ----------
@@ -163,16 +378,27 @@ class MainActivity : ComponentActivity() {
 
                         if (mostrarRegistro) {
 
+
                             RegistroScreen(
+                                viewModel = registroViewModel,
+
                                 onRegistrado = {
                                     mostrarRegistro = false
+
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Cuenta creada correctamente. Inicia sesión con tu alias y contraseña.",
+                                        Toast.LENGTH_LONG
+                                    ).show()
                                 },
+
                                 onIrALogin = {
                                     mostrarRegistro = false
                                 }
                             )
 
                         } else {
+
 
                             LoginScreen(
                                 onLoginSuccess = { admin ->
@@ -188,6 +414,7 @@ class MainActivity : ComponentActivity() {
                                         admin
                                     )
                                 },
+
                                 onIrARegistro = {
                                     mostrarRegistro = true
                                 }
@@ -210,18 +437,16 @@ class MainActivity : ComponentActivity() {
                                     mostrarHistorial = true
                                 },
 
+
                                 onConfirmarPreparacion = { pedidoId ->
 
-                                    // Comprueba que sea el pedido seleccionado,
-                                    // que esté confirmado y que todas las
-                                    // cantidades hayan sido verificadas.
                                     val puedeConfirmar =
                                         pedidoId == pedidoParaPreparar.id &&
                                                 pedidoParaPreparar.estado ==
                                                 EstadoPedido.CONFIRMADO &&
                                                 prepararPedidoViewModel.pedidoCompleto()
 
-                                    if (puedeConfirmar) {
+                                    if (!puedeConfirmar) {
 
                                         // Registrar el nuevo estado del pedido en el backend.
                                         // error es null si salió bien, o el motivo del servidor.
@@ -252,13 +477,41 @@ class MainActivity : ComponentActivity() {
                                             }
                                         }
 
-                                    } else {
+                                                if (actualizado) {
 
-                                        Toast.makeText(
-                                            this@MainActivity,
-                                            "El pedido no cumple los requisitos de preparación",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "Pedido preparado correctamente",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+
+                                                    pedidoPrepararId = null
+                                                    mostrarHistorial = true
+
+                                                } else {
+
+                                                    Toast.makeText(
+                                                        this@MainActivity,
+                                                        "No se pudo actualizar el pedido",
+                                                        Toast.LENGTH_LONG
+                                                    ).show()
+                                                }
+
+                                            } catch (e: CancellationException) {
+                                                throw e
+
+                                            } catch (e: Exception) {
+
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Error al guardar la preparación",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+
+                                            } finally {
+                                                procesandoPreparacion = false
+                                            }
+                                        }
                                     }
                                 }
                             )
@@ -278,7 +531,7 @@ class MainActivity : ComponentActivity() {
 
                         CarroScreen(
                             // Identificador temporal del cliente.
-                            clienteId = "cliente-demo",
+                            clienteId = usuarioSesionId,
 
                             // ViewModel compartido con HomeCliente.
                             vm = carritoViewModel,
@@ -309,6 +562,7 @@ class MainActivity : ComponentActivity() {
                                     }
                                 }
                             }
+
                         )
                     }
 
@@ -317,14 +571,14 @@ class MainActivity : ComponentActivity() {
 
                         HistorialScreen(
                             // Identificadores temporales de prueba.
-                            usuarioId = if (esAdmin) {
-                                "admin-demo"
-                            } else {
-                                "cliente-demo"
-                            },
+                            usuarioId = usuarioSesionId,
 
                             esAdmin = esAdmin,
                             viewModel = historialViewModel,
+                            onNavegar = { indice ->
+                                pestanaDesdeHistorial = indice
+                                mostrarHistorial = false
+                            },
 
                             onVolver = {
                                 mostrarHistorial = false
@@ -358,6 +612,8 @@ class MainActivity : ComponentActivity() {
                     esAdmin -> {
 
                         HomeAdmin(
+                            pestanaSolicitada = pestanaDesdeHistorial,
+                            onPestanaAtendida = { pestanaDesdeHistorial = null },
                             onLogout = {
                                 SesionRepository.cerrarSesion()
                                 historialViewModel.limpiar()
@@ -383,11 +639,12 @@ class MainActivity : ComponentActivity() {
                     // ---------- Home cliente ----------
                     else -> {
 
+                        estadoHomeCliente.SaveableStateProvider(usuarioSesionId) {
                         HomeCliente(
                             nombre = usuarioSesion?.nombre ?: "Cliente",
 
                             // Identificador temporal hasta implementar sesiones.
-                            clienteId = "cliente-demo",
+                            clienteId = usuarioSesionId,
 
                             // Compartimos el catálogo y el carrito.
                             productoViewModel = productoViewModel,
@@ -412,6 +669,7 @@ class MainActivity : ComponentActivity() {
                                 mostrarCarrito = true
                             }
                         )
+                        }
                     }
                 }
             }

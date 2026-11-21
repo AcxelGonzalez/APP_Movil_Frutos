@@ -15,6 +15,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 
 import android.widget.Toast
 import com.example.oyl_fs.model.EstadoPedido
@@ -22,8 +23,14 @@ import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.ui.components.EstadoPedidoChip
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 
+import android.widget.Toast
+
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.CancellationException
+
 import java.text.NumberFormat
 import java.text.SimpleDateFormat
+
 import java.util.Date
 import java.util.Locale
 
@@ -49,7 +56,8 @@ fun HistorialScreen(
     esAdmin: Boolean,
     viewModel: HistorialViewModel,
     onVolver: () -> Unit,
-    onPrepararPedido: (Pedido) -> Unit
+    onPrepararPedido: (Pedido) -> Unit,
+    onNavegar: (Int) -> Unit = { onVolver() }
 ) {
 
     val contexto = LocalContext.current
@@ -63,6 +71,17 @@ fun HistorialScreen(
     val pedidos by viewModel.pedidosVisibles.collectAsState()
     val filtro by viewModel.filtroEstado.collectAsState()
 
+    val contexto = LocalContext.current
+
+    val scope = rememberCoroutineScope()
+
+    // Impide modificaciones simultáneas
+    // de estado desde esta pantalla.
+    var cambiandoEstado by remember {
+        mutableStateOf(false)
+    }
+
+
     // Identificador del pedido seleccionado para ver detalles.
     var pedidoSeleccionadoId by remember {
         mutableStateOf<String?>(null)
@@ -75,6 +94,17 @@ fun HistorialScreen(
     // Pantalla principal con encabezado y contenido.
     Scaffold(
         containerColor = FondoHistorial,
+        bottomBar = {
+            // Reutiliza la misma barra de los Home, con Pedidos seleccionado.
+            val navegar: (Int) -> Unit = { indice ->
+                if (indice != 3) onNavegar(indice)
+            }
+            if (esAdmin) {
+                BarraAdmin(seleccion = 3, onSelect = navegar)
+            } else {
+                BarraCliente(seleccion = 3, onSelect = navegar)
+            }
+        },
 
         topBar = {
             TopAppBar(
@@ -203,6 +233,7 @@ fun HistorialScreen(
                                 pedidoSeleccionadoId = pedido.id
                             },
 
+
                             onCambiarEstado = { nuevoEstado ->
                                 // El backend valida el cambio; si lo rechaza, mostramos su motivo.
                                 viewModel.cambiarEstadoPedido(
@@ -314,6 +345,35 @@ private fun TarjetaPedido(
         mutableStateOf(false)
     }
 
+    /**
+     * Opciones administrativas disponibles
+     * según el estado actual del pedido.
+     *
+     * PREPARADO no aparece aquí porque requiere
+     * la verificación de productos mediante QR.
+     */
+    val opcionesCambio = when (pedido.estado) {
+
+        EstadoPedido.PENDIENTE_VALIDACION -> {
+            listOf(EstadoPedido.CONFIRMADO)
+        }
+
+        EstadoPedido.CONFIRMADO -> {
+            // Se prepara exclusivamente mediante
+            // el flujo de lectura QR.
+            emptyList()
+        }
+
+        EstadoPedido.PREPARADO -> {
+            listOf(EstadoPedido.ENTREGADO)
+        }
+
+        EstadoPedido.ENTREGADO -> {
+            // Un pedido entregado está finalizado.
+            emptyList()
+        }
+    }
+
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
@@ -386,8 +446,9 @@ private fun TarjetaPedido(
                         Text("Ver detalle")
                     }
 
-                    // Solo el administrador puede modificar estados.
-                    if (esAdmin) {
+                    // Mostrar el menú solamente cuando el
+                    // administrador tenga acciones disponibles.
+                    if (esAdmin && opcionesCambio.isNotEmpty()) {
 
                         Box {
 
@@ -406,25 +467,21 @@ private fun TarjetaPedido(
                                 }
                             ) {
 
-                                // PREPARADO solo se podrá establecer
-                                // luego de completar la validación QR.
-                                EstadoPedido.values()
-                                    .filter {
-                                        it != EstadoPedido.PREPARADO
-                                    }
-                                    .forEach { estado ->
+                                // Mostrar únicamente las
+                                // transiciones permitidas.
+                                opcionesCambio.forEach { estado ->
 
-                                        DropdownMenuItem(
-                                            text = {
-                                                Text(estado.descripcion)
-                                            },
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(estado.descripcion)
+                                        },
 
-                                            onClick = {
-                                                menuAbierto = false
-                                                onCambiarEstado(estado)
-                                            }
-                                        )
-                                    }
+                                        onClick = {
+                                            menuAbierto = false
+                                            onCambiarEstado(estado)
+                                        }
+                                    )
+                                }
                             }
                         }
                     }
