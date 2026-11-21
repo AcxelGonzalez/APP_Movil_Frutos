@@ -33,5 +33,6 @@ object RetrofitClient {
 
     val productos: ProductosApi by lazy { crear(8081, ProductosApi::class.java) }
     val pedidos: PedidosApi by lazy { crear(8082, PedidosApi::class.java) }
-    // Más adelante: val usuarios (8083)
+    val usuarios: UsuariosApi by lazy { crear(8083, UsuariosApi::class.java) }
 }
+

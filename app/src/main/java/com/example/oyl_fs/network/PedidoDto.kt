@@ -18,3 +18,9 @@ data class DetallePedidoDto(
     val cantidad: Int,
     val subtotal: Long
 )
+
+// Lo que la app ENVÍA para cambiar el estado de un pedido (PATCH /api/pedidos/{id}/estado)
+data class CambiarEstadoRequest(
+    val estado: String
+)
+

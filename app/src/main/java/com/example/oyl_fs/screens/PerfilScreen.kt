@@ -26,13 +26,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.network.UsuarioDto
 import com.example.oyl_fs.viewmodel.PerfilViewModel
 
 private val FondoPerfil = Color(0xFFFFF5E7)
 private val CafePerfil = Color(0xFF92623D)
 private val OscuroPerfil = Color(0xFF4B2E15)
 
+// Los datos salen del usuario que inició sesión (backend), no de un perfil local.
+// El parámetro usuarioId se mantiene para no cambiar las pantallas que lo llaman.
 @Composable
 fun PerfilUsuarioScreen(
     usuarioId: String,
@@ -40,10 +42,11 @@ fun PerfilUsuarioScreen(
     onVolver: () -> Unit,
     onLogout: () -> Unit
 ) {
-    val perfiles by viewModel.perfiles.collectAsState()
+    val usuario by viewModel.perfil.collectAsState()
     val error by viewModel.error.collectAsState()
-    val perfil = perfiles.find { it.id == usuarioId } ?: return
-    var pantalla by rememberSaveable(usuarioId) { mutableStateOf("perfil") }
+    val guardando by viewModel.guardando.collectAsState()
+    val perfil = usuario ?: return
+    var pantalla by rememberSaveable(perfil.id) { mutableStateOf("perfil") }
 
     fun volver() {
         viewModel.limpiarError()
@@ -56,8 +59,10 @@ fun PerfilUsuarioScreen(
     BackHandler { volver() }
 
     when (pantalla) {
-        "editar" -> EditarPerfilScreen(perfil, error, { volver() }) { editado ->
-            if (viewModel.guardarPerfil(editado)) pantalla = "datos"
+        "editar" -> EditarPerfilScreen(perfil, error, guardando, { volver() }) { nombre, correo, telefono, direccion ->
+            viewModel.guardarPerfil(nombre, correo, telefono, direccion) {
+                pantalla = "datos"
+            }
         }
         "datos" -> DatosPersonalesScreen(perfil, { volver() }) {
             viewModel.limpiarError()
@@ -69,7 +74,7 @@ fun PerfilUsuarioScreen(
 
 @Composable
 fun PerfilScreen(
-    perfil: PerfilUsuario,
+    perfil: UsuarioDto,
     onVolver: () -> Unit,
     onDatosPersonales: () -> Unit,
     onLogout: () -> Unit
@@ -88,10 +93,10 @@ fun PerfilScreen(
                 Icon(Icons.Default.Person, "Perfil", tint = Color.White, modifier = Modifier.size(54.dp))
             }
         }
-        Text("${perfil.nombre} ${perfil.apellido}".trim(), color = OscuroPerfil,
+        Text(perfil.nombre, color = OscuroPerfil,
             fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Text(perfil.correo, color = CafePerfil)
-        Text(if (perfil.esAdmin) "Cuenta de administrador" else "Cuenta de cliente", color = CafePerfil)
+        Text(if (perfil.rol == "ADMIN") "Cuenta de administrador" else "Cuenta de cliente", color = CafePerfil)
         Button(
             onClick = onDatosPersonales, modifier = Modifier.fillMaxWidth().height(56.dp),
             shape = RoundedCornerShape(16.dp),
@@ -111,7 +116,7 @@ fun PerfilScreen(
 
 @Composable
 private fun DatosPersonalesScreen(
-    perfil: PerfilUsuario,
+    perfil: UsuarioDto,
     onVolver: () -> Unit,
     onEditar: () -> Unit
 ) {
@@ -122,11 +127,10 @@ private fun DatosPersonalesScreen(
         Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 DatoPerfil("Nombre", perfil.nombre)
-                DatoPerfil("Apellido", perfil.apellido)
-                DatoPerfil("RUT", perfil.rut)
+                DatoPerfil("Usuario", perfil.alias)
                 DatoPerfil("Correo", perfil.correo)
-                DatoPerfil("Teléfono", perfil.telefono)
-                if (!perfil.esAdmin) DatoPerfil("Dirección", perfil.direccion)
+                DatoPerfil("Teléfono", perfil.telefono.orEmpty())
+                if (perfil.rol != "ADMIN") DatoPerfil("Dirección", perfil.direccion.orEmpty())
             }
         }
         Button(onClick = onEditar, modifier = Modifier.fillMaxWidth().height(52.dp),
@@ -144,39 +148,36 @@ private fun DatoPerfil(titulo: String, valor: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun EditarPerfilScreen(
-    perfil: PerfilUsuario,
+    perfil: UsuarioDto,
     error: String?,
+    guardando: Boolean,
     onVolver: () -> Unit,
-    onGuardar: (PerfilUsuario) -> Unit
+    onGuardar: (nombre: String, correo: String, telefono: String, direccion: String) -> Unit
 ) {
     var nombre by rememberSaveable(perfil.id) { mutableStateOf(perfil.nombre) }
-    var apellido by rememberSaveable(perfil.id) { mutableStateOf(perfil.apellido) }
-    var rut by rememberSaveable(perfil.id) { mutableStateOf(perfil.rut) }
     var correo by rememberSaveable(perfil.id) { mutableStateOf(perfil.correo) }
-    var telefono by rememberSaveable(perfil.id) { mutableStateOf(perfil.telefono) }
-    var direccion by rememberSaveable(perfil.id) { mutableStateOf(perfil.direccion) }
+    var telefono by rememberSaveable(perfil.id) { mutableStateOf(perfil.telefono.orEmpty()) }
+    var direccion by rememberSaveable(perfil.id) { mutableStateOf(perfil.direccion.orEmpty()) }
     Column(Modifier.fillMaxSize().background(FondoPerfil)
         .verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onVolver) { Text("‹ Editar datos", color = OscuroPerfil) }
         CampoPerfil("Nombre *", nombre) { nombre = it }
-        CampoPerfil("Apellido", apellido) { apellido = it }
-        CampoPerfil("RUT de prueba", rut) { rut = it }
         CampoPerfil("Correo *", correo) { correo = it }
         CampoPerfil("Teléfono", telefono) { telefono = it }
-        if (!perfil.esAdmin) CampoPerfil("Dirección de prueba", direccion) { direccion = it }
+        if (perfil.rol != "ADMIN") CampoPerfil("Dirección", direccion) { direccion = it }
         AnimatedVisibility(visible = error != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
             Text(error.orEmpty(), color = Color(0xFFC0392B))
         }
-        Text("Utiliza únicamente datos ficticios para la demostración.", color = CafePerfil, fontSize = 12.sp)
         Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             OutlinedButton(onClick = onVolver, modifier = Modifier.weight(1f)) { Text("Cancelar") }
             Button(onClick = {
-                onGuardar(perfil.copy(nombre = nombre, apellido = apellido, rut = rut,
-                    correo = correo, telefono = telefono, direccion = direccion))
-            }, modifier = Modifier.weight(1f),
-                colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text("Guardar") }
+                onGuardar(nombre, correo, telefono, direccion)
+            }, enabled = !guardando, modifier = Modifier.weight(1f),
+                colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) {
+                Text(if (guardando) "Guardando..." else "Guardar")
+            }
         }
     }
 }
@@ -195,11 +196,22 @@ private fun CampoPerfil(titulo: String, valor: String, onCambio: (String) -> Uni
 @Preview(showBackground = true)
 @Composable
 private fun PerfilClientePreview() {
-    MaterialTheme { PerfilScreen(PerfilUsuario("cliente-demo", false, "Cliente", correo = "cliente@example.test"), {}, {}, {}) }
+    MaterialTheme {
+        PerfilScreen(
+            UsuarioDto(2, "Cliente", "cliente", "cliente@example.test", rol = "CLIENTE"),
+            {}, {}, {}
+        )
+    }
 }
 
 @Preview(showBackground = true)
 @Composable
 private fun PerfilAdminPreview() {
-    MaterialTheme { PerfilScreen(PerfilUsuario("admin-demo", true, "Administrador", correo = "admin@example.test"), {}, {}, {}) }
+    MaterialTheme {
+        PerfilScreen(
+            UsuarioDto(1, "Administrador", "admin", "admin@example.test", rol = "ADMIN"),
+            {}, {}, {}
+        )
+    }
 }
+

@@ -23,6 +23,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.R
+import com.example.oyl_fs.network.mensajeApi
+import com.example.oyl_fs.repository.SesionRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -32,6 +35,11 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
     var usuario by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+
+    // Mientras se espera la respuesta del servidor
+    var cargando by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
     val cafe = Color(0xFF4A2C1A)
     val rojo = Color(0xFFC0392B)
 
@@ -85,31 +93,41 @@ fun LoginScreen(onLoginSuccess: (Boolean) -> Unit,// true sera admin
 
             // Mensaje de error (ocupa lugar solo cuando hay algo que decir)
             AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
-            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
-            Column {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(error, color = rojo, fontSize = 13.sp)
-            }
+                exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(error, color = rojo, fontSize = 13.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
 
             Button(
                 onClick = {
-                    val u = usuario.trim().lowercase()
+                    val u = usuario.trim()
                     val c = contrasena.trim()
-                    when {
-                        u.isEmpty() || c.isEmpty() ->
-                            error = "Completa usuario y contraseña"
-                        u == "admin" && c == "admin" -> onLoginSuccess(true)
-                        u == "cliente" && c == "cliente" -> onLoginSuccess(false)
-                        else -> error = "Usuario o contraseña incorrectos"
+                    if (u.isEmpty() || c.isEmpty()) {
+                        error = "Completa usuario y contraseña"
+                    } else {
+                        // El login lo valida el backend (ms-usuarios)
+                        cargando = true
+                        scope.launch {
+                            SesionRepository.iniciarSesion(u, c)
+                                .onSuccess { usuarioBackend ->
+                                    onLoginSuccess(usuarioBackend.rol == "ADMIN")
+                                }
+                                .onFailure { e ->
+                                    error = e.mensajeApi()
+                                }
+                            cargando = false
+                        }
                     }
                 },
+                enabled = !cargando,
                 colors = ButtonDefaults.buttonColors(containerColor = cafe),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Iniciar sesión")
+                Text(if (cargando) "Ingresando..." else "Iniciar sesión")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

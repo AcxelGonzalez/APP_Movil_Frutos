@@ -11,10 +11,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import android.widget.Toast
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.ui.components.EstadoPedidoChip
@@ -49,6 +51,8 @@ fun HistorialScreen(
     onVolver: () -> Unit,
     onPrepararPedido: (Pedido) -> Unit
 ) {
+
+    val contexto = LocalContext.current
 
     // Configura el usuario al ingresar a la pantalla.
     LaunchedEffect(usuarioId, esAdmin) {
@@ -131,7 +135,7 @@ fun HistorialScreen(
                     horizontal = 16.dp
                 ),
                 horizontalArrangement =
-                Arrangement.spacedBy(8.dp)
+                    Arrangement.spacedBy(8.dp)
             ) {
                 items(estados.size) { indice ->
                     val estado = estados[indice]
@@ -151,7 +155,7 @@ fun HistorialScreen(
 
                         colors = FilterChipDefaults.filterChipColors(
                             selectedContainerColor =
-                            PrincipalHistorial,
+                                PrincipalHistorial,
                             selectedLabelColor = Color.White
                         )
                     )
@@ -184,7 +188,7 @@ fun HistorialScreen(
                     contentPadding = PaddingValues(16.dp),
 
                     verticalArrangement =
-                    Arrangement.spacedBy(12.dp)
+                        Arrangement.spacedBy(12.dp)
                 ) {
                     items(
                         items = pedidos,
@@ -200,10 +204,15 @@ fun HistorialScreen(
                             },
 
                             onCambiarEstado = { nuevoEstado ->
+                                // El backend valida el cambio; si lo rechaza, mostramos su motivo.
                                 viewModel.cambiarEstadoPedido(
                                     pedido.id,
                                     nuevoEstado
-                                )
+                                ) { error ->
+                                    if (error != null) {
+                                        Toast.makeText(contexto, error, Toast.LENGTH_LONG).show()
+                                    }
+                                }
                             },
 
                             // Abre la preparación del pedido seleccionado.
@@ -232,7 +241,7 @@ fun HistorialScreen(
             text = {
                 Column(
                     verticalArrangement =
-                    Arrangement.spacedBy(8.dp)
+                        Arrangement.spacedBy(8.dp)
                 ) {
                     Text(
                         "Fecha: ${formatearFecha(pedidoSeleccionado.fecha)}"
@@ -327,7 +336,7 @@ private fun TarjetaPedido(
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement =
-                Arrangement.SpaceBetween,
+                    Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
 

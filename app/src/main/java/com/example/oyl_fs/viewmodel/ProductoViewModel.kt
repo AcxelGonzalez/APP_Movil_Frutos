@@ -79,6 +79,28 @@ class ProductoViewModel(
         }
     }
 
+    init {
+        if (remoteRepository != null) refrescar()
+    }
+
+    // Vuelve a pedir la lista al backend (también se usará después de comprar)
+    fun refrescar() {
+        viewModelScope.launch { cargarRemoto() }
+    }
+
+    private suspend fun cargarRemoto() {
+        val remoto = remoteRepository ?: return
+        try {
+            _productos.value = remoto.listar()
+            _error.value = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _error.value = e.mensajeApi()
+        }
+        _cargandoProductos.value = false
+    }
+
     // Busca un producto
     fun obtenerProducto(id: Int): ProductoInfo? {
         return _productos.value.find { it.id == id }
@@ -207,6 +229,21 @@ class ProductoViewModel(
         producto: ProductoInfo
     ): Boolean {
 
+        remoteRepository?.let { remoto ->
+            if (!validarProducto(producto)) return false
+            return try {
+                remoto.crear(producto.copy(
+                    nombre = producto.nombre.trim(), codigo = producto.codigo.trim()))
+                cargarRemoto()
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = e.mensajeApi()
+                false
+            }
+        }
+
         val repo = roomRepository
             ?: return agregarProducto(producto)
 
@@ -255,7 +292,22 @@ class ProductoViewModel(
         producto: ProductoInfo
     ): Boolean {
 
-        val repo = roomRepository
+        remoteRepository?.let { remoto ->
+            if (!validarProducto(producto)) return false
+            return try {
+                remoto.actualizar(producto.copy(
+                    nombre = producto.nombre.trim(), codigo = producto.codigo.trim()))
+                cargarRemoto()
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = e.mensajeApi()
+                false
+            }
+        }
+
+            val repo = roomRepository
             ?: return editarProducto(producto)
 
         if (!validarProducto(producto)) return false
@@ -319,6 +371,20 @@ class ProductoViewModel(
     suspend fun eliminarProductoPersistente(
         id: Int
     ): Boolean {
+
+        remoteRepository?.let { remoto ->
+            limpiarError()
+            return try {
+                val eliminado = remoto.eliminar(id)
+                if (eliminado) cargarRemoto() else _error.value = "El producto ya no existe"
+                eliminado
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = e.mensajeApi()
+                false
+            }
+        }
 
         val repo = roomRepository
             ?: return eliminarProducto(id)

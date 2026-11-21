@@ -1,13 +1,19 @@
 package com.example.oyl_fs.repository
 
+import com.example.oyl_fs.model.DetallePedido
+import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.ItemCarrito
+import com.example.oyl_fs.model.Pedido
+import com.example.oyl_fs.network.CambiarEstadoRequest
 import com.example.oyl_fs.network.CrearPedidoRequest
 import com.example.oyl_fs.network.ItemPedidoRequest
 import com.example.oyl_fs.network.PedidoDto
 import com.example.oyl_fs.network.RetrofitClient
-import org.json.JSONObject
-import retrofit2.HttpException
-import java.io.IOException
+import com.example.oyl_fs.network.mensajeApi
+import kotlinx.coroutines.CancellationException
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 // El resultado de intentar crear un pedido: salió bien, o salió mal con un mensaje
 sealed class ResultadoPedido {
@@ -15,8 +21,10 @@ sealed class ResultadoPedido {
     data class Error(val mensaje: String) : ResultadoPedido()
 }
 
+// Conecta la app con ms-pedidos
 object PedidoRemoteRepository {
 
+    // ---------- Crear un pedido desde el carrito ----------
     suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>): ResultadoPedido {
         // El backend usa ids numéricos; el carrito guarda el id como texto
         val itemsRequest = items.map {
@@ -28,22 +36,78 @@ object PedidoRemoteRepository {
         return try {
             val pedido = RetrofitClient.pedidos.crear(CrearPedidoRequest(usuarioId, itemsRequest))
             ResultadoPedido.Exito(pedido)
-        } catch (e: HttpException) {
-            // El servidor respondió con error (409 sin stock, 404 producto no existe, etc.)
-            ResultadoPedido.Error(mensajeDelServidor(e))
-        } catch (e: IOException) {
-            // Ni siquiera llegó al servidor: sin internet o backend apagado
-            ResultadoPedido.Error("No se pudo conectar con el servidor")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Sin stock, producto inexistente, servidor apagado, etc.
+            ResultadoPedido.Error(e.mensajeApi())
         }
     }
 
-    // El backend manda el motivo en el campo "message" del JSON de error
-    private fun mensajeDelServidor(e: HttpException): String {
+    // ---------- Consultar pedidos ----------
+    // Todos los pedidos (administrador)
+    suspend fun listarTodos(): Result<List<Pedido>> = try {
+        Result.success(RetrofitClient.pedidos.listar().map { it.aPedido() })
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    // Solo los pedidos de un cliente
+    suspend fun listarPorUsuario(usuarioId: Long): Result<List<Pedido>> = try {
+        Result.success(RetrofitClient.pedidos.listarPorUsuario(usuarioId).map { it.aPedido() })
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
+    }
+
+    // ---------- Cambiar el estado ----------
+    suspend fun cambiarEstado(pedidoId: String, nuevoEstado: EstadoPedido): Result<Pedido> {
+        val id = idNumerico(pedidoId)
+            ?: return Result.failure(IllegalArgumentException("Pedido no válido"))
         return try {
-            val cuerpo = e.response()?.errorBody()?.string().orEmpty()
-            JSONObject(cuerpo).optString("message", "Error ${e.code()}")
-        } catch (ex: Exception) {
-            "Error ${e.code()}"
+            val actualizado = RetrofitClient.pedidos.cambiarEstado(
+                id, CambiarEstadoRequest(nuevoEstado.name)
+            )
+            Result.success(actualizado.aPedido())
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Result.failure(e)
         }
+    }
+
+    // ---------- Conversión backend -> modelo de la app ----------
+    // El backend usa id numérico (7); la app lo muestra como "PED-007"
+    private fun textoId(id: Long) = "PED-" + id.toString().padStart(3, '0')
+
+    private fun idNumerico(texto: String): Long? = texto.removePrefix("PED-").toLongOrNull()
+
+    private fun PedidoDto.aPedido() = Pedido(
+        id = textoId(id),
+        usuarioId = usuarioId.toString(),
+        fecha = parsearFecha(fecha),
+        productos = detalles.map {
+            DetallePedido(
+                productoId = it.productoId.toString(),
+                nombreProducto = it.nombreProducto,
+                cantidad = it.cantidad,
+                precioUnitario = it.precioUnitario
+            )
+        },
+        total = total.toInt(),
+        estado = EstadoPedido.values().firstOrNull { it.name == estado }
+            ?: EstadoPedido.PENDIENTE_VALIDACION
+    )
+
+    // El servidor manda la fecha como "2026-11-21T20:51:07.934514" (hora UTC)
+    private fun parsearFecha(texto: String): Long = try {
+        val formato = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+        formato.timeZone = TimeZone.getTimeZone("UTC")
+        formato.parse(texto.take(19))?.time ?: 0L
+    } catch (e: Exception) {
+        0L
     }
 }

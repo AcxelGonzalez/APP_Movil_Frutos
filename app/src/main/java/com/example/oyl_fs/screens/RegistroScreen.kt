@@ -1,5 +1,6 @@
 package com.example.oyl_fs.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,10 +16,15 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.oyl_fs.network.RegistroRequest
+import com.example.oyl_fs.network.mensajeApi
+import com.example.oyl_fs.repository.SesionRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,12 +33,18 @@ fun RegistroScreen(
     onIrALogin: () -> Unit
 ) {
     var nombre by remember { mutableStateOf("") }
+    var alias by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
-    var rut by remember { mutableStateOf("") }
     var telefono by remember { mutableStateOf("") }
+    var direccion by remember { mutableStateOf("") }
     var clave by remember { mutableStateOf("") }
     var confirmacion by remember { mutableStateOf("") }
     var error by remember { mutableStateOf("") }
+
+    // Mientras se espera la respuesta del servidor
+    var cargando by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     val cafe = Color(0xFF4A2C1A)
     val rojo = Color(0xFFC0392B)
@@ -60,6 +72,17 @@ fun RegistroScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // El alias es el nombre con el que se inicia sesión
+        OutlinedTextField(
+            value = alias,
+            onValueChange = { alias = it },
+            label = { Text("Usuario (para iniciar sesión)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(Modifier.height(12.dp))
+
         OutlinedTextField(
             value = correo,
             onValueChange = { correo = it },
@@ -71,9 +94,9 @@ fun RegistroScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = rut,
-            onValueChange = { rut = it },
-            label = { Text("RUT") },
+            value = telefono,
+            onValueChange = { telefono = it },
+            label = { Text("Teléfono (opcional)") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -81,9 +104,9 @@ fun RegistroScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = telefono,
-            onValueChange = { telefono = it },
-            label = { Text("Teléfono (opcional)") },
+            value = direccion,
+            onValueChange = { direccion = it },
+            label = { Text("Dirección (opcional)") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -113,8 +136,8 @@ fun RegistroScreen(
         AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
             Column {
-            Spacer(Modifier.height(10.dp))
-            Text(error, color = rojo, fontSize = 13.sp)
+                Spacer(Modifier.height(10.dp))
+                Text(error, color = rojo, fontSize = 13.sp)
             }
         }
 
@@ -122,20 +145,52 @@ fun RegistroScreen(
 
         Button(
             onClick = {
+                // Primero se validan los datos en el teléfono
                 error = when {
-                    nombre.isBlank() || correo.isBlank() || rut.isBlank() ->
+                    nombre.isBlank() || alias.isBlank() || correo.isBlank() ->
                         "Completa todos los campos obligatorios"
+                    alias.trim().length !in 3..20 ->
+                        "El usuario debe tener entre 3 y 20 caracteres"
                     !correo.contains("@") -> "Ingresa un correo válido"
-                    clave.length < 4 -> "La contraseña debe tener mínimo 4 dígitos"
+                    clave.length < 6 -> "La contraseña debe tener mínimo 6 caracteres"
                     clave != confirmacion -> "Las contraseñas no coinciden"
                     else -> ""
                 }
-                if (error.isEmpty()) onRegistrado()
+
+                // Si todo está bien, se crea la cuenta en el backend (ms-usuarios)
+                if (error.isEmpty()) {
+                    cargando = true
+                    scope.launch {
+                        SesionRepository.registrar(
+                            RegistroRequest(
+                                nombre = nombre.trim(),
+                                alias = alias.trim(),
+                                correo = correo.trim(),
+                                telefono = telefono.trim().ifEmpty { null },
+                                direccion = direccion.trim().ifEmpty { null },
+                                contrasena = clave
+                            )
+                        )
+                            .onSuccess {
+                                Toast.makeText(
+                                    context,
+                                    "Cuenta creada. Ya puedes iniciar sesión",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                onRegistrado()
+                            }
+                            .onFailure { e ->
+                                error = e.mensajeApi()
+                            }
+                        cargando = false
+                    }
+                }
             },
+            enabled = !cargando,
             colors = ButtonDefaults.buttonColors(containerColor = cafe),
             modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
-            Text("Registrarse")
+            Text(if (cargando) "Creando cuenta..." else "Registrarse")
         }
 
         TextButton(onClick = onIrALogin) {
