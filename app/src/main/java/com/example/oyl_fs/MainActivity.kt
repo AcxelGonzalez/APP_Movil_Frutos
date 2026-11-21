@@ -27,6 +27,8 @@ import com.example.oyl_fs.viewmodel.PrepararPedidoViewModel
 
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
+import com.example.oyl_fs.network.RetrofitClient
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
