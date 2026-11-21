@@ -14,6 +14,10 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map as mapFlow
 import kotlinx.coroutines.flow.stateIn
 
+import com.example.oyl_fs.repository.PedidoRemoteRepository
+import com.example.oyl_fs.repository.ResultadoPedido
+import kotlinx.coroutines.launch
+
 data class CarritoUiState(
     val items: List<ItemCarrito> = emptyList()
 ) {
@@ -38,6 +42,8 @@ class CarritoViewModel : ViewModel() {
 
     private val _mensaje = MutableStateFlow<String?>(null)
     val mensaje: StateFlow<String?> = _mensaje.asStateFlow()
+    private val _enviando = MutableStateFlow(false)
+    val enviando: StateFlow<Boolean> = _enviando.asStateFlow()
 
     val uiState: StateFlow<CarritoUiState> = clienteId
         .flatMapLatest { id -> repo.obtenerCarrito(id) }
@@ -140,6 +146,29 @@ class CarritoViewModel : ViewModel() {
             return false
         }
         return true
+    }
+
+    /**
+     * Envía el carrito como pedido al backend (ms-pedidos).
+     * Si sale bien, vacía el carrito y avisa; si falla, muestra el motivo del servidor.
+     */
+    fun enviarPedido(usuarioId: Long, onExito: () -> Unit = {}) {
+        val id = clienteId.value
+        if (_enviando.value) return              // evita doble clic
+        if (!validarAntesDeConfirmar()) return   // carrito vacío o sin stock local
+
+        _enviando.value = true
+        viewModelScope.launch {
+            when (val r = PedidoRemoteRepository.crearPedido(usuarioId, uiState.value.items)) {
+                is ResultadoPedido.Exito -> {
+                    repo.vaciar(id)
+                    _mensaje.value = "Pedido #${r.pedido.id} creado correctamente"
+                    onExito()
+                }
+                is ResultadoPedido.Error -> _mensaje.value = r.mensaje
+            }
+            _enviando.value = false
+        }
     }
 
     /**

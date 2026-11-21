@@ -33,6 +33,9 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.R
+import com.example.oyl_fs.network.mensajeApi
+import com.example.oyl_fs.repository.SesionRepository
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -44,18 +47,12 @@ fun LoginScreen(
 ) {
     var usuario by remember { mutableStateOf("") }
     var contrasena by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf("") }
 
-    /**
-     * Estado de autenticación.
-     *
-     * LoginViewModel controla los errores
-     * y el indicador de procesamiento.
-     */
-    val estado by viewModel.estado.collectAsState()
+    // Mientras se espera la respuesta del servidor
+    var cargando by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
 
-    val error = estado.error.orEmpty()
-
-    val foco = LocalFocusManager.current
     val cafe = Color(0xFF4A2C1A)
     val rojo = Color(0xFFC0392B)
 
@@ -121,11 +118,11 @@ fun LoginScreen(
 
             // Mensaje de error (ocupa lugar solo cuando hay algo que decir)
             AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
-            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
-            Column {
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(error, color = rojo, fontSize = 13.sp)
-            }
+                exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
+                Column {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(error, color = rojo, fontSize = 13.sp)
+                }
             }
 
             Spacer(modifier = Modifier.height(32.dp))
@@ -133,39 +130,30 @@ fun LoginScreen(
 
             Button(
                 onClick = {
-
-                    foco.clearFocus()
-
-                    // LoginViewModel identifica al cliente
-                    // y comprueba sus credenciales en Room.
-                    viewModel.iniciarSesion(
-                        usuario = usuario,
-                        contrasena = contrasena,
-                        onExito = onLoginSuccess
-                    )
+                    val u = usuario.trim()
+                    val c = contrasena.trim()
+                    if (u.isEmpty() || c.isEmpty()) {
+                        error = "Completa usuario y contraseña"
+                    } else {
+                        // El login lo valida el backend (ms-usuarios)
+                        cargando = true
+                        scope.launch {
+                            SesionRepository.iniciarSesion(u, c)
+                                .onSuccess { usuarioBackend ->
+                                    onLoginSuccess(usuarioBackend.rol == "ADMIN")
+                                }
+                                .onFailure { e ->
+                                    error = e.mensajeApi()
+                                }
+                            cargando = false
+                        }
+                    }
                 },
-
-                enabled = !estado.procesando,
-
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = cafe
-                ),
-
+                enabled = !cargando,
+                colors = ButtonDefaults.buttonColors(containerColor = cafe),
                 modifier = Modifier.fillMaxWidth()
             ) {
-
-                if (estado.procesando) {
-
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(20.dp),
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        strokeWidth = 2.dp
-                    )
-
-                } else {
-
-                    Text("Iniciar sesión")
-                }
+                Text(if (cargando) "Ingresando..." else "Iniciar sesión")
             }
 
             Spacer(modifier = Modifier.height(16.dp))

@@ -43,6 +43,9 @@ import com.example.oyl_fs.repository.PedidoRoomRepository
 
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
+import com.example.oyl_fs.repository.ProductoRemoteRepository
+import com.example.oyl_fs.repository.SesionRepository
+
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -114,7 +117,9 @@ class MainActivity : ComponentActivity() {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 require(modelClass.isAssignableFrom(ProductoViewModel::class.java))
                 @Suppress("UNCHECKED_CAST")
-                return ProductoViewModel(ProductoRoomRepository(applicationContext)) as T
+                return ProductoViewModel(
+                    remoteRepository = ProductoRemoteRepository(applicationContext)
+                ) as T
             }
         })[ProductoViewModel::class.java]
 
@@ -196,7 +201,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             OYL_FSTheme {
 
-                val perfiles by perfilViewModel.perfiles.collectAsState()
+                // Usuario que inició sesión (datos del backend).
+                val usuarioSesion by SesionRepository.usuario.collectAsState()
 
                 // Observa los productos del catálogo compartido.
                 val productosActuales by productoViewModel
@@ -395,80 +401,18 @@ class MainActivity : ComponentActivity() {
 
 
                             LoginScreen(
-                                viewModel = loginViewModel,
+                                onLoginSuccess = { admin ->
+                                    esAdmin = admin
+                                    mostrarHistorial = false
+                                    mostrarCarrito = false
+                                    pedidoPrepararId = null
+                                    sesionIniciada = true
 
-                                onLoginSuccess = { sesion ->
-
-                                    lifecycleScope.launch {
-
-                                        try {
-
-                                            // Para clientes registrados, recuperar
-                                            // su perfil real antes de entrar.
-                                            if (!sesion.esDemo) {
-
-                                                val usuario = usuarioRoomRepository
-                                                    .obtenerUsuario(
-                                                        sesion.usuarioId
-                                                    )
-
-                                                if (usuario == null) {
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "No se encontró la cuenta registrada",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-
-                                                    return@launch
-                                                }
-
-                                                perfilViewModel
-                                                    .activarClienteRegistrado(usuario)
-                                            }
-
-                                            // Identificar el carrito correcto.
-                                            carritoViewModel.iniciar(
-                                                if (sesion.esAdmin) {
-                                                    ""
-                                                } else {
-                                                    sesion.usuarioId
-                                                }
-                                            )
-
-                                            // Asociar el historial con la cuenta
-                                            // y el rol que inició sesión.
-                                            historialViewModel.configurarSesion(
-                                                usuarioId = sesion.usuarioId,
-                                                esAdmin = sesion.esAdmin
-                                            )
-
-                                            usuarioSesionId = sesion.usuarioId
-                                            nombreSesion = sesion.nombre
-                                            esAdmin = sesion.esAdmin
-
-                                            mostrarHistorial = false
-                                            mostrarCarrito = false
-                                            pedidoPrepararId = null
-                                            pestanaDesdeHistorial = null
-                                            mostrarRegistro = false
-
-                                            // Ingresar solamente después
-                                            // de preparar los datos del usuario.
-                                            sesionIniciada = true
-
-                                        } catch (e: CancellationException) {
-                                            throw e
-
-                                        } catch (_: Exception) {
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "No se pudo iniciar la sesión",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-                                        }
-                                    }
+                                    // Carga los pedidos del usuario desde el backend.
+                                    historialViewModel.configurarSesion(
+                                        SesionRepository.usuarioId?.toString().orEmpty(),
+                                        admin
+                                    )
                                 },
 
                                 onIrARegistro = {
@@ -504,25 +448,34 @@ class MainActivity : ComponentActivity() {
 
                                     if (!puedeConfirmar) {
 
-                                        Toast.makeText(
-                                            this@MainActivity,
-                                            "El pedido no cumple los requisitos de preparación",
-                                            Toast.LENGTH_LONG
-                                        ).show()
+                                        // Registrar el nuevo estado del pedido en el backend.
+                                        // error es null si salió bien, o el motivo del servidor.
+                                        historialViewModel.cambiarEstadoPedido(
+                                            pedidoId,
+                                            EstadoPedido.PREPARADO
+                                        ) { error ->
 
-                                    } else if (!procesandoPreparacion) {
+                                            if (error == null) {
 
-                                        procesandoPreparacion = true
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "Pedido $pedidoId preparado correctamente",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
 
-                                        lifecycleScope.launch {
+                                                // Regresar al historial.
+                                                pedidoPrepararId = null
+                                                mostrarHistorial = true
 
-                                            try {
+                                            } else {
 
-                                                val actualizado = historialViewModel
-                                                    .cambiarEstadoPedidoPersistente(
-                                                        pedidoId = pedidoId,
-                                                        nuevoEstado = EstadoPedido.PREPARADO
-                                                    )
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    error,
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+                                            }
+                                        }
 
                                                 if (actualizado) {
 
@@ -587,83 +540,25 @@ class MainActivity : ComponentActivity() {
                                 mostrarCarrito = false
                             },
 
+                            // La compra ahora la procesa el backend (ms-pedidos):
+                            // valida el stock, lo descuenta y crea el pedido.
+                            onConfirmar = { _ ->
+                                // El pedido se crea a nombre del usuario que inició sesión.
+                                val usuarioId = SesionRepository.usuarioId
 
-                            onConfirmar = { productos ->
-
-                                if (!procesandoCompra) {
-
-                                    procesandoCompra = true
-
-                                    lifecycleScope.launch {
-
-                                        try {
-
-                                            // Validación previa para mostrar
-                                            // errores claros al usuario.
-                                            val errorStock = productoViewModel
-                                                .validarStockParaCompra(productos)
-
-                                            if (errorStock != null) {
-
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    errorStock,
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-
-                                            } else {
-
-                                                // Una única operación persistente:
-                                                // 1. Guardar pedido.
-                                                // 2. Guardar detalles.
-                                                // 3. Descontar stock.
-                                                val pedido = historialViewModel
-                                                    .registrarCompraPersistente(
-                                                        usuarioId = usuarioSesionId,
-                                                        productos = productos
-                                                    )
-
-                                                if (pedido != null) {
-
-                                                    // Vaciar solamente después
-                                                    // de confirmar SQLite.
-                                                    carritoViewModel
-                                                        .vaciarDespuesDeConfirmar()
-
-                                                    mostrarCarrito = false
-                                                    mostrarHistorial = true
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "Pedido registrado correctamente",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-
-                                                } else {
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "Stock insuficiente o precio modificado. Revisa tu carrito.",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
-                                            }
-
-                                        } catch (e: CancellationException) {
-                                            throw e
-
-                                        } catch (e: Exception) {
-
-                                            Toast.makeText(
-                                                this@MainActivity,
-                                                "No se pudo registrar el pedido",
-                                                Toast.LENGTH_LONG
-                                            ).show()
-
-                                        } finally {
-
-                                            procesandoCompra = false
-                                        }
+                                if (usuarioId == null) {
+                                    Toast.makeText(
+                                        this@MainActivity,
+                                        "Inicia sesión nuevamente",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                } else {
+                                    carritoViewModel.enviarPedido(usuarioId) {
+                                        // Solo se ejecuta si el pedido fue aceptado.
+                                        // Vuelve a pedir el catálogo para ver el stock real.
+                                        productoViewModel.refrescar()
+                                        mostrarCarrito = false
+                                        mostrarHistorial = true
                                     }
                                 }
                             }
@@ -720,7 +615,12 @@ class MainActivity : ComponentActivity() {
                             pestanaSolicitada = pestanaDesdeHistorial,
                             onPestanaAtendida = { pestanaDesdeHistorial = null },
                             onLogout = {
-                                cerrarSesionActual()
+                                SesionRepository.cerrarSesion()
+                                historialViewModel.limpiar()
+                                mostrarHistorial = false
+                                mostrarCarrito = false
+                                pedidoPrepararId = null
+                                sesionIniciada = false
                             },
 
                             onAbrirHistorial = {
@@ -732,9 +632,7 @@ class MainActivity : ComponentActivity() {
                             historialViewModel = historialViewModel,
                             perfilViewModel = perfilViewModel,
 
-                            nombre = perfiles.find {
-                                it.id == "admin-demo"
-                            }?.nombre ?: "Administrador"
+                            nombre = usuarioSesion?.nombre ?: "Administrador"
                         )
                     }
 
@@ -743,13 +641,7 @@ class MainActivity : ComponentActivity() {
 
                         estadoHomeCliente.SaveableStateProvider(usuarioSesionId) {
                         HomeCliente(
-                            pestanaSolicitada = pestanaDesdeHistorial,
-                            onPestanaAtendida = { pestanaDesdeHistorial = null },
-
-                            nombre = perfiles.find {
-                                it.id == usuarioSesionId
-                            }?.nombre ?: nombreSesion,
-
+                            nombre = usuarioSesion?.nombre ?: "Cliente",
 
                             // Identificador temporal hasta implementar sesiones.
                             clienteId = usuarioSesionId,
@@ -761,7 +653,12 @@ class MainActivity : ComponentActivity() {
                             perfilViewModel = perfilViewModel,
 
                             onLogout = {
-                                cerrarSesionActual()
+                                SesionRepository.cerrarSesion()
+                                historialViewModel.limpiar()
+                                mostrarHistorial = false
+                                mostrarCarrito = false
+                                pedidoPrepararId = null
+                                sesionIniciada = false
                             },
 
                             onAbrirHistorial = {
@@ -779,3 +676,4 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
+

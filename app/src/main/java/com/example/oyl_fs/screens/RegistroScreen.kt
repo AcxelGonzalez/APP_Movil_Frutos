@@ -1,6 +1,7 @@
 
 package com.example.oyl_fs.screens
 
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -15,12 +16,18 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.oyl_fs.network.RegistroRequest
+import com.example.oyl_fs.network.mensajeApi
+import com.example.oyl_fs.repository.SesionRepository
+import kotlinx.coroutines.launch
 
 import com.example.oyl_fs.viewmodel.CampoRegistro
 import com.example.oyl_fs.viewmodel.FormularioRegistro
@@ -44,23 +51,21 @@ fun RegistroScreen(
     onRegistrado: () -> Unit,
     onIrALogin: () -> Unit
 ) {
-
-    val estado by viewModel.estado.collectAsState()
-    val errores = estado.errores
-
-    var alias by rememberSaveable { mutableStateOf("") }
-    var nombre by rememberSaveable { mutableStateOf("") }
-    var correo by rememberSaveable { mutableStateOf("") }
-    var rut by rememberSaveable { mutableStateOf("") }
-    var telefono by rememberSaveable { mutableStateOf("") }
-
-    // No almacenar las contraseñas mediante
-    // rememberSaveable ni SavedState.
+    var nombre by remember { mutableStateOf("") }
+    var alias by remember { mutableStateOf("") }
+    var correo by remember { mutableStateOf("") }
+    var telefono by remember { mutableStateOf("") }
+    var direccion by remember { mutableStateOf("") }
     var clave by remember { mutableStateOf("") }
     var confirmacion by remember { mutableStateOf("") }
 
-    val cafe = androidx.compose.ui.graphics.Color(0xFF4A2C1A)
-    val errorColor = MaterialTheme.colorScheme.error
+    // Mientras se espera la respuesta del servidor
+    var cargando by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
+
+    val cafe = Color(0xFF4A2C1A)
+    val rojo = Color(0xFFC0392B)
 
     Column(
         modifier = Modifier
@@ -120,19 +125,11 @@ fun RegistroScreen(
 
         Spacer(Modifier.height(12.dp))
 
+        // El alias es el nombre con el que se inicia sesión
         OutlinedTextField(
-            value = correo,
-            onValueChange = {
-                correo = it
-                viewModel.limpiarError(CampoRegistro.CORREO)
-            },
-            label = { Text("Correo electrónico *") },
-            leadingIcon = { Icon(Icons.Default.Email, null) },
-            keyboardOptions = KeyboardOptions(
-                keyboardType = KeyboardType.Email
-            ),
-            isError = errores.correo != null,
-            enabled = !estado.procesando,
+            value = alias,
+            onValueChange = { alias = it },
+            label = { Text("Usuario (para iniciar sesión)") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -141,16 +138,9 @@ fun RegistroScreen(
         Spacer(Modifier.height(12.dp))
 
         OutlinedTextField(
-            value = rut,
-            onValueChange = {
-                rut = it
-                viewModel.limpiarError(CampoRegistro.RUT)
-            },
-            label = { Text("RUT *") },
-            placeholder = { Text("12.345.678-5") },
-            leadingIcon = { Icon(Icons.Default.Badge, null) },
-            isError = errores.rut != null,
-            enabled = !estado.procesando,
+            value = correo,
+            onValueChange = { correo = it },
+            label = { Text("Correo electrónico") },
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
@@ -175,6 +165,16 @@ fun RegistroScreen(
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.telefono)
+
+        Spacer(Modifier.height(12.dp))
+
+        OutlinedTextField(
+            value = direccion,
+            onValueChange = { direccion = it },
+            label = { Text("Dirección (opcional)") },
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth()
+        )
 
         Spacer(Modifier.height(12.dp))
 
@@ -218,52 +218,64 @@ fun RegistroScreen(
         )
         ErrorRegistroCampo(errores.confirmacion)
 
-        AnimatedVisibility(
-            visible = errores.general != null,
-            enter = fadeIn(),
-            exit = fadeOut()
-        ) {
-            Text(
-                text = errores.general.orEmpty(),
-                color = errorColor,
-                modifier = Modifier.padding(top = 12.dp)
-            )
+        AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
+            exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
+            Column {
+                Spacer(Modifier.height(10.dp))
+                Text(error, color = rojo, fontSize = 13.sp)
+            }
         }
 
         Spacer(Modifier.height(24.dp))
 
         Button(
             onClick = {
-                viewModel.registrar(
-                    formulario = FormularioRegistro(
-                        alias = alias,
-                        nombre = nombre,
-                        correo = correo,
-                        rut = rut,
-                        telefono = telefono,
-                        clave = clave,
-                        confirmacion = confirmacion
-                    ),
-                    onRegistroExitoso = onRegistrado
-                )
+                // Primero se validan los datos en el teléfono
+                error = when {
+                    nombre.isBlank() || alias.isBlank() || correo.isBlank() ->
+                        "Completa todos los campos obligatorios"
+                    alias.trim().length !in 3..20 ->
+                        "El usuario debe tener entre 3 y 20 caracteres"
+                    !correo.contains("@") -> "Ingresa un correo válido"
+                    clave.length < 6 -> "La contraseña debe tener mínimo 6 caracteres"
+                    clave != confirmacion -> "Las contraseñas no coinciden"
+                    else -> ""
+                }
+
+                // Si todo está bien, se crea la cuenta en el backend (ms-usuarios)
+                if (error.isEmpty()) {
+                    cargando = true
+                    scope.launch {
+                        SesionRepository.registrar(
+                            RegistroRequest(
+                                nombre = nombre.trim(),
+                                alias = alias.trim(),
+                                correo = correo.trim(),
+                                telefono = telefono.trim().ifEmpty { null },
+                                direccion = direccion.trim().ifEmpty { null },
+                                contrasena = clave
+                            )
+                        )
+                            .onSuccess {
+                                Toast.makeText(
+                                    context,
+                                    "Cuenta creada. Ya puedes iniciar sesión",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                                onRegistrado()
+                            }
+                            .onFailure { e ->
+                                error = e.mensajeApi()
+                            }
+                        cargando = false
+                    }
+                }
             },
-            enabled = !estado.procesando,
-            colors = ButtonDefaults.buttonColors(
-                containerColor = cafe
-            ),
-            modifier = Modifier
-                .fillMaxWidth()
-                .heightIn(min = 52.dp)
+            enabled = !cargando,
+            colors = ButtonDefaults.buttonColors(containerColor = cafe),
+            modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
-            if (estado.procesando) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(22.dp),
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    strokeWidth = 2.dp
-                )
-            } else {
-                Text("Registrarse")
-            }
+            Text(if (cargando) "Creando cuenta..." else "Registrarse")
         }
 
         Spacer(Modifier.height(8.dp))
@@ -280,28 +292,5 @@ fun RegistroScreen(
                 color = cafe
             )
         }
-    }
-}
-
-/**
- * Mensaje visual reutilizable debajo
- * de los campos con errores.
- */
-@Composable
-private fun ErrorRegistroCampo(mensaje: String?) {
-
-    AnimatedVisibility(
-        visible = mensaje != null,
-        enter = fadeIn(),
-        exit = fadeOut()
-    ) {
-        Text(
-            text = mensaje.orEmpty(),
-            color = MaterialTheme.colorScheme.error,
-            style = MaterialTheme.typography.bodySmall,
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(top = 4.dp)
-        )
     }
 }
