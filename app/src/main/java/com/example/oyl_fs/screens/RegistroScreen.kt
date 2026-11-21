@@ -28,7 +28,7 @@ import com.example.oyl_fs.viewmodel.RegistroViewModel
 
 
 /**
- * Formulario para registrar clientes en Room.
+ * Formulario para registrar clientes mediante RegistroViewModel.
  *
  * Las validaciones se realizan desde
  * RegistroViewModel y no desde Compose.
@@ -155,6 +155,7 @@ fun RegistroScreen(
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.rut)
+        if (viewModel.usaBackend) Text("El RUT se guarda solo en este dispositivo.", fontSize = 12.sp)
 
         Spacer(Modifier.height(12.dp))
 
@@ -164,7 +165,7 @@ fun RegistroScreen(
                 telefono = it
                 viewModel.limpiarError(CampoRegistro.TELEFONO)
             },
-            label = { Text("Teléfono (opcional)") },
+            label = { Text(if (viewModel.usaBackend) "Teléfono *" else "Teléfono (opcional)") },
             leadingIcon = { Icon(Icons.Default.Phone, null) },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Phone

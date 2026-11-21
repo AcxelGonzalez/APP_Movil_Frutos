@@ -69,7 +69,7 @@ fun CarroScreen(
     }
     val pedido = confirmacion.pedido
     if (pedido != null) {
-        PedidoConfirmadoScreen(pedido, ::abrirMisPedidos)
+        PedidoConfirmadoScreen(pedido, confirmacion.error, ::abrirMisPedidos)
         return
     }
     if (mostrarConfirmacion) {

@@ -1,5 +1,6 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.network.mensajeApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 
@@ -123,12 +124,15 @@ object ValidacionRegistro {
 }
 
 /**
- * Gestiona la validación y el registro real
- * de clientes mediante UsuarioRoomRepository.
+ * Valida el registro. MainActivity utiliza ms-usuarios y complementos locales;
+ * las pruebas de compatibilidad pueden utilizar UsuarioRoomRepository.
  */
 class RegistroViewModel(
-    private val repository: UsuarioRoomRepository
+    private val repository: UsuarioRoomRepository,
+    private val complementos: com.example.oyl_fs.repository.DatosLocalesRemotosRepository? = null
 ) : ViewModel() {
+
+    val usaBackend: Boolean get() = complementos != null
 
     private val _estado = MutableStateFlow(RegistroUiState())
     val estado = _estado.asStateFlow()
@@ -169,7 +173,7 @@ class RegistroViewModel(
      * Valida el formulario y solicita el registro.
      *
      * La navegación solo se ejecuta después
-     * de confirmar el almacenamiento en SQLite.
+     * de confirmar el registro en el repositorio configurado.
      */
     fun registrar(
         formulario: FormularioRegistro,
@@ -178,7 +182,11 @@ class RegistroViewModel(
 
         if (_estado.value.procesando) return
 
-        val errores = ValidacionRegistro.validar(formulario)
+        var errores = ValidacionRegistro.validar(formulario)
+        if (complementos != null) {
+            if (formulario.alias.trim().length > 20) errores = errores.copy(alias = "El alias debe tener entre 3 y 20 caracteres")
+            if (formulario.telefono.isBlank()) errores = errores.copy(telefono = "Ingresa tu teléfono")
+        }
 
         if (errores.hayErrores()) {
             _estado.value = RegistroUiState(
@@ -194,6 +202,25 @@ class RegistroViewModel(
         viewModelScope.launch {
             try {
 
+                if (complementos != null) {
+                    val usuario = com.example.oyl_fs.repository.SesionRemotaRepository.registrar(
+                        com.example.oyl_fs.network.RegistroRequest(
+                            nombre = formulario.nombre.trim(), alias = formulario.alias.trim().lowercase(Locale.ROOT),
+                            correo = formulario.correo.trim().lowercase(Locale.ROOT), telefono = formulario.telefono.trim(),
+                            contrasena = formulario.clave
+                        )
+                    ).getOrThrow()
+                    try {
+                        complementos.guardarPerfil(usuario.id.toString(), formulario.rut.trim())
+                    } catch (e: CancellationException) { throw e
+                    } catch (e: Exception) {
+                        _estado.value = RegistroUiState(errores = ErroresRegistro(general = "La cuenta ya fue creada. Inicia sesión y vuelve a ingresar tu RUT en el perfil."))
+                        return@launch
+                    }
+                    _estado.value = RegistroUiState()
+                    onRegistroExitoso()
+                    return@launch
+                }
                 val resultado = repository.registrarCliente(
                     DatosRegistroCliente(
                         alias = formulario.alias.trim(),
@@ -250,11 +277,11 @@ class RegistroViewModel(
             } catch (e: CancellationException) {
                 throw e
 
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 _estado.update {
                     it.copy(
                         errores = ErroresRegistro(
-                            general = "No se pudo guardar la cuenta. Intenta nuevamente."
+                            general = if (complementos != null) e.mensajeApi() else "No se pudo guardar la cuenta. Intenta nuevamente."
                         )
                     )
                 }

@@ -1,5 +1,7 @@
 package com.example.oyl_fs.viewmodel
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import androidx.lifecycle.ViewModel
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.screens.ProductosDatos
@@ -12,16 +14,19 @@ import com.example.oyl_fs.repository.ProductoRoomRepository
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
+import com.example.oyl_fs.network.mensajeApi
+import com.example.oyl_fs.repository.ProductoRemoteRepository
 
 class ProductoViewModel(
-    // Si no se proporciona un repositorio, mantiene
-    // el comportamiento en memoria para las pruebas.
-    private val roomRepository: ProductoRoomRepository? = null
+    private val roomRepository: ProductoRoomRepository? = null,
+    // Si se entrega, el backend (ms-productos) es la fuente de datos.
+    private val remoteRepository: ProductoRemoteRepository? = null
 ) : ViewModel() {
 
+    private val cargaMutex = Mutex()
 
     private val _productos = MutableStateFlow<List<ProductoInfo>>(
-        if (roomRepository == null) {
+        if (roomRepository == null && remoteRepository == null) {
             // Modo de pruebas unitarias actual.
             ProductosDatos.productos
         } else {
@@ -36,6 +41,9 @@ class ProductoViewModel(
     val productos: StateFlow<List<ProductoInfo>> =
         _productos.asStateFlow()
 
+    private val _errorCatalogo = MutableStateFlow<String?>(null)
+    val errorCatalogo = _errorCatalogo.asStateFlow()
+
     private val _error = MutableStateFlow<String?>(null)
 
     val error: StateFlow<String?> = _error.asStateFlow()
@@ -43,7 +51,7 @@ class ProductoViewModel(
     // Indica si todavía estamos cargando los
 // productos desde la base de datos.
     private val _cargandoProductos =
-        MutableStateFlow(roomRepository != null)
+        MutableStateFlow(roomRepository != null || remoteRepository != null)
 
     val cargandoProductos: StateFlow<Boolean> =
         _cargandoProductos.asStateFlow()
@@ -76,6 +84,29 @@ class ProductoViewModel(
                 }
             }
         }
+    }
+
+    init {
+        if (remoteRepository != null) refrescar()
+    }
+
+    // Vuelve a pedir la lista al backend (también se usará después de comprar)
+    fun refrescar() {
+        viewModelScope.launch { cargarRemoto() }
+    }
+
+    private suspend fun cargarRemoto() = cargaMutex.withLock {
+        val remoto = remoteRepository ?: return@withLock
+        _cargandoProductos.value = true
+        try {
+            _productos.value = remoto.listar()
+            _errorCatalogo.value = null
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _errorCatalogo.value = e.mensajeApi()
+        }
+        _cargandoProductos.value = false
     }
 
     // Busca un producto
@@ -205,6 +236,21 @@ class ProductoViewModel(
         producto: ProductoInfo
     ): Boolean {
 
+        remoteRepository?.let { remoto ->
+            if (!validarProducto(producto)) return false
+            return try {
+                remoto.crear(producto.copy(
+                    nombre = producto.nombre.trim(), codigo = producto.codigo.trim()))
+                cargarRemoto()
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = e.mensajeApi()
+                false
+            }
+        }
+
         val repo = roomRepository
             ?: return agregarProducto(producto)
 
@@ -253,7 +299,22 @@ class ProductoViewModel(
         producto: ProductoInfo
     ): Boolean {
 
-        val repo = roomRepository
+        remoteRepository?.let { remoto ->
+            if (!validarProducto(producto)) return false
+            return try {
+                remoto.actualizar(producto.copy(
+                    nombre = producto.nombre.trim(), codigo = producto.codigo.trim()))
+                cargarRemoto()
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = e.mensajeApi()
+                false
+            }
+        }
+
+            val repo = roomRepository
             ?: return editarProducto(producto)
 
         if (!validarProducto(producto)) return false
@@ -317,6 +378,20 @@ class ProductoViewModel(
     suspend fun eliminarProductoPersistente(
         id: Int
     ): Boolean {
+
+        remoteRepository?.let { remoto ->
+            limpiarError()
+            return try {
+                val eliminado = remoto.eliminar(id)
+                if (eliminado) cargarRemoto() else _error.value = "El producto ya no existe"
+                eliminado
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _error.value = e.mensajeApi()
+                false
+            }
+        }
 
         val repo = roomRepository
             ?: return eliminarProducto(id)

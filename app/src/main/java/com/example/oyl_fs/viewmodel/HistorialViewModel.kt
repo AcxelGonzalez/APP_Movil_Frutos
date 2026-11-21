@@ -1,5 +1,10 @@
 package com.example.oyl_fs.viewmodel
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.Job
+import com.example.oyl_fs.repository.DatosLocalesRemotosRepository
+import com.example.oyl_fs.repository.PedidoRemoteRepository
+import com.example.oyl_fs.network.mensajeApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.oyl_fs.model.EstadoPedido
@@ -28,13 +33,15 @@ import kotlinx.coroutines.flow.map
  */
 
 class HistorialViewModel(
-    // Sin repositorio Room mantiene el
-    // comportamiento actual de demostración.
-    private val roomRepository: PedidoRoomRepository? = null
+    // MainActivity usa remoto; Room y memoria conservan compatibilidad con los datos y pruebas anteriores.
+    private val roomRepository: PedidoRoomRepository? = null,
+    private val remoto: Boolean = false,
+    private val complementos: DatosLocalesRemotosRepository? = null,
+    private val api: PedidoRemoteRepository = PedidoRemoteRepository()
 ) : ViewModel() {
 
     // Repositorio temporal con pedidos de demostración.
-    private val repository = PedidoRepository()
+    private val repository by lazy { PedidoRepository() }
 
 
     /**
@@ -44,8 +51,40 @@ class HistorialViewModel(
      * En modo demostración conserva el repositorio
      * en memoria utilizado actualmente.
      */
+    private val remotos = MutableStateFlow<List<Pedido>>(emptyList())
+    private val _error = MutableStateFlow<String?>(null)
+    val error = _error.asStateFlow()
+    private val _cargando = MutableStateFlow(false)
+    val cargando = _cargando.asStateFlow()
+    private var carga: Job? = null
+    private var generacion = 0
+
+    fun refrescar() {
+        if (!remoto) return
+        carga?.cancel()
+        val actual = ++generacion
+        val id = _usuarioId.value.toLongOrNull()
+        val admin = _esAdmin.value
+        if (id == null || id <= 0) {
+            remotos.value = emptyList()
+            _cargando.value = false
+            return
+        }
+        _cargando.value = true
+        _error.value = null
+        carga = viewModelScope.launch {
+            val resultado = if (admin) api.listarTodos() else api.listarPorUsuario(id)
+            if (actual != generacion) return@launch
+            resultado.fold(
+                onSuccess = { remotos.value = it.filter { p -> admin || p.usuarioId == id.toString() }.map { p -> complementos?.completarPedido(p) ?: p } },
+                onFailure = { _error.value = it.mensajeApi() }
+            )
+            _cargando.value = false
+        }
+    }
+
     val pedidosParaAdmin: StateFlow<List<Pedido>> =
-        roomRepository?.pedidos?.stateIn(
+        if (remoto) remotos.asStateFlow() else roomRepository?.pedidos?.stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
             initialValue = emptyList()
@@ -114,11 +153,14 @@ class HistorialViewModel(
         usuarioId: String,
         esAdmin: Boolean
     ) {
+        val cambio = _usuarioId.value != usuarioId || _esAdmin.value != esAdmin
+        if (remoto && cambio) remotos.value = emptyList()
         _usuarioId.value = usuarioId
         _esAdmin.value = esAdmin
 
         // Reinicia el filtro al cambiar de sesión.
-        _filtroEstado.value = null
+        if (cambio) _filtroEstado.value = null
+        refrescar()
     }
 
     /**
@@ -196,7 +238,7 @@ class HistorialViewModel(
         usuarioId: String
     ): Flow<Pedido?> {
 
-        val origen = roomRepository
+        val origen = if (remoto) remotos.map { lista -> lista.filter { it.usuarioId == usuarioId } } else roomRepository
             ?.observarPedidosUsuario(usuarioId)
             ?: repository.observarPedidosUsuario(usuarioId)
 
@@ -243,6 +285,19 @@ class HistorialViewModel(
             return false
         }
 
+        if (remoto) {
+            val actual = generacion
+            val resultado = api.cambiarEstado(pedidoId, nuevoEstado)
+            if (actual != generacion) return false
+            return resultado.fold(
+                onSuccess = { actualizado ->
+                    remotos.value = remotos.value.map { if (it.id == pedidoId) (complementos?.completarPedido(actualizado) ?: actualizado) else it }
+                    _error.value = null
+                    true
+                },
+                onFailure = { _error.value = it.mensajeApi(); false }
+            )
+        }
         val repo = roomRepository
 
         return if (repo != null) {

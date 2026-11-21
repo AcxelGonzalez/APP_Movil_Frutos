@@ -451,7 +451,7 @@ fun HomeAdmin(
             // ---------- PERFIL ----------
             4 -> Box(Modifier.fillMaxSize().padding(padding)) {
                 PerfilUsuarioScreen(
-                    usuarioId = "admin-demo",
+                    usuarioId = perfilViewModel.perfiles.value.firstOrNull { it.esAdmin }?.id ?: "admin-demo",
                     viewModel = perfilViewModel,
                     onVolver = { tab = 0 },
                     onLogout = onLogout

@@ -39,6 +39,18 @@ class StockNoDisponibleException :
  */
 @Dao
 interface ProductoDao {
+    @Query("DELETE FROM productos")
+    suspend fun vaciarCache()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertarCache(productos: List<ProductoEntity>)
+
+    @Transaction
+    suspend fun reemplazarCache(productos: List<ProductoEntity>) {
+        vaciarCache()
+        insertarCache(productos)
+    }
+
 
     /**
      * Observa todos los productos.

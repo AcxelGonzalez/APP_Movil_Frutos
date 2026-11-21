@@ -164,6 +164,7 @@ private fun EditarPerfilScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onVolver) { Text("‹ Editar datos", color = OscuroPerfil) }
         CampoPerfil("Nombre *", nombre, errores.nombre) { nombre = it }
+        if (perfil.id.toLongOrNull() != null) Text("El RUT y el apellido se guardan solo en este dispositivo.", color = CafePerfil, fontSize = 12.sp)
         CampoPerfil("Apellido", apellido) { apellido = it }
         CampoPerfil("RUT de prueba", rut, errores.rut) { rut = it }
         CampoPerfil("Correo *", correo, errores.correo) { correo = it }

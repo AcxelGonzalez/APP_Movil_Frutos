@@ -1,5 +1,10 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.repository.DatosLocalesRemotosRepository
+import com.example.oyl_fs.repository.SesionRemotaRepository
+import com.example.oyl_fs.network.ActualizarPerfilRequest
+import com.example.oyl_fs.network.UsuarioDto
+import com.example.oyl_fs.network.mensajeApi
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
@@ -21,6 +26,15 @@ class PerfilViewModel @JvmOverloads constructor(
     private val preferencias: SharedPreferences = application.getSharedPreferences("perfiles_oyl", Context.MODE_PRIVATE)
 ) : AndroidViewModel(application) {
     // Las cuentas demo conservan sus preferencias; los clientes usan Room.
+    private val complementos = DatosLocalesRemotosRepository(application)
+    private var remoto = false
+
+    fun activarRemoto(usuario: UsuarioDto) {
+        remoto = true
+        _perfiles.value = listOf(complementos.perfil(usuario))
+        limpiarError()
+    }
+
     private val _perfiles = MutableStateFlow(
         listOf(cargarPerfil("admin-demo", true), cargarPerfil("cliente-demo", false))
     )
@@ -63,6 +77,14 @@ class PerfilViewModel @JvmOverloads constructor(
             telefono = perfil.telefono.trim(), direccion = perfil.direccion.trim()
         )
         return try {
+            if (remoto) {
+                val actualizado = SesionRemotaRepository.actualizarPerfil(
+                    ActualizarPerfilRequest(guardado.nombre, guardado.correo, guardado.telefono, guardado.direccion)
+                ).getOrThrow()
+                complementos.guardarPerfil(perfil.id, guardado.rut, guardado.apellido)
+                activarRemoto(actualizado)
+                return true
+            }
             if (perfil.id in setOf("admin-demo", "cliente-demo")) {
                 withContext(Dispatchers.IO) {
                     check(preferencias.edit()
@@ -86,8 +108,8 @@ class PerfilViewModel @JvmOverloads constructor(
             true
         } catch (e: CancellationException) {
             throw e
-        } catch (_: Exception) {
-            _errores.value = ErroresPerfil(general = "No se pudo guardar el perfil")
+        } catch (e: Exception) {
+            _errores.value = ErroresPerfil(general = if (remoto) e.mensajeApi() else "No se pudo guardar el perfil")
             _error.value = _errores.value.general
             false
         }
@@ -138,6 +160,11 @@ class PerfilViewModel @JvmOverloads constructor(
      */
     fun limpiarSesionRegistrada() {
 
+        if (remoto) {
+            _perfiles.value = emptyList()
+            limpiarError()
+            return
+        }
         _perfiles.value = _perfiles.value.filter {
             it.id == "admin-demo" ||
                     it.id == "cliente-demo"

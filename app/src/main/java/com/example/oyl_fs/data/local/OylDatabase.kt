@@ -83,9 +83,6 @@ abstract class OylDatabase : RoomDatabase() {
                         MIGRATION_4_5
                     )
 
-                    .addCallback(
-                        crearCallbackInicializacion(contexto)
-                    )
 
                     .build()
                     .also {

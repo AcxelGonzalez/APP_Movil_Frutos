@@ -68,6 +68,8 @@ fun HistorialScreen(
     // Observa los cambios del ViewModel.
     val pedidos by viewModel.pedidosVisibles.collectAsState()
     val filtro by viewModel.filtroEstado.collectAsState()
+    val error by viewModel.error.collectAsState()
+    val cargando by viewModel.cargando.collectAsState()
 
     val contexto = LocalContext.current
 
@@ -136,6 +138,9 @@ fun HistorialScreen(
                 .padding(paddingValues)
         ) {
 
+            if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+            error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
+            TextButton(onClick = { viewModel.refrescar() }, enabled = !cargando) { Text("Actualizar pedidos") }
             // Encabezado según el perfil del usuario.
             Text(
                 text = if (esAdmin) {

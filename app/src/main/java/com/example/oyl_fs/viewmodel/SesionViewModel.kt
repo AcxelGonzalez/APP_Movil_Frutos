@@ -1,11 +1,9 @@
 package com.example.oyl_fs.viewmodel
 
 import android.app.Application
-import android.content.Context
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.example.oyl_fs.repository.SesionRepository
-import com.example.oyl_fs.repository.UsuarioRoomRepository
+import com.example.oyl_fs.repository.SesionRemotaRepository
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,10 +19,7 @@ data class SesionUiState(
 )
 
 class SesionViewModel(application: Application) : AndroidViewModel(application) {
-    private val repo = SesionRepository(
-        application.getSharedPreferences("sesion_oyl", Context.MODE_PRIVATE),
-        UsuarioRoomRepository(application)
-    )
+    private val repo = SesionRemotaRepository.also { it.configurar(application) }
     private val mutex = Mutex()
     private val _estado = MutableStateFlow(SesionUiState())
     val estado = _estado.asStateFlow()

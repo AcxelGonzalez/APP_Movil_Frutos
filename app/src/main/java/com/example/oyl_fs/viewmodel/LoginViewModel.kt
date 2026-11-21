@@ -1,5 +1,6 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.network.mensajeApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 
@@ -51,14 +52,13 @@ data class LoginUiState(
 )
 
 /**
- * Autenticación local de OYL Frutos Secos.
- *
- * Conserva las cuentas académicas admin
- * y cliente, pero también comprueba los
- * usuarios registrados mediante Room.
+ * MainActivity autentica contra ms-usuarios.
+ * El modo local conserva compatibilidad con cuentas anteriores y pruebas;
+ * no se usa como alternativa cuando falla el servidor.
  */
 class LoginViewModel(
-    private val usuarios: UsuarioRoomRepository
+    private val usuarios: UsuarioRoomRepository,
+    private val remoto: Boolean = false
 ) : ViewModel() {
 
     private val _estado =
@@ -97,6 +97,13 @@ class LoginViewModel(
         if (alias.isBlank() || contrasena.isEmpty()) {
             return ResultadoLogin.Error(
                 "Completa usuario y contraseña."
+            )
+        }
+
+        if (remoto) {
+            return com.example.oyl_fs.repository.SesionRemotaRepository.iniciarSesion(alias, contrasena).fold(
+                onSuccess = { ResultadoLogin.Exito(SesionIdentificada(it.id.toString(), it.nombre, it.rol == "ADMIN", false)) },
+                onFailure = { ResultadoLogin.Error(it.mensajeApi()) }
             )
         }
 

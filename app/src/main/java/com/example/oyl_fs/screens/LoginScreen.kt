@@ -182,7 +182,7 @@ fun LoginScreen(
                     foco.clearFocus()
 
                     // LoginViewModel identifica al cliente
-                    // y comprueba sus credenciales en Room.
+                    // y delega la autenticación al repositorio configurado.
                     viewModel.iniciarSesion(
                         usuario = usuario,
                         contrasena = contrasena,

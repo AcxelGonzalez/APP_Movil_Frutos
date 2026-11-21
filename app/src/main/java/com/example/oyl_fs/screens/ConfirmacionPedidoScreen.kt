@@ -109,8 +109,9 @@ fun ConfirmacionPedidoScreen(
 @Composable
 fun DatosEntregaResumen(entrega: EntregaPedido?) {
     if (entrega == null) {
-        Text("Pedido anterior sin datos de entrega registrados.")
+        Text("Este pedido no tiene datos de entrega guardados en este dispositivo.")
     } else {
+        Text("Datos de entrega guardados en este dispositivo.", style = MaterialTheme.typography.bodySmall)
         Text("Modalidad: ${entrega.modalidad.descripcion}", fontWeight = FontWeight.Bold)
         Text("Contacto: ${entrega.nombreContacto}")
         Text("Teléfono: ${entrega.telefonoContacto}")
@@ -120,7 +121,7 @@ fun DatosEntregaResumen(entrega: EntregaPedido?) {
 }
 
 @Composable
-fun PedidoConfirmadoScreen(pedido: Pedido, onMisPedidos: () -> Unit) {
+fun PedidoConfirmadoScreen(pedido: Pedido, advertencia: String? = null, onMisPedidos: () -> Unit) {
     Column(Modifier.fillMaxSize().background(FondoConfirmacion).verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         var visible by remember { mutableStateOf(false) }
@@ -134,6 +135,7 @@ fun PedidoConfirmadoScreen(pedido: Pedido, onMisPedidos: () -> Unit) {
         Text("Total: ${precioPedido(pedido.total.toLong())}", fontWeight = FontWeight.Bold)
         Divider()
         DatosEntregaResumen(pedido.entrega)
+        advertencia?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Text("Tu solicitud está pendiente de validación. Esta demostración no realiza cobros.")
         Button(onClick = onMisPedidos, modifier = Modifier.fillMaxWidth()) { Text("Ver mis pedidos") }
     }

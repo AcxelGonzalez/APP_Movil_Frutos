@@ -24,11 +24,11 @@ class SesionNavegacionTest {
 
     @Test fun clienteConservaSesionAlRecrearYReabrirYElLogoutImpideRestaurarla() {
         val contexto = ApplicationProvider.getApplicationContext<Context>()
-        val preferencias = contexto.getSharedPreferences("sesion_oyl", Context.MODE_PRIVATE)
-        val anterior = preferencias.getString("usuarioId", null)
+        val preferencias = contexto.getSharedPreferences("sesion_remota_oyl", Context.MODE_PRIVATE)
+        val anterior = preferencias.getString("usuario", null)
         var escenario: ActivityScenario<MainActivity>? = null
         try {
-            check(preferencias.edit().putString("usuarioId", "cliente-demo").commit())
+            check(preferencias.edit().putString("usuario", com.google.gson.Gson().toJson(com.example.oyl_fs.network.UsuarioDto(987654, "Cliente prueba", "clienteprueba", "cliente@example.test", "912345678", rol = "CLIENTE"))).commit())
             escenario = ActivityScenario.launch(MainActivity::class.java)
             esperarTexto("Catálogo")
             escenario.recreate()
@@ -46,7 +46,7 @@ class SesionNavegacionTest {
             escenario?.close()
             // Restaurar la sesión que tenía el dispositivo antes de la prueba.
             val editor = preferencias.edit()
-            if (anterior == null) editor.remove("usuarioId") else editor.putString("usuarioId", anterior)
+            if (anterior == null) editor.remove("usuario") else editor.putString("usuario", anterior)
             check(editor.commit())
         }
     }

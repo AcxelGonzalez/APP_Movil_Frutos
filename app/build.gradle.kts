@@ -18,6 +18,12 @@ android {
         versionCode = 1
         versionName = "1.0"
 
+        val hostBackend = providers.gradleProperty("oylBackendHost").orElse("http://10.0.2.2").get()
+        require(Regex("^https?://[a-zA-Z0-9.-]+$").matches(hostBackend)) {
+            "oylBackendHost debe incluir protocolo y host, sin puerto ni ruta"
+        }
+        buildConfigField("String", "OYL_BACKEND_HOST", "\"$hostBackend\"")
+
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -40,6 +46,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
+        buildConfig = true
         compose = true 
     }
     composeOptions {
@@ -88,4 +95,8 @@ dependencies {
     // Genera automáticamente el código de entidades y DAOs.
     kapt("androidx.room:room-compiler:2.5.2")
 
+    // Retrofit: conexión con el backend
+    implementation("com.squareup.retrofit2:retrofit:2.9.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.9.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 }

@@ -1,5 +1,6 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.network.mensajeApi
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -21,7 +22,8 @@ data class ConfirmacionPedidoUiState(
 
 class ConfirmacionPedidoViewModel @JvmOverloads constructor(
     application: Application,
-    private val repo: PedidoRoomRepository = PedidoRoomRepository(application)
+    private val repo: PedidoRoomRepository? = null,
+    private val remoto: com.example.oyl_fs.repository.CompraRemotaRepository = com.example.oyl_fs.repository.CompraRemotaRepository(application)
 ) : AndroidViewModel(application) {
     private val _estado = MutableStateFlow(ConfirmacionPedidoUiState())
     val estado = _estado.asStateFlow()
@@ -40,6 +42,11 @@ class ConfirmacionPedidoViewModel @JvmOverloads constructor(
         val seleccion = items.toList()
         viewModelScope.launch {
             try {
+                if (repo == null) {
+                    val resultado = remoto.confirmar(usuarioId, seleccion, entrega)
+                    _estado.value = ConfirmacionPedidoUiState(usuarioId, pedido = resultado.pedido, error = resultado.advertencia)
+                    return@launch
+                }
                 val pedido = repo.registrarCompraDesdeCarrito(usuarioId, seleccion, entrega)
                 _estado.value = if (pedido != null) {
                     ConfirmacionPedidoUiState(usuarioId, pedido = pedido)
@@ -49,9 +56,9 @@ class ConfirmacionPedidoViewModel @JvmOverloads constructor(
                 }
             } catch (e: CancellationException) {
                 throw e
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 _estado.value = ConfirmacionPedidoUiState(usuarioId,
-                    error = "No se pudo guardar el pedido. Inténtalo nuevamente.")
+                    error = if (repo == null) e.mensajeApi() else "No se pudo guardar el pedido. Inténtalo nuevamente.")
             }
         }
     }
