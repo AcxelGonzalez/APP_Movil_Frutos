@@ -12,7 +12,7 @@ import org.junit.Test
 /**
  * Pruebas de la lógica de preparación QR.
  *
- * No requieren cámara, emulador ni SQLite.
+ * Se ejecutan en la JVM: no requieren cámara, emulador ni SQLite.
  */
 class PrepararPedidoViewModelTest {
 

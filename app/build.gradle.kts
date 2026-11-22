@@ -1,9 +1,71 @@
+import org.gradle.api.tasks.testing.Test
+import org.gradle.testing.jacoco.plugins.JacocoTaskExtension
+import org.gradle.testing.jacoco.tasks.JacocoReport
+import org.gradle.testing.jacoco.tasks.JacocoCoverageVerification
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
 
     // Permite generar las implementaciones de los DAOs.
     id("org.jetbrains.kotlin.kapt")
+    id("jacoco")
+}
+
+jacoco {
+    toolVersion = "0.8.13"
+}
+
+tasks.withType<Test>().configureEach {
+    extensions.configure<JacocoTaskExtension> {
+        isIncludeNoLocationClasses = true
+        excludes = listOf("jdk.internal.*")
+    }
+}
+
+// Incluye la lógica escrita a mano, también las corrutinas y clases sin pruebas.
+// Solo quedan fuera la UI y las implementaciones generadas por Room.
+val paquetesLogica = listOf("viewmodel", "repository", "model", "util", "network", "data/local")
+val clasesLogica = files(
+    fileTree(layout.buildDirectory.dir("tmp/kotlin-classes/debug")) {
+        include(paquetesLogica.map { "com/example/oyl_fs/$it/**" })
+        exclude("**/*_Impl*")
+    },
+    fileTree(layout.buildDirectory.dir("intermediates/javac/debug/classes")) {
+        include(paquetesLogica.map { "com/example/oyl_fs/$it/**" })
+        exclude("**/*_Impl*")
+    }
+)
+
+tasks.register<JacocoReport>("jacocoDebugUnitTestReport") {
+    group = "verification"
+    description = "Genera cobertura HTML/XML de la lógica con pruebas unitarias JVM, sin instrumentación."
+    dependsOn("testDebugUnitTest")
+    executionData(layout.buildDirectory.file("jacoco/testDebugUnitTest.exec"))
+    classDirectories.setFrom(clasesLogica)
+    sourceDirectories.setFrom(files("src/main/java"))
+    reports {
+        html.required.set(true)
+        xml.required.set(true)
+        csv.required.set(false)
+    }
+}
+
+tasks.register<JacocoCoverageVerification>("jacocoDebugUnitTestCoverageVerification") {
+    group = "verification"
+    description = "Comprueba el mínimo de 80 % de líneas de lógica cubiertas por pruebas unitarias JVM."
+    dependsOn("jacocoDebugUnitTestReport")
+    executionData(layout.buildDirectory.file("jacoco/testDebugUnitTest.exec"))
+    classDirectories.setFrom(clasesLogica)
+    violationRules {
+        rule {
+            limit {
+                counter = "LINE"
+                value = "COVEREDRATIO"
+                minimum = "0.80".toBigDecimal()
+            }
+        }
+    }
 }
 
 
