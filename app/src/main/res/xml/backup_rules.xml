@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <exclude domain="database" path="oyl_perfiles_remotos.db" />
+    <exclude domain="database" path="oyl_perfiles_remotos.db-wal" />
+    <exclude domain="database" path="oyl_perfiles_remotos.db-shm" />
+    <exclude domain="database" path="oyl_perfiles_remotos.db-journal" />
     <exclude domain="sharedpref" path="complementos_remotos_oyl.xml" />
     <exclude domain="sharedpref" path="sesion_remota_oyl.xml" />
 </full-backup-content>

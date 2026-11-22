@@ -5,6 +5,7 @@ import androidx.room.Room
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import com.example.oyl_fs.data.local.OylDatabase
+import com.example.oyl_fs.data.local.PerfilRemotoDatabase
 import com.example.oyl_fs.model.*
 import com.example.oyl_fs.network.*
 import kotlinx.coroutines.flow.first
@@ -29,6 +30,7 @@ import java.util.UUID
 class IntegracionRemotaRoomTest {
     private val contexto = ApplicationProvider.getApplicationContext<Context>()
     private lateinit var base: OylDatabase
+    private lateinit var basePerfiles: PerfilRemotoDatabase
     private lateinit var preferenciasNombre: String
     private lateinit var extras: DatosLocalesRemotosRepository
     private lateinit var productosApi: Catalogo
@@ -68,8 +70,9 @@ class IntegracionRemotaRoomTest {
     }
     @Before fun preparar() {
         base = Room.inMemoryDatabaseBuilder(contexto, OylDatabase::class.java).build()
+        basePerfiles = Room.inMemoryDatabaseBuilder(contexto, PerfilRemotoDatabase::class.java).build()
         preferenciasNombre = "prueba_complementos_" + UUID.randomUUID()
-        extras = DatosLocalesRemotosRepository(contexto.getSharedPreferences(preferenciasNombre, Context.MODE_PRIVATE))
+        extras = DatosLocalesRemotosRepository(contexto.getSharedPreferences(preferenciasNombre, Context.MODE_PRIVATE), basePerfiles)
         productosApi = Catalogo()
         productos = ProductoRemoteRepository(contexto, productosApi, base)
         pedidosApi = Pedidos()
@@ -78,6 +81,7 @@ class IntegracionRemotaRoomTest {
     }
     @After fun limpiar() {
         base.close()
+        basePerfiles.close()
         contexto.deleteSharedPreferences(preferenciasNombre)
     }
     private suspend fun seleccionar(): List<ItemCarrito> {
@@ -100,7 +104,7 @@ class IntegracionRemotaRoomTest {
         productosApi.lista = productosApi.lista.map { it.copy(stock = 8) }
         productos.listar()
         assertEquals(8, base.productoDao().obtenerPorId(901)?.stock)
-        val nuevaInstancia = DatosLocalesRemotosRepository(contexto.getSharedPreferences(preferenciasNombre, Context.MODE_PRIVATE))
+        val nuevaInstancia = DatosLocalesRemotosRepository(contexto.getSharedPreferences(preferenciasNombre, Context.MODE_PRIVATE), basePerfiles)
         assertEquals(entrega, nuevaInstancia.completarPedido(resultado.pedido.copy(entrega = null)).entrega)
         assertNull(nuevaInstancia.completarPedido(resultado.pedido.copy(usuarioId = "8", entrega = null)).entrega)
     }

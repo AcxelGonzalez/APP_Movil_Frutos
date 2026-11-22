@@ -211,7 +211,7 @@ class RegistroViewModel(
                         )
                     ).getOrThrow()
                     try {
-                        complementos.guardarPerfil(usuario.id.toString(), formulario.rut.trim())
+                        complementos.guardarPerfil(usuario, formulario.rut.trim())
                     } catch (e: CancellationException) { throw e
                     } catch (e: Exception) {
                         _estado.value = RegistroUiState(errores = ErroresRegistro(general = "La cuenta ya fue creada. Inicia sesión y vuelve a ingresar tu RUT en el perfil."))

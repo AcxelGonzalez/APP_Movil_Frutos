@@ -23,15 +23,20 @@ import kotlinx.coroutines.flow.asStateFlow
 class PerfilViewModel @JvmOverloads constructor(
     application: Application,
     private val usuarios: UsuarioRoomRepository = UsuarioRoomRepository(application),
-    private val preferencias: SharedPreferences = application.getSharedPreferences("perfiles_oyl", Context.MODE_PRIVATE)
+    private val preferencias: SharedPreferences = application.getSharedPreferences("perfiles_oyl", Context.MODE_PRIVATE),
+    private val complementos: DatosLocalesRemotosRepository = DatosLocalesRemotosRepository(application)
 ) : AndroidViewModel(application) {
     // Las cuentas demo conservan sus preferencias; los clientes usan Room.
-    private val complementos = DatosLocalesRemotosRepository(application)
     private var remoto = false
+    private var generacionPerfil = 0L
 
-    fun activarRemoto(usuario: UsuarioDto) {
+    suspend fun activarRemoto(usuario: UsuarioDto) {
         remoto = true
-        _perfiles.value = listOf(complementos.perfil(usuario))
+        val generacion = ++generacionPerfil
+        _perfiles.value = emptyList()
+        val perfil = complementos.perfil(usuario)
+        if (generacion != generacionPerfil) return
+        _perfiles.value = listOf(perfil)
         limpiarError()
     }
 
@@ -61,6 +66,7 @@ class PerfilViewModel @JvmOverloads constructor(
     }
 
     suspend fun guardarPerfil(perfil: PerfilUsuario): Boolean {
+        val generacion = generacionPerfil
         val actual = _perfiles.value.find { it.id == perfil.id }
         if (actual == null || actual.esAdmin != perfil.esAdmin) {
             _errores.value = ErroresPerfil(general = "El perfil no es válido")
@@ -81,8 +87,13 @@ class PerfilViewModel @JvmOverloads constructor(
                 val actualizado = SesionRemotaRepository.actualizarPerfil(
                     ActualizarPerfilRequest(guardado.nombre, guardado.correo, guardado.telefono, guardado.direccion)
                 ).getOrThrow()
-                complementos.guardarPerfil(perfil.id, guardado.rut, guardado.apellido)
-                activarRemoto(actualizado)
+                check(actualizado.id.toString() == perfil.id && (actualizado.rol == "ADMIN") == perfil.esAdmin) {
+                    "La respuesta no corresponde al perfil activo"
+                }
+                val guardadoLocal = complementos.guardarPerfil(actualizado, guardado.rut, guardado.apellido)
+                if (generacion != generacionPerfil) return false
+                _perfiles.value = listOf(guardadoLocal)
+                limpiarError()
                 return true
             }
             if (perfil.id in setOf("admin-demo", "cliente-demo")) {
@@ -109,6 +120,7 @@ class PerfilViewModel @JvmOverloads constructor(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            if (generacion != generacionPerfil) return false
             _errores.value = ErroresPerfil(general = if (remoto) e.mensajeApi() else "No se pudo guardar el perfil")
             _error.value = _errores.value.general
             false
@@ -159,6 +171,7 @@ class PerfilViewModel @JvmOverloads constructor(
      * No borra sus datos guardados.
      */
     fun limpiarSesionRegistrada() {
+        generacionPerfil++
 
         if (remoto) {
             _perfiles.value = emptyList()
