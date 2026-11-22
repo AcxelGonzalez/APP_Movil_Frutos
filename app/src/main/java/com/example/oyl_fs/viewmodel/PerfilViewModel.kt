@@ -67,7 +67,7 @@ class PerfilViewModel @JvmOverloads constructor(
             _error.value = _errores.value.primerError()
             return false
         }
-        val validacion = ValidacionPerfil.validar(perfil)
+        val validacion = ValidacionPerfil.validar(perfil, requerirTelefono = remoto)
         _errores.value = validacion
         _error.value = validacion.primerError()
         if (_error.value != null) return false

@@ -104,9 +104,21 @@ class ProductoViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _errorCatalogo.value = e.mensajeApi()
+            try {
+                _productos.value = remoto.cargarCache()
+                _errorCatalogo.value = if (_productos.value.isNotEmpty()) {
+                    "Mostrando catálogo guardado. Los precios y el stock pueden haber cambiado. ${e.mensajeApi()}"
+                } else {
+                    "No hay catálogo guardado para consultar sin conexión. ${e.mensajeApi()}"
+                }
+            } catch (cancelacion: CancellationException) {
+                throw cancelacion
+            } catch (_: Exception) {
+                _errorCatalogo.value = "No se pudo recuperar el catálogo guardado. ${e.mensajeApi()}"
+            }
+        } finally {
+            _cargandoProductos.value = false
         }
-        _cargandoProductos.value = false
     }
 
     // Busca un producto
@@ -130,6 +142,8 @@ class ProductoViewModel(
             precio = producto.precio.toString(),
             stock = producto.stock.toString(),
             stockMinimo = producto.stockMinimo.toString(),
+            presentacion = producto.presentacion,
+            descripcion = producto.descripcion,
             imagenPresente = producto.imagen != 0 ||
                     !producto.imagenUri.isNullOrBlank()
         )

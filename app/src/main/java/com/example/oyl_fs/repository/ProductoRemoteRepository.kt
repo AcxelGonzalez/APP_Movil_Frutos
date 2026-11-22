@@ -16,6 +16,10 @@ class ProductoRemoteRepository(context: Context, private val api: com.example.oy
 
     private val contexto = context.applicationContext
 
+    // Solo lectura: nunca reemplaza la copia local si falla la petición remota.
+    suspend fun cargarCache(): List<ProductoInfo> =
+        ProductoRoomRepository(contexto, database.productoDao()).cargarProductos()
+
     suspend fun listar(): List<ProductoInfo> = cargaMutex.withLock {
         val lista = api.listar().map { it.aProductoInfo() }
         database.productoDao().reemplazarCache(lista.map { producto ->

@@ -245,7 +245,7 @@ fun EditarProductoScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
+                .clickable(enabled = !guardando) {
                     seleccionarImagen.launch(
                         arrayOf("image/jpeg", "image/png")
                     )
@@ -281,6 +281,18 @@ fun EditarProductoScreen(
                 }
             }
         }
+
+        CapturarFotoProducto(
+            enabled = !guardando,
+            modifier = Modifier.fillMaxWidth(),
+            onFoto = { uri ->
+                imagenUri = uri
+                errorFormulario = null
+                erroresFormulario = erroresFormulario.copy(imagen = null)
+                onEdicionFormulario()
+            },
+            onError = { errorFormulario = it }
+        )
 
         erroresFormulario.imagen?.let { mensaje ->
             Text(
@@ -384,9 +396,11 @@ fun EditarProductoScreen(
             titulo = "Descripción",
             valor = descripcion,
             icono = Icons.Default.Description,
+            error = erroresFormulario.descripcion,
             multilinea = true
         ) {
             descripcion = it
+            erroresFormulario = erroresFormulario.copy(descripcion = null)
             onEdicionFormulario()
         }
 
@@ -433,11 +447,13 @@ fun EditarProductoScreen(
         }
 
         CampoEditar(
-            titulo = "Peso / Presentación",
+            titulo = "Peso / Presentación *",
             valor = presentacion,
-            icono = Icons.Default.Straighten
+            icono = Icons.Default.Straighten,
+            error = erroresFormulario.presentacion
         ) {
             presentacion = it
+            erroresFormulario = erroresFormulario.copy(presentacion = null)
             onEdicionFormulario()
         }
 
@@ -498,6 +514,8 @@ fun EditarProductoScreen(
                                 precio = precio,
                                 stock = stock,
                                 stockMinimo = stockMinimo,
+                                presentacion = presentacion,
+                                descripcion = descripcion,
                                 imagenPresente =
                                     !imagenUri.isNullOrBlank() ||
                                             producto.imagen != 0

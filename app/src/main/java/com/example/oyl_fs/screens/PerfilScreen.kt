@@ -168,7 +168,7 @@ private fun EditarPerfilScreen(
         CampoPerfil("Apellido", apellido) { apellido = it }
         CampoPerfil("RUT de prueba", rut, errores.rut) { rut = it }
         CampoPerfil("Correo *", correo, errores.correo) { correo = it }
-        CampoPerfil("Teléfono", telefono, errores.telefono) { telefono = it }
+        CampoPerfil(if (perfil.id.toLongOrNull() != null) "Teléfono *" else "Teléfono", telefono, errores.telefono) { telefono = it }
         if (!perfil.esAdmin) CampoPerfil("Dirección de prueba", direccion) { direccion = it }
         AnimatedVisibility(visible = errores.general != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {

@@ -75,6 +75,8 @@ fun DetalleProductoClienteScreen(
         ImagenProducto(producto, Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(18.dp)))
         Text(producto.nombre, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = oscuro)
         Text(producto.presentacion, color = cafe)
+        Text("Categoría: ${producto.categoria}", color = cafe)
+        Text("Stock publicado: ${producto.stock} unidades", color = cafe)
         Text("$" + "%,d".format(producto.precio).replace(',', '.'),
             color = oscuro, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Divider(color = cafe.copy(alpha = 0.15f))

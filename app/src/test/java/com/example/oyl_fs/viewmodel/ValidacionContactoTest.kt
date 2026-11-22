@@ -7,6 +7,12 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class ValidacionContactoTest {
+    @Test fun perfilRemotoRequiereTelefonoSinCambiarLaCompatibilidadLocal() {
+        val perfil = PerfilUsuario("7", false, "Cliente", correo = "cliente@example.test")
+        assertNull(ValidacionPerfil.validar(perfil).telefono)
+        assertEquals("Escribe el teléfono", ValidacionPerfil.validar(perfil, requerirTelefono = true).telefono)
+        assertNull(ValidacionPerfil.validar(perfil.copy(telefono = "912345678"), requerirTelefono = true).telefono)
+    }
     @Test fun telefonoAdmiteFormatoChilenoPeroRechazaLetrasYExcesoDeDigitos() {
         assertTrue(ValidacionContacto.telefonoValido("+56 9 1234 5678"))
         assertTrue(ValidacionContacto.telefonoValido(""))

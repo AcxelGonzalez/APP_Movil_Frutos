@@ -242,7 +242,7 @@ fun AgregarProductoScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
+                .clickable(enabled = !guardando) {
                     seleccionarImagen.launch(
                         arrayOf("image/jpeg", "image/png")
                     )
@@ -278,6 +278,18 @@ fun AgregarProductoScreen(
                 }
             }
         }
+
+        CapturarFotoProducto(
+            enabled = !guardando,
+            modifier = Modifier.fillMaxWidth(),
+            onFoto = { uri ->
+                imagenUri = uri
+                errorFormulario = null
+                erroresFormulario = erroresFormulario.copy(imagen = null)
+                onEdicionFormulario()
+            },
+            onError = { errorFormulario = it }
+        )
 
         erroresFormulario.imagen?.let { mensaje ->
             Text(
@@ -379,9 +391,11 @@ fun AgregarProductoScreen(
             titulo = "Descripción",
             valor = descripcion,
             icono = Icons.Default.Description,
+            error = erroresFormulario.descripcion,
             multilinea = true
         ) {
             descripcion = it
+            erroresFormulario = erroresFormulario.copy(descripcion = null)
             onEdicionFormulario()
         }
 
@@ -428,11 +442,13 @@ fun AgregarProductoScreen(
         }
 
         CampoAgregar(
-            titulo = "Peso / Presentación",
+            titulo = "Peso / Presentación *",
             valor = presentacion,
-            icono = Icons.Default.Straighten
+            icono = Icons.Default.Straighten,
+            error = erroresFormulario.presentacion
         ) {
             presentacion = it
+            erroresFormulario = erroresFormulario.copy(presentacion = null)
             onEdicionFormulario()
         }
 
@@ -495,6 +511,8 @@ fun AgregarProductoScreen(
                                 precio = precio,
                                 stock = stock,
                                 stockMinimo = stockMinimo,
+                                presentacion = presentacion,
+                                descripcion = descripcion,
                                 imagenPresente = imagenUri != null ||
                                         productoFormulario.imagen != 0
                             ),

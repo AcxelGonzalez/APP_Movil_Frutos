@@ -219,6 +219,7 @@ fun CatalogoClienteScreen(
                             .clip(RoundedCornerShape(14.dp)).clickable { onDetalle(producto) })
                         TextoTarjetaProducto(producto.nombre, color = OscuroCliente, fontWeight = FontWeight.Bold)
                         TextoTarjetaProducto(producto.presentacion, color = CafeCliente, fontSize = 12.sp)
+                        TextoTarjetaProducto("Stock: ${producto.stock}", color = CafeCliente, fontSize = 12.sp)
                         TextoTarjetaProducto("$" + "%,d".format(producto.precio).replace(',', '.'),
                             color = OscuroCliente, fontWeight = FontWeight.Bold, lineas = 1)
                         TextoTarjetaProducto(when {

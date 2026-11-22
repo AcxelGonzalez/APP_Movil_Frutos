@@ -9,6 +9,12 @@ import com.example.oyl_fs.model.*
 import com.example.oyl_fs.network.*
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
+import androidx.lifecycle.ViewModelStore
+import com.example.oyl_fs.viewmodel.ProductoViewModel
+import java.io.IOException
 import org.junit.After
 import org.junit.Assert.*
 import org.junit.Before
@@ -35,7 +41,11 @@ class IntegracionRemotaRoomTest {
     private class Catalogo : ProductosApi {
         var lista = listOf(ProductoDto(901, "Almendras", "PRUEBA-901", "Frutos secos", "Prueba", "500 g", 1000, 10, 2, true, null))
         var borrado = 204
-        override suspend fun listar() = lista
+        var error: Exception? = null
+        override suspend fun listar(): List<ProductoDto> {
+            error?.let { throw it }
+            return lista
+        }
         override suspend fun obtener(id: Long) = lista.first { it.id == id }
         override suspend fun crear(producto: ProductoDto) = producto.copy(id = 902)
         override suspend fun actualizar(id: Long, producto: ProductoDto) = producto.copy(id = id)
@@ -146,5 +156,48 @@ class IntegracionRemotaRoomTest {
         assertEquals("12.345.678-5", perfil.rut)
         assertEquals("Apellido prueba", perfil.apellido)
         assertEquals("", extras.perfil(usuario.copy(id = 8)).rut)
+    }
+
+    @Test fun aperturaSinConexionRecuperaCacheYReintentoSustituyeDatosYQuitaAviso() = runBlocking {
+        val guardado = productos.listar().single()
+        productosApi.error = IOException("Sin conexión de prueba")
+        val almacen = ViewModelStore()
+        val viewModel = withContext(Dispatchers.Main) {
+            ProductoViewModel(remoteRepository = ProductoRemoteRepository(contexto, productosApi, base)).also {
+                almacen.put("catalogo", it)
+            }
+        }
+        try {
+            withTimeout(5000) { viewModel.cargandoProductos.first { !it } }
+            assertEquals(listOf(guardado), viewModel.productos.value)
+            assertTrue(viewModel.errorCatalogo.value.orEmpty().contains("Mostrando catálogo guardado"))
+            assertEquals(guardado, productos.cargarCache().single())
+
+            productosApi.error = null
+            productosApi.lista = productosApi.lista.map { it.copy(precio = 1200, stock = 8) }
+            withContext(Dispatchers.Main) { viewModel.refrescar() }
+            withTimeout(5000) { viewModel.productos.first { it.singleOrNull()?.precio == 1200 } }
+            withTimeout(5000) { viewModel.cargandoProductos.first { !it } }
+            assertEquals(8, viewModel.productos.value.single().stock)
+            assertNull(viewModel.errorCatalogo.value)
+            assertEquals(1200, productos.cargarCache().single().precio)
+        } finally {
+            withContext(Dispatchers.Main) { almacen.clear() }
+        }
+    }
+
+    @Test fun aperturaSinConexionNiCacheExplicaLaAusenciaSinInventarProductos() = runBlocking {
+        productosApi.error = IOException("Sin conexión de prueba")
+        val almacen = ViewModelStore()
+        val viewModel = withContext(Dispatchers.Main) {
+            ProductoViewModel(remoteRepository = productos).also { almacen.put("catalogo", it) }
+        }
+        try {
+            withTimeout(5000) { viewModel.cargandoProductos.first { !it } }
+            assertTrue(viewModel.productos.value.isEmpty())
+            assertTrue(viewModel.errorCatalogo.value.orEmpty().contains("No hay catálogo guardado"))
+        } finally {
+            withContext(Dispatchers.Main) { almacen.clear() }
+        }
     }
 }

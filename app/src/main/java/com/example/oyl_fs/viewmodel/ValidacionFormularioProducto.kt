@@ -7,7 +7,9 @@ data class DatosFormularioProducto(
     val precio: String,
     val stock: String,
     val stockMinimo: String,
-    val imagenPresente: Boolean
+    val imagenPresente: Boolean,
+    val presentacion: String,
+    val descripcion: String = ""
 )
 
 data class ErroresFormularioProducto(
@@ -17,11 +19,13 @@ data class ErroresFormularioProducto(
     val precio: String? = null,
     val stock: String? = null,
     val stockMinimo: String? = null,
-    val imagen: String? = null
+    val imagen: String? = null,
+    val presentacion: String? = null,
+    val descripcion: String? = null
 ) {
     fun primerError(): String? = listOfNotNull(
         nombre, codigo, categoria,
-        precio, stock, stockMinimo, imagen
+        descripcion, precio, stock, stockMinimo, presentacion, imagen
     ).firstOrNull()
 
     val hayErrores: Boolean
@@ -46,12 +50,24 @@ object ValidacionFormularioProducto {
         val stockMinimo = datos.stockMinimo.toIntOrNull()
 
         return ErroresFormularioProducto(
-            nombre = if (datos.nombre.isBlank()) {
-                "Escribe el nombre del producto."
+            nombre = when {
+                datos.nombre.isBlank() -> "Escribe el nombre del producto."
+                datos.nombre.trim().length > 100 -> "El nombre admite hasta 100 caracteres."
+                else -> null
+            },
+
+            codigo = when {
+                datos.codigo.isBlank() -> "Escribe el código del producto."
+                datos.codigo.trim().length > 30 -> "El código admite hasta 30 caracteres."
+                else -> null
+            },
+
+            presentacion = if (datos.presentacion.isBlank()) {
+                "Escribe el peso o la presentación."
             } else null,
 
-            codigo = if (datos.codigo.isBlank()) {
-                "Escribe el código del producto."
+            descripcion = if (datos.descripcion.length > 500) {
+                "La descripción admite hasta 500 caracteres."
             } else null,
 
             categoria = if (
