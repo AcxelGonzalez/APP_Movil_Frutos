@@ -10,7 +10,7 @@ object RetrofitClient {
 
     // 10.0.2.2 = "la PC donde corre el emulador" (localhost de la PC)
     // Con celular real: la IP de la PC en el WiFi, ej. "http://192.168.1.15"
-    private const val HOST =  "http://192.168.100.68"
+     private const val HOST = "http://10.0.2.2"
 
     // Muestra cada petición y respuesta en Logcat
     private val logging = HttpLoggingInterceptor().apply {
