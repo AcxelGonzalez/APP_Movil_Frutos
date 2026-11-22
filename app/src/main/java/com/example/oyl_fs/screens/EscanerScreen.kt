@@ -1,5 +1,9 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -41,7 +45,7 @@ fun EscanerScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().entradaOYL()
             .background(FondoOYL)
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -49,9 +53,7 @@ fun EscanerScreen(
 
         // ---------- Encabezado ----------
         Row(verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, "Volver", tint = SecundarioOYL)
-            }
+            BotonVolverOYL(onVolver)
             Text(
                 "Escanear producto",
                 fontSize = 22.sp,

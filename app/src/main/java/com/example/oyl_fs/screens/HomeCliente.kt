@@ -1,8 +1,12 @@
 
 package com.example.oyl_fs.screens
 
-import androidx.compose.animation.core.Animatable
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+
+import androidx.compose.animation.core.Animatable
 import kotlinx.coroutines.launch
 
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -72,7 +76,9 @@ fun HomeCliente(
     onAbrirHistorial: () -> Unit,
     onAbrirCarrito: () -> Unit,
     pestanaSolicitada: Int? = null,
-    onPestanaAtendida: () -> Unit = {}
+    onPestanaAtendida: () -> Unit = {},
+    pestanaSeleccionada: Int? = null,
+    onSeleccionarPestana: ((Int) -> Unit)? = null
 ) {
     // Datos de prueba (luego vendrán del ViewModel / SQLite)
     val promos = listOf(
@@ -144,12 +150,18 @@ fun HomeCliente(
     }
 
 
-    var tab by rememberSaveable { mutableStateOf(0) }
+    var tabLocal by rememberSaveable { mutableStateOf(0) }
+    // MainActivity conserva la selección incluso al abrir módulos externos.
+    val tab = pestanaSeleccionada ?: tabLocal
+    fun seleccionarPestana(indice: Int) {
+        if (onSeleccionarPestana != null) onSeleccionarPestana(indice)
+        else tabLocal = indice
+    }
 
     // El historial puede solicitar una pestaña del mismo menú.
     LaunchedEffect(pestanaSolicitada) {
         if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
-            tab = pestanaSolicitada
+            seleccionarPestana(pestanaSolicitada)
             onPestanaAtendida()
         }
     }
@@ -161,9 +173,7 @@ fun HomeCliente(
     }
 
 
-    var visible by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) { visible = true }
 
     BackHandler(enabled = tab != 0) {
         if (tab == 5) {
@@ -171,7 +181,7 @@ fun HomeCliente(
             productoDetalleId = null
         }
 
-        tab = 0
+        seleccionarPestana(0)
     }
 
     Scaffold(
@@ -188,7 +198,7 @@ fun HomeCliente(
                     onAbrirHistorial()
                 } else {
                     // Las demás pestañas conservan su comportamiento.
-                    tab = indice
+                    seleccionarPestana(indice)
                 }
             }
         }
@@ -213,7 +223,7 @@ fun HomeCliente(
                 ) {
                     MapaScreen(
                         onVolver = {
-                            tab = 0
+                            seleccionarPestana(0)
                         }
                     )
                 }
@@ -223,7 +233,7 @@ fun HomeCliente(
                 ProductosCliente(
                     productoViewModel = productoViewModel,
                     carritoViewModel = carritoViewModel,
-                    onVolver = { tab = 0 },
+                    onVolver = { seleccionarPestana(0) },
                     onAbrirCarrito = onAbrirCarrito
                 )
             }
@@ -250,7 +260,7 @@ fun HomeCliente(
 
                         onVolver = {
                             productoDetalleId = null
-                            tab = 0
+                            seleccionarPestana(0)
                         },
 
                         onAgregar = { cantidad ->
@@ -266,7 +276,7 @@ fun HomeCliente(
                 } else {
                     LaunchedEffect(productoDetalleId) {
                         productoDetalleId = null
-                        tab = 0
+                        seleccionarPestana(0)
                     }
                 }
             }
@@ -275,13 +285,14 @@ fun HomeCliente(
                 PerfilUsuarioScreen(
                     usuarioId = clienteId,
                     viewModel = perfilViewModel,
-                    onVolver = { tab = 0 },
+                    onVolver = { seleccionarPestana(0) },
                     onLogout = onLogout
                 )
             }
             else -> AnimatedVisibility(
-                visible = visible,
-                enter = fadeIn(tween(600)) + slideInVertically { it / 6 }
+                visible = true,
+                enter = androidx.compose.animation.EnterTransition.None,
+                    exit = androidx.compose.animation.ExitTransition.None
             ) {
 
                 Column(
@@ -312,11 +323,21 @@ fun HomeCliente(
                         }
                     }
 
+                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
+                        Text(
+                            "Hola, ${nombre.trim().substringBefore(" ")}",
+                            color = SecundarioOYL,
+                            fontSize = 27.sp,
+                            fontWeight = FontWeight.Bold,
+                            lineHeight = 33.sp
+                        )
+                    }
+
                     // ---------- abrir catalogo ----------
                     Card(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clickable { tab = 1 },
+                            .clickable { seleccionarPestana(1) },
 
                         shape = RoundedCornerShape(50),
 
@@ -357,10 +378,10 @@ fun HomeCliente(
 
                             Card(
                                 modifier = Modifier
-                                    .width(250.dp)
-                                    .height(105.dp),
+                                    .width(280.dp)
+                                    .heightIn(min = 126.dp),
 
-                                shape = RoundedCornerShape(20.dp),
+                                shape = RoundedCornerShape(24.dp),
 
                                 colors = CardDefaults.cardColors(
                                     containerColor = PrincipalOYL
@@ -369,8 +390,13 @@ fun HomeCliente(
 
                                 Column(
                                     Modifier
-                                        .fillMaxSize()
-                                        .padding(18.dp),
+                                        .fillMaxWidth()
+                                        .background(Brush.linearGradient(listOf(SecundarioOYL, PrincipalOYL)))
+                                        .drawBehind {
+                                            drawCircle(Color.White.copy(alpha = 0.06f), size.width * 0.34f,
+                                                androidx.compose.ui.geometry.Offset(size.width * 0.95f, 0f))
+                                        }
+                                        .padding(22.dp),
 
                                     verticalArrangement = Arrangement.Center
                                 ) {
@@ -421,7 +447,7 @@ fun HomeCliente(
                         )
 
                         TextButton(
-                            onClick = { tab = 1 }
+                            onClick = { seleccionarPestana(1) }
                         ) {
                             Text(
                                 "Ver todo →",
@@ -437,9 +463,9 @@ fun HomeCliente(
                         items(destacados, key = { it.id }) { p ->
 
                             Card(
-                                modifier = Modifier.width(150.dp),
+                                modifier = Modifier.width(178.dp),
 
-                                shape = RoundedCornerShape(18.dp),
+                                shape = RoundedCornerShape(24.dp),
 
                                 colors = CardDefaults.cardColors(
                                     containerColor = Color.White
@@ -452,7 +478,7 @@ fun HomeCliente(
 
                                     ImagenProducto(
                                         producto = p,
-                                        modifier = Modifier.fillMaxWidth().height(85.dp)
+                                        modifier = Modifier.fillMaxWidth().height(96.dp)
                                             .clip(RoundedCornerShape(14.dp))
                                     )
 
@@ -460,12 +486,14 @@ fun HomeCliente(
 
                                     TextoTarjetaProducto(
                                         p.nombre,
+                                        fontSize = 14.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = SecundarioOYL
                                     )
 
                                     TextoTarjetaProducto(
                                         p.presentacion,
+                                        lineas = 1,
                                         fontSize = 12.sp,
                                         color = PrincipalOYL
                                     )
@@ -493,7 +521,7 @@ fun HomeCliente(
                                                 .background(SecundarioOYL)
                                                 .clickable {
                                                     productoDetalleId = p.id
-                                                    tab = 5
+                                                    seleccionarPestana(5)
                                                 },
                                             contentAlignment = Alignment.Center
                                         ) {
@@ -513,7 +541,7 @@ fun HomeCliente(
 
                     // ---------- ultimos pedidos ----------
                     Card(
-                        shape = RoundedCornerShape(20.dp),
+                        shape = RoundedCornerShape(24.dp),
 
                         colors = CardDefaults.cardColors(
                             containerColor = Color.White
@@ -675,12 +703,14 @@ fun BarraCliente(
 ) {
 
     NavigationBar(
-        containerColor = Color.White
+        containerColor = Color.White,
+        tonalElevation = 0.dp,
+        modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
     ) {
 
         val items = listOf(
             "Inicio" to Icons.Default.Home,
-            "Catálogo" to Icons.Default.List,
+            "Catálogo" to Icons.Default.GridView,
             "Tiendas" to Icons.Default.Storefront,
             "Pedidos" to Icons.Default.Receipt,
             "Perfil" to Icons.Default.Person
@@ -695,7 +725,8 @@ fun BarraCliente(
                 label = {
                     Text(
                         texto,
-                        fontSize = 10.sp
+                        fontSize = 11.sp,
+                        fontWeight = if (seleccion == i) FontWeight.SemiBold else FontWeight.Normal
                     )
                 },
 
@@ -707,9 +738,9 @@ fun BarraCliente(
                 },
 
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = SecundarioOYL,
+                    selectedIconColor = Color.White,
                     selectedTextColor = SecundarioOYL,
-                    indicatorColor = FondoOYL,
+                    indicatorColor = SecundarioOYL,
                     unselectedIconColor = PrincipalOYL,
                     unselectedTextColor = PrincipalOYL
                 )
@@ -721,18 +752,18 @@ fun BarraCliente(
 @Composable
 private fun LogoInicio(modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth().height(76.dp),
-        shape = RoundedCornerShape(38.dp),
-        color = Color.White
+        modifier = modifier.fillMaxWidth().height(80.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFEEDFCB))
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
             Image(
                 painter = painterResource(R.drawable.logo_oyl_vector),
                 contentDescription = "OYL Frutos Secos",
-                // Ajuste visual: compensa el peso del texto bajo el símbolo.
-                modifier = Modifier.fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .offset(y = (-2).dp)
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                alignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize().offset(y = (-2).dp)
             )
         }
     }
@@ -746,7 +777,7 @@ private fun TextoTarjetaProducto(
     fontSize: TextUnit = 16.sp,
     lineas: Int = 2
 ) {
-    val altoLinea = (fontSize.value * 1.5f).sp
+    val altoLinea = (fontSize.value * 1.3f).sp
     val alto = with(LocalDensity.current) { (altoLinea.value * lineas).sp.toDp() }
     Text(
         text = text,

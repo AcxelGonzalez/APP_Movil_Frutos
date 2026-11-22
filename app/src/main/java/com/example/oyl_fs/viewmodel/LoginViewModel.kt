@@ -1,5 +1,6 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.network.mensajeApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 
@@ -186,4 +187,37 @@ class LoginViewModel(
             }
         }
     }
+    // Conserva el acceso al backend y comparte su estado con la pantalla.
+    fun iniciarSesionRemota(
+        usuario: String,
+        contrasena: String,
+        onExito: (SesionIdentificada) -> Unit
+    ) {
+        if (_estado.value.procesando) return
+        if (usuario.isBlank() || contrasena.isEmpty()) {
+            _estado.value = LoginUiState(error = "Completa usuario y contraseña")
+            return
+        }
+        _estado.value = LoginUiState(procesando = true)
+        viewModelScope.launch {
+            try {
+                com.example.oyl_fs.repository.SesionRepository
+                    .iniciarSesion(usuario.trim(), contrasena)
+                    .onSuccess { cuenta ->
+                        onExito(SesionIdentificada(
+                            usuarioId = cuenta.id.toString(),
+                            nombre = cuenta.nombre,
+                            esAdmin = cuenta.rol == "ADMIN",
+                            esDemo = false
+                        ))
+                    }
+                    .onFailure { error ->
+                        _estado.value = LoginUiState(error = error.mensajeApi(esLogin = true))
+                    }
+            } finally {
+                _estado.value = _estado.value.copy(procesando = false)
+            }
+        }
+    }
+
 }

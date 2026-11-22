@@ -1,7 +1,18 @@
 
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -68,6 +79,7 @@ fun HistorialScreen(
     // Observa los cambios del ViewModel.
     val pedidos by viewModel.pedidosVisibles.collectAsState()
     val filtro by viewModel.filtroEstado.collectAsState()
+    val errorCarga by viewModel.error.collectAsState()
 
 
     val scope = rememberCoroutineScope()
@@ -107,19 +119,15 @@ fun HistorialScreen(
             TopAppBar(
                 title = {
                     Text(
-                        text = "Historial de pedidos",
+                        text = if (esAdmin) "Pedidos" else "Mis pedidos",
+                        fontSize = 26.sp,
                         color = SecundarioHistorial,
                         fontWeight = FontWeight.Bold
                     )
                 },
 
                 navigationIcon = {
-                    TextButton(onClick = onVolver) {
-                        Text(
-                            text = "Volver",
-                            color = PrincipalHistorial
-                        )
-                    }
+                    BotonVolverOYL(onVolver)
                 },
 
                 colors = TopAppBarDefaults.smallTopAppBarColors(
@@ -135,16 +143,23 @@ fun HistorialScreen(
                 .padding(paddingValues)
         ) {
 
+            if (errorCarga != null) {
+                Column(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
+                    MensajeErrorOYL(errorCarga.orEmpty())
+                    TextButton(onClick = { viewModel.refrescar() }) { Text("Reintentar") }
+                }
+            }
+
             // Encabezado según el perfil del usuario.
             Text(
                 text = if (esAdmin) {
-                    "Gestión de pedidos"
+                    "Consulta y gestiona los pedidos de tu tienda."
                 } else {
-                    "Mis pedidos"
+                    "Sigue el estado de tus compras."
                 },
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = SecundarioHistorial,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Normal,
+                color = PrincipalHistorial,
                 modifier = Modifier.padding(
                     horizontal = 16.dp,
                     vertical = 12.dp
@@ -181,8 +196,9 @@ fun HistorialScreen(
                         },
 
                         colors = FilterChipDefaults.filterChipColors(
-                            selectedContainerColor =
-                                PrincipalHistorial,
+                            containerColor = Color(0xFFFFFBF5),
+                            labelColor = SecundarioHistorial,
+                            selectedContainerColor = SecundarioHistorial,
                             selectedLabelColor = Color.White
                         )
                     )
@@ -201,7 +217,7 @@ fun HistorialScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = "No hay pedidos para mostrar",
+                        text = if (errorCarga == null) "No hay pedidos para mostrar" else "No pudimos cargar los pedidos",
                         color = PrincipalHistorial
                     )
                 }
@@ -257,67 +273,10 @@ fun HistorialScreen(
     // Ventana con el detalle del pedido seleccionado.
     if (pedidoSeleccionado != null) {
 
-        AlertDialog(
-            onDismissRequest = {
-                pedidoSeleccionadoId = null
-            },
-
-            title = {
-                Text("Pedido ${pedidoSeleccionado.id}")
-            },
-
-            text = {
-                Column(
-                    verticalArrangement =
-                        Arrangement.spacedBy(8.dp)
-                ) {
-                    Text(
-                        "Fecha: ${formatearFecha(pedidoSeleccionado.fecha)}"
-                    )
-
-                    Text(
-                        "Estado: ${pedidoSeleccionado.estado.descripcion}"
-                    )
-
-                    Divider()
-
-                    Text(
-                        text = "Productos:",
-                        fontWeight = FontWeight.Bold
-                    )
-
-                    // Muestra los productos del pedido.
-                    pedidoSeleccionado.productos.forEach { detalle ->
-                        Text(
-                            text = "${detalle.nombreProducto} " +
-                                    "x${detalle.cantidad} - " +
-                                    formatearPrecio(detalle.subtotal)
-                        )
-                    }
-
-                    Divider()
-
-                    Text(
-                        text = "Total: " +
-                                formatearPrecio(pedidoSeleccionado.total),
-                        fontWeight = FontWeight.Bold,
-                        color = SecundarioHistorial
-                    )
-                }
-            },
-
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        pedidoSeleccionadoId = null
-                    }
-                ) {
-                    Text("Cerrar")
-                }
-            }
-        )
+        DetallePedidoDialogo(pedidoSeleccionado) { pedidoSeleccionadoId = null }
     }
 }
+
 
 /**
  * Tarjeta reutilizable para mostrar un pedido.
@@ -373,130 +332,94 @@ private fun TarjetaPedido(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(16.dp),
-
-        colors = CardDefaults.cardColors(
-            containerColor = Color.White
-        ),
-
-        elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
-        )
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White),
+        border = BorderStroke(1.dp, Color(0xFFF0E3D3)),
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
-
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(10.dp)
-        ) {
-
-            // Identificador, fecha y total del pedido.
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement =
-                    Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-
-                Column(
-                    modifier = Modifier.weight(1f)
-                ) {
-                    Text(
-                        text = pedido.id,
-                        fontWeight = FontWeight.Bold,
-                        color = SecundarioHistorial
-                    )
-
-                    Text(
-                        text = formatearFecha(pedido.fecha),
-                        fontSize = 12.sp,
-                        color = PrincipalHistorial
-                    )
+        Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(color = FondoHistorial, shape = RoundedCornerShape(14.dp)) {
+                    Box(Modifier.size(46.dp), contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.ReceiptLong, null, tint = SecundarioHistorial)
+                    }
                 }
-
-                Text(
-                    text = formatearPrecio(pedido.total),
-                    fontWeight = FontWeight.Bold,
-                    color = SecundarioHistorial
-                )
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+                    Text("Pedido", color = SecundarioHistorial,
+                        fontWeight = FontWeight.Bold, fontSize = 18.sp)
+                    Text(pedido.id, color = PrincipalHistorial, fontSize = 12.sp,
+                        maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    Text(formatearFecha(pedido.fecha), color = PrincipalHistorial, fontSize = 12.sp)
+                }
             }
 
-            // Componente reutilizable del estado.
-            EstadoPedidoChip(
-                estado = pedido.estado
-            )
+            EstadoPedidoChip(estado = pedido.estado)
 
-            // Acciones disponibles para el usuario.
-            // Se usa Column para evitar que los botones
-            // ocupen más espacio que el ancho de la pantalla.
-            Column(
-                modifier = Modifier.fillMaxWidth(),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+            val unidades = pedido.productos.sumOf { it.cantidad.toLong() }
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text("$unidades ${if (unidades == 1L) "unidad" else "unidades"}",
+                    color = SecundarioHistorial, fontWeight = FontWeight.Medium, fontSize = 14.sp)
+                if (pedido.productos.isNotEmpty()) {
+                    Text(pedido.productos.joinToString(" · ") { it.nombreProducto },
+                        color = PrincipalHistorial, fontSize = 13.sp, maxLines = 2,
+                        overflow = TextOverflow.Ellipsis)
+                }
+            }
+
+            Divider(color = Color(0xFFF0E3D3))
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text("Total del pedido", Modifier.weight(1f), color = PrincipalHistorial, fontSize = 13.sp)
+                Text(formatearPrecio(pedido.total), color = SecundarioHistorial,
+                    fontWeight = FontWeight.Bold, fontSize = 22.sp)
+            }
+
+            Button(
+                onClick = onVerDetalle,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = SecundarioHistorial, contentColor = Color.White)
             ) {
+                Text("Ver detalle", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.width(8.dp))
+                Icon(Icons.Default.ArrowForward, null, Modifier.size(18.dp))
+            }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.End,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
-                    TextButton(onClick = onVerDetalle) {
-                        Text("Ver detalle")
+            // Se mantienen las mismas transiciones y el flujo de preparación QR.
+            if (esAdmin && opcionesCambio.isNotEmpty()) {
+                Box(Modifier.fillMaxWidth()) {
+                    OutlinedButton(
+                        onClick = { menuAbierto = true },
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            containerColor = Color.White, contentColor = SecundarioHistorial)
+                    ) {
+                        Text("Cambiar estado")
+                        Spacer(Modifier.width(6.dp))
+                        Icon(Icons.Default.ExpandMore, null, Modifier.size(20.dp))
                     }
-
-                    // Mostrar el menú solamente cuando el
-                    // administrador tenga acciones disponibles.
-                    if (esAdmin && opcionesCambio.isNotEmpty()) {
-
-                        Box {
-
-                            OutlinedButton(
-                                onClick = {
-                                    menuAbierto = true
-                                }
-                            ) {
-                                Text("Cambiar estado")
-                            }
-
-                            DropdownMenu(
-                                expanded = menuAbierto,
-                                onDismissRequest = {
-                                    menuAbierto = false
-                                }
-                            ) {
-
-                                // Mostrar únicamente las
-                                // transiciones permitidas.
-                                opcionesCambio.forEach { estado ->
-
-                                    DropdownMenuItem(
-                                        text = {
-                                            Text(estado.descripcion)
-                                        },
-
-                                        onClick = {
-                                            menuAbierto = false
-                                            onCambiarEstado(estado)
-                                        }
-                                    )
-                                }
-                            }
+                    DropdownMenu(expanded = menuAbierto, onDismissRequest = { menuAbierto = false }) {
+                        opcionesCambio.forEach { estado ->
+                            DropdownMenuItem(
+                                text = { Text(estado.descripcion) },
+                                onClick = { menuAbierto = false; onCambiarEstado(estado) }
+                            )
                         }
                     }
                 }
-
-                // El administrador puede preparar pedidos confirmados.
-                if (esAdmin && pedido.estado == EstadoPedido.CONFIRMADO) {
-
-                    Button(
-                        onClick = onPrepararPedido,
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = ButtonDefaults.buttonColors(
-                            containerColor = SecundarioHistorial
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("Preparar pedido (QR)")
-                    }
+            }
+            if (esAdmin && pedido.estado == EstadoPedido.CONFIRMADO) {
+                Button(
+                    onClick = onPrepararPedido,
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = SecundarioHistorial),
+                    shape = RoundedCornerShape(14.dp)
+                ) {
+                    Icon(Icons.Default.QrCodeScanner, null, Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Preparar pedido (QR)")
                 }
             }
         }
@@ -526,4 +449,65 @@ private fun formatearFecha(fecha: Long): String {
     )
 
     return formato.format(Date(fecha))
+}
+
+// Detalle compartido por cliente y administrador, con lista desplazable.
+@Composable
+private fun DetallePedidoDialogo(pedido: Pedido, onCerrar: () -> Unit) {
+    val altoMaximo = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp.dp * 0.84f
+    androidx.compose.ui.window.Dialog(onDismissRequest = onCerrar,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)) {
+        Surface(
+            Modifier.widthIn(max = 480.dp).fillMaxWidth().padding(horizontal = 20.dp).heightIn(max = altoMaximo),
+            shape = RoundedCornerShape(28.dp), color = Color.White, tonalElevation = 0.dp
+        ) {
+            Column {
+                Row(Modifier.fillMaxWidth().padding(start = 22.dp, top = 16.dp, end = 10.dp, bottom = 12.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("Detalle del pedido", Modifier.weight(1f), color = SecundarioHistorial,
+                        fontWeight = FontWeight.Bold, fontSize = 22.sp, lineHeight = 28.sp)
+                    IconButton(onClick = onCerrar) { Icon(Icons.Default.Close, "Cerrar detalle", tint = PrincipalHistorial) }
+                }
+                Divider(color = Color(0xFFF0E3D3))
+                Column(Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()).padding(22.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Text("NÚMERO DE PEDIDO", color = PrincipalHistorial, fontSize = 10.sp,
+                            letterSpacing = 1.sp, fontWeight = FontWeight.Bold)
+                        androidx.compose.foundation.text.selection.SelectionContainer {
+                            Text(pedido.id, color = SecundarioHistorial, fontWeight = FontWeight.SemiBold, fontSize = 15.sp)
+                        }
+                        Text(formatearFecha(pedido.fecha), color = PrincipalHistorial, fontSize = 13.sp)
+                    }
+                    EstadoPedidoChip(pedido.estado)
+                    Text("Productos del pedido", color = SecundarioHistorial,
+                        fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                    pedido.productos.forEach { producto ->
+                        Surface(color = Color(0xFFFFFBF5), shape = RoundedCornerShape(16.dp),
+                            border = BorderStroke(1.dp, Color(0xFFF0E3D3))) {
+                            Column(Modifier.fillMaxWidth().padding(14.dp),
+                                verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Text(producto.nombreProducto, color = SecundarioHistorial, fontWeight = FontWeight.SemiBold)
+                                Text("${producto.cantidad} × ${formatearPrecio(producto.precioUnitario)}",
+                                    color = PrincipalHistorial, fontSize = 13.sp)
+                                Text(formatearPrecio(producto.subtotal), color = SecundarioHistorial,
+                                    fontWeight = FontWeight.Bold, modifier = Modifier.align(Alignment.End))
+                            }
+                        }
+                    }
+                }
+                Divider(color = Color(0xFFF0E3D3))
+                Column(Modifier.fillMaxWidth().padding(22.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text("Total", Modifier.weight(1f), color = PrincipalHistorial, fontSize = 15.sp)
+                        Text(formatearPrecio(pedido.total), color = SecundarioHistorial,
+                            fontWeight = FontWeight.Bold, fontSize = 26.sp)
+                    }
+                    Button(onClick = onCerrar, modifier = Modifier.fillMaxWidth().heightIn(min = 50.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = SecundarioHistorial)) { Text("Cerrar detalle") }
+                }
+            }
+        }
+    }
 }

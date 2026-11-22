@@ -288,7 +288,7 @@ class MainActivity : ComponentActivity() {
                 var procesandoPreparacion by remember {
                     mutableStateOf(false)
                 }
-                var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
+                var pestanaHome by rememberSaveable { mutableStateOf(0) }
 
                 // Navegación al carrito.
                 var mostrarCarrito by rememberSaveable {
@@ -369,7 +369,7 @@ class MainActivity : ComponentActivity() {
                     mostrarCarrito = false
                     mostrarRegistro = false
                     pedidoPrepararId = null
-                    pestanaDesdeHistorial = null
+                    pestanaHome = 0
 
                     usuarioSesionId = ""
                     nombreSesion = ""
@@ -535,7 +535,7 @@ class MainActivity : ComponentActivity() {
                             esAdmin = esAdmin,
                             viewModel = historialViewModel,
                             onNavegar = { indice ->
-                                pestanaDesdeHistorial = indice
+                                pestanaHome = indice
                                 mostrarHistorial = false
                             },
 
@@ -571,8 +571,8 @@ class MainActivity : ComponentActivity() {
                     esAdmin -> {
 
                         HomeAdmin(
-                            pestanaSolicitada = pestanaDesdeHistorial,
-                            onPestanaAtendida = { pestanaDesdeHistorial = null },
+                            pestanaSeleccionada = pestanaHome,
+                            onSeleccionarPestana = { pestanaHome = it },
                             onLogout = { cerrarSesionActual() },
 
                             onAbrirHistorial = {
@@ -593,6 +593,8 @@ class MainActivity : ComponentActivity() {
 
                         estadoHomeCliente.SaveableStateProvider(usuarioSesionId) {
                         HomeCliente(
+                            pestanaSeleccionada = pestanaHome,
+                            onSeleccionarPestana = { pestanaHome = it },
                             nombre = usuarioSesion?.nombre ?: "Cliente",
 
                             // Identificador temporal hasta implementar sesiones.

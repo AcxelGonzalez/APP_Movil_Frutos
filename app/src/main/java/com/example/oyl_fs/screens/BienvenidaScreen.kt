@@ -219,7 +219,7 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
                                 modifier = Modifier
                                     .size(42.dp)
                                     .background(
-                                        color = beige,
+                                        color = Color(0xFFFFFFFF),
                                         shape = RoundedCornerShape(8.dp)
                                     ),
                                 contentAlignment = Alignment.Center

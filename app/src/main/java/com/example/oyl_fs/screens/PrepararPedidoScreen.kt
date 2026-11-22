@@ -1,6 +1,10 @@
 
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -78,7 +82,7 @@ fun PrepararPedidoScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().entradaOYL()
             .background(FondoOYL)
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
@@ -87,13 +91,7 @@ fun PrepararPedidoScreen(
 
         // ---------- Encabezado ----------
         Row {
-            IconButton(onClick = onVolver) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = SecundarioOYL
-                )
-            }
+            BotonVolverOYL(onVolver)
 
             Column {
                 Text(

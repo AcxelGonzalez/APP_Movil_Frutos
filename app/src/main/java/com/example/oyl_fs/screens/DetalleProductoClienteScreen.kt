@@ -1,5 +1,8 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.EncabezadoOYL
+
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalDensity
 
 import androidx.compose.animation.core.Animatable
@@ -42,11 +45,14 @@ fun DetalleProductoClienteScreen(
     onAgregar: (Int) -> Boolean,
     onAbrirCarrito: () -> Unit
 ) {
-    val entrada = remember(producto.id) { Animatable(0f) }
-    val desplazamiento = with(LocalDensity.current) { 18.dp.toPx() }
+    val vistaPrevia = LocalInspectionMode.current
+    val entrada = remember(producto.id) { Animatable(if (vistaPrevia) 1f else 0f) }
+    val desplazamiento = with(LocalDensity.current) { 40.dp.toPx() }
     LaunchedEffect(producto.id) {
-        withFrameNanos { }
-        entrada.animateTo(1f, tween(650))
+        if (!vistaPrevia) {
+            withFrameNanos { }
+            entrada.animateTo(1f, tween(850))
+        }
     }
 
     val fondo = Color(0xFFFFF5E7)
@@ -66,11 +72,11 @@ fun DetalleProductoClienteScreen(
             .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onVolver) { Text("‹", color = oscuro, fontSize = 28.sp) }
-            Text("Detalle del producto", color = oscuro, fontWeight = FontWeight.Bold, fontSize = 20.sp)
-        }
-        ImagenProducto(producto, Modifier.fillMaxWidth().height(220.dp).clip(RoundedCornerShape(18.dp)))
+        EncabezadoOYL("Detalle del producto", onVolver)
+        ImagenProducto(producto, Modifier.graphicsLayer {
+            scaleX = 0.90f + entrada.value * 0.10f
+            scaleY = scaleX
+        }.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(24.dp)))
         Text(producto.nombre, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = oscuro)
         Text(producto.presentacion, color = cafe)
         Text("$" + "%,d".format(producto.precio).replace(',', '.'),
@@ -106,7 +112,7 @@ fun DetalleProductoClienteScreen(
             },
             enabled = limite > 0,
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = oscuro)
         ) { Text("Agregar al carrito") }
         OutlinedButton(onClick = onAbrirCarrito, modifier = Modifier.fillMaxWidth(),
@@ -123,7 +129,7 @@ fun DetalleProductoClienteScreen(
 @Preview(showBackground = true)
 @Composable
 private fun DetalleClientePreview() {
-    MaterialTheme {
+    com.example.oyl_fs.ui.theme.OYL_FSTheme {
         DetalleProductoClienteScreen(ProductosDatos.almendras, 10, {}, { false }, {})
     }
 }

@@ -1,6 +1,13 @@
 
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -55,6 +62,8 @@ fun RegistroScreen(
     onIrALogin: () -> Unit
 ) {
     var error by remember { mutableStateOf("") }
+    var intentoEnvio by remember { mutableStateOf(false) }
+    val correoValido = Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
     var nombre by remember { mutableStateOf("") }
     var alias by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
@@ -73,7 +82,7 @@ fun RegistroScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().background(Color(0xFFFFF5E7)).entradaOYL()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
@@ -98,14 +107,18 @@ fun RegistroScreen(
         OutlinedTextField(
             value = alias,
             onValueChange = {
-                alias = it
+                alias = it; error = ""
                 viewModel.limpiarError(CampoRegistro.ALIAS)
             },
             label = { Text("Alias de usuario *") },
             leadingIcon = { Icon(Icons.Default.Person, null) },
-            isError = error.isNotEmpty(),
+            isError = intentoEnvio && (alias.trim().length !in 3..20),
             enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -114,14 +127,18 @@ fun RegistroScreen(
         OutlinedTextField(
             value = nombre,
             onValueChange = {
-                nombre = it
+                nombre = it; error = ""
                 viewModel.limpiarError(CampoRegistro.NOMBRE)
             },
             label = { Text("Nombre completo *") },
             leadingIcon = { Icon(Icons.Default.AccountCircle, null) },
-            isError = error.isNotEmpty(),
+            isError = intentoEnvio && (nombre.isBlank()),
             enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -129,9 +146,15 @@ fun RegistroScreen(
 
         OutlinedTextField(
             value = correo,
-            onValueChange = { correo = it },
-            label = { Text("Correo electrónico") },
+            onValueChange = { correo = it; error = "" },
+            label = { Text("Correo electrónico *") },
+            isError = intentoEnvio && !correoValido.matches(correo.trim()),
+            enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -140,7 +163,7 @@ fun RegistroScreen(
         OutlinedTextField(
             value = telefono,
             onValueChange = {
-                telefono = it
+                telefono = it; error = ""
                 viewModel.limpiarError(CampoRegistro.TELEFONO)
             },
             label = { Text("Teléfono (opcional)") },
@@ -151,6 +174,10 @@ fun RegistroScreen(
             isError = error.isNotEmpty(),
             enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -158,9 +185,14 @@ fun RegistroScreen(
 
         OutlinedTextField(
             value = direccion,
-            onValueChange = { direccion = it },
+            onValueChange = { direccion = it; error = "" },
             label = { Text("Dirección (opcional)") },
+            enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -169,7 +201,7 @@ fun RegistroScreen(
         OutlinedTextField(
             value = clave,
             onValueChange = {
-                clave = it
+                clave = it; error = ""
                 viewModel.limpiarError(CampoRegistro.CLAVE)
             },
             label = { Text("Contraseña *") },
@@ -178,9 +210,13 @@ fun RegistroScreen(
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password
             ),
-            isError = error.isNotEmpty(),
+            isError = intentoEnvio && (clave.length < 6),
             enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -189,7 +225,7 @@ fun RegistroScreen(
         OutlinedTextField(
             value = confirmacion,
             onValueChange = {
-                confirmacion = it
+                confirmacion = it; error = ""
                 viewModel.limpiarError(CampoRegistro.CONFIRMACION)
             },
             label = { Text("Confirmar contraseña *") },
@@ -198,9 +234,13 @@ fun RegistroScreen(
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password
             ),
-            isError = error.isNotEmpty(),
+            isError = intentoEnvio && (clave != confirmacion),
             enabled = !cargando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
 
@@ -208,7 +248,7 @@ fun RegistroScreen(
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
             Column {
                 Spacer(Modifier.height(10.dp))
-                Text(error, color = rojo, fontSize = 13.sp)
+                MensajeErrorOYL(error)
             }
         }
 
@@ -216,13 +256,14 @@ fun RegistroScreen(
 
         Button(
             onClick = {
+                intentoEnvio = true
                 // Primero se validan los datos en el teléfono
                 error = when {
                     nombre.isBlank() || alias.isBlank() || correo.isBlank() ->
                         "Completa todos los campos obligatorios"
                     alias.trim().length !in 3..20 ->
                         "El usuario debe tener entre 3 y 20 caracteres"
-                    !correo.contains("@") -> "Ingresa un correo válido"
+                    !correoValido.matches(correo.trim()) -> "Ingresa un correo válido"
                     clave.length < 6 -> "La contraseña debe tener mínimo 6 caracteres"
                     clave != confirmacion -> "Las contraseñas no coinciden"
                     else -> ""

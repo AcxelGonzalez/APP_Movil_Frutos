@@ -1,5 +1,11 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.EncabezadoOYL
+
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -66,6 +72,7 @@ fun EditarProductoAdmin(
         producto = producto,
         errorGuardado = error,
         guardando = guardando,
+        onEditarFormulario = viewModel::limpiarError,
 
         onVolver = {
             viewModel.limpiarError()
@@ -106,7 +113,8 @@ fun EditarProductoScreen(
     onVolver: () -> Unit,
     onGuardar: (ProductoInfo) -> Unit,
     errorGuardado: String? = null,
-    guardando: Boolean = false
+    guardando: Boolean = false,
+    onEditarFormulario: () -> Unit = {}
 ) {
 
     // Al editar, comienza con los datos del producto.
@@ -143,6 +151,11 @@ fun EditarProductoScreen(
 
     var menuCategorias by remember { mutableStateOf(false) }
     var errorFormulario by remember { mutableStateOf<String?>(null) }
+
+    LaunchedEffect(nombre, codigo, categoria, descripcion, precio, stock, stockMinimo, presentacion, imagenUri, disponible) {
+        errorFormulario = null
+        onEditarFormulario()
+    }
 
     val contexto = LocalContext.current
     val categorias = listOf(
@@ -187,26 +200,14 @@ fun EditarProductoScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().entradaOYL()
             .background(FondoEditar)
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onVolver) {
-                Text("‹", color = OscuroEditar, fontSize = 30.sp)
-            }
-
-            Text(
-                text = "Editar producto",
-                modifier = Modifier.weight(1f),
-                color = OscuroEditar,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        EncabezadoOYL("Editar producto", onVolver)
 
         Card(
             modifier = Modifier
@@ -216,7 +217,7 @@ fun EditarProductoScreen(
                         arrayOf("image/jpeg", "image/png")
                     )
                 },
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Color.White
             )
@@ -266,7 +267,7 @@ fun EditarProductoScreen(
             OutlinedButton(
                 onClick = { menuCategorias = true },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = OscuroEditar
                 )
@@ -357,7 +358,7 @@ fun EditarProductoScreen(
 
         AnimatedVisibility(visible = mensaje != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
-            Text(mensaje.orEmpty(), color = Color(0xFFC0392B))
+            MensajeErrorOYL(mensaje.orEmpty())
         }
 
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -457,13 +458,13 @@ private fun CampoEditar(
                     KeyboardType.Text
                 }
             ),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 textColor = OscuroEditar,
                 containerColor = Color.White,
                 cursorColor = OscuroEditar,
                 focusedBorderColor = CafeEditar,
-                unfocusedBorderColor = CafeEditar
+                unfocusedBorderColor = Color(0xFFD5BEA6)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -475,7 +476,7 @@ private fun CampoEditar(
 @Preview(showBackground = true, widthDp = 360, heightDp = 1500)
 @Composable
 private fun EditarProductoPreview() {
-    MaterialTheme {
+    com.example.oyl_fs.ui.theme.OYL_FSTheme {
         EditarProductoScreen(
             producto = ProductosDatos.almendras,
             onVolver = {},

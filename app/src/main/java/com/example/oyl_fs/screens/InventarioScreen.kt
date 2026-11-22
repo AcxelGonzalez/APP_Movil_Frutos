@@ -1,6 +1,11 @@
 
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+import androidx.compose.foundation.BorderStroke
+
+
 import kotlinx.coroutines.launch
 
 import androidx.activity.compose.BackHandler
@@ -206,17 +211,6 @@ private fun InventarioListado(
                 )
             }
 
-            Surface(
-                shape = RoundedCornerShape(16.dp),
-                color = Color.White
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Inventory2,
-                    contentDescription = "Inventario",
-                    tint = OscuroInventario,
-                    modifier = Modifier.padding(14.dp)
-                )
-            }
         }
 
         Spacer(Modifier.height(20.dp))
@@ -267,11 +261,7 @@ private fun InventarioListado(
         Spacer(Modifier.height(14.dp))
 
         if (error != null) {
-            Text(
-                text = error,
-                color = RojoInventario,
-                fontSize = 13.sp
-            )
+            MensajeErrorOYL(error)
 
             Spacer(Modifier.height(10.dp))
         }
@@ -378,8 +368,9 @@ private fun TarjetaInventario(
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         ),
+        border = BorderStroke(1.dp, Color(0xFFEEDFCB)),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp
+            defaultElevation = 0.dp
         )
     ) {
 
@@ -493,7 +484,7 @@ private fun TarjetaInventario(
 
                 Button(
                     onClick = onVerDetalle,
-                    shape = RoundedCornerShape(12.dp),
+                    shape = RoundedCornerShape(16.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = OscuroInventario
                     )
