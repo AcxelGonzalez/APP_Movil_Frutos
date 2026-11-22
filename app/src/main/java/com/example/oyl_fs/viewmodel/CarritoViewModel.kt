@@ -28,9 +28,10 @@ data class CarritoUiState(
     val sinStock: List<ItemCarrito> get() = items.filterNot { it.stockSuficiente }
 }
 
-class CarritoViewModel(application: Application) : AndroidViewModel(application) {
-
-    private val repo = CarritoRoomRepository(application)
+class CarritoViewModel @JvmOverloads constructor(
+    application: Application,
+    private val repo: CarritoRoomRepository = CarritoRoomRepository(application)
+) : AndroidViewModel(application) {
 
     private val clienteId = MutableStateFlow("")
 
@@ -93,15 +94,17 @@ class CarritoViewModel(application: Application) : AndroidViewModel(application)
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            _mensaje.value = "No se pudo guardar el carrito"
+            if (clienteId.value == id) _mensaje.value = "No se pudo guardar el carrito"
             return false
         }
 
         // Mensaje para mostrar al usuario.
-        _mensaje.value = if (agregado) {
-            "${producto.nombre} agregado al carrito"
-        } else {
-            "No hay stock suficiente de ${producto.nombre}"
+        if (clienteId.value == id) {
+            _mensaje.value = if (agregado) {
+                "${producto.nombre} agregado al carrito"
+            } else {
+                "No hay stock suficiente de ${producto.nombre}"
+            }
         }
 
         return agregado
