@@ -53,6 +53,7 @@ fun LoginScreen(
     var cargando by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
+    val foco = LocalFocusManager.current
     val cafe = Color(0xFF4A2C1A)
     val rojo = Color(0xFFC0392B)
 
@@ -140,7 +141,12 @@ fun LoginScreen(
                         scope.launch {
                             SesionRepository.iniciarSesion(u, c)
                                 .onSuccess { usuarioBackend ->
-                                    onLoginSuccess(usuarioBackend.rol == "ADMIN")
+                                    onLoginSuccess(SesionIdentificada(
+                                        usuarioId = usuarioBackend.id.toString(),
+                                        nombre = usuarioBackend.nombre,
+                                        esAdmin = usuarioBackend.rol == "ADMIN",
+                                        esDemo = false
+                                    ))
                                 }
                                 .onFailure { e ->
                                     error = e.mensajeApi()

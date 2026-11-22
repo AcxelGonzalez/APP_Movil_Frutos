@@ -15,7 +15,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.platform.LocalContext
 
 import android.widget.Toast
 import com.example.oyl_fs.model.EstadoPedido
@@ -23,7 +22,6 @@ import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.ui.components.EstadoPedidoChip
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 
-import android.widget.Toast
 
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.CancellationException
@@ -71,7 +69,6 @@ fun HistorialScreen(
     val pedidos by viewModel.pedidosVisibles.collectAsState()
     val filtro by viewModel.filtroEstado.collectAsState()
 
-    val contexto = LocalContext.current
 
     val scope = rememberCoroutineScope()
 

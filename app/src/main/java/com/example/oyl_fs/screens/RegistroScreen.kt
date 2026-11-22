@@ -4,6 +4,9 @@ package com.example.oyl_fs.screens
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -51,6 +54,7 @@ fun RegistroScreen(
     onRegistrado: () -> Unit,
     onIrALogin: () -> Unit
 ) {
+    var error by remember { mutableStateOf("") }
     var nombre by remember { mutableStateOf("") }
     var alias by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
@@ -99,12 +103,11 @@ fun RegistroScreen(
             },
             label = { Text("Alias de usuario *") },
             leadingIcon = { Icon(Icons.Default.Person, null) },
-            isError = errores.alias != null,
-            enabled = !estado.procesando,
+            isError = error.isNotEmpty(),
+            enabled = !cargando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        ErrorRegistroCampo(errores.alias)
 
         Spacer(Modifier.height(12.dp))
 
@@ -116,24 +119,11 @@ fun RegistroScreen(
             },
             label = { Text("Nombre completo *") },
             leadingIcon = { Icon(Icons.Default.AccountCircle, null) },
-            isError = errores.nombre != null,
-            enabled = !estado.procesando,
+            isError = error.isNotEmpty(),
+            enabled = !cargando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        ErrorRegistroCampo(errores.nombre)
-
-        Spacer(Modifier.height(12.dp))
-
-        // El alias es el nombre con el que se inicia sesión
-        OutlinedTextField(
-            value = alias,
-            onValueChange = { alias = it },
-            label = { Text("Usuario (para iniciar sesión)") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth()
-        )
-        ErrorRegistroCampo(errores.correo)
 
         Spacer(Modifier.height(12.dp))
 
@@ -144,7 +134,6 @@ fun RegistroScreen(
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        ErrorRegistroCampo(errores.rut)
 
         Spacer(Modifier.height(12.dp))
 
@@ -159,12 +148,11 @@ fun RegistroScreen(
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Phone
             ),
-            isError = errores.telefono != null,
-            enabled = !estado.procesando,
+            isError = error.isNotEmpty(),
+            enabled = !cargando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        ErrorRegistroCampo(errores.telefono)
 
         Spacer(Modifier.height(12.dp))
 
@@ -190,12 +178,11 @@ fun RegistroScreen(
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password
             ),
-            isError = errores.clave != null,
-            enabled = !estado.procesando,
+            isError = error.isNotEmpty(),
+            enabled = !cargando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        ErrorRegistroCampo(errores.clave)
 
         Spacer(Modifier.height(12.dp))
 
@@ -211,12 +198,11 @@ fun RegistroScreen(
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Password
             ),
-            isError = errores.confirmacion != null,
-            enabled = !estado.procesando,
+            isError = error.isNotEmpty(),
+            enabled = !cargando,
             singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
-        ErrorRegistroCampo(errores.confirmacion)
 
         AnimatedVisibility(visible = error.isNotEmpty(), enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
@@ -285,7 +271,7 @@ fun RegistroScreen(
                 viewModel.reiniciar()
                 onIrALogin()
             },
-            enabled = !estado.procesando
+            enabled = !cargando
         ) {
             Text(
                 "¿Ya tienes cuenta? Iniciar sesión",

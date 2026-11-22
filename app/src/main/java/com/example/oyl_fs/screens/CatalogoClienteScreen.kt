@@ -64,6 +64,8 @@ fun ProductosCliente(
     onAbrirCarrito: () -> Unit
 ) {
     val productos by productoViewModel.productos.collectAsState()
+    val cargando by productoViewModel.cargandoProductos.collectAsState()
+    val error by productoViewModel.error.collectAsState()
     val carrito by carritoViewModel.uiState.collectAsState()
     var productoId by rememberSaveable { mutableStateOf<Int?>(null) }
     val seleccionado = productos.find { it.id == productoId && it.disponible }
@@ -94,6 +96,15 @@ fun ProductosCliente(
             onAbrirCarrito = onAbrirCarrito
         )
     } else {
+        Column(Modifier.fillMaxSize()) {
+            if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (error != null) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = { productoViewModel.refrescar() }) { Text("Reintentar") }
+                }
+            }
+            Box(Modifier.weight(1f)) {
         CatalogoClienteScreen(
             productos = productos.filter { it.disponible },
             onVolver = onVolver,
@@ -104,6 +115,8 @@ fun ProductosCliente(
             totalCarrito = carrito.total,
             onAbrirCarrito = onAbrirCarrito
         )
+            }
+        }
     }
 }
 

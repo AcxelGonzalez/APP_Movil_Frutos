@@ -42,12 +42,25 @@ fun CatalogoAdmin(
     onAgregarProducto: () -> Unit
 ) {
     val productos by viewModel.productos.collectAsState()
+    val cargando by viewModel.cargandoProductos.collectAsState()
+    val error by viewModel.error.collectAsState()
+    Column(Modifier.fillMaxSize()) {
+        if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (error != null) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                Text(error.orEmpty(), color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = { viewModel.refrescar() }) { Text("Reintentar") }
+            }
+        }
+        Box(Modifier.weight(1f)) {
 
     CatalogoScreen(
         productos = productos,
         onProductoClick = onProductoClick,
         onAgregarProducto = onAgregarProducto
     )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)

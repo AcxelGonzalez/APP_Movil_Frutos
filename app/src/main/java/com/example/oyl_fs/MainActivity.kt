@@ -1,5 +1,7 @@
 package com.example.oyl_fs
 
+import com.example.oyl_fs.screens.BienvenidaScreen
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 
@@ -201,6 +203,8 @@ class MainActivity : ComponentActivity() {
         setContent {
             OYL_FSTheme {
 
+                var mostrarBienvenida by rememberSaveable { mutableStateOf(true) }
+
                 // Usuario que inició sesión (datos del backend).
                 val usuarioSesion by SesionRepository.usuario.collectAsState()
 
@@ -338,6 +342,8 @@ class MainActivity : ComponentActivity() {
                 fun cerrarSesionActual() {
 
                     val idAnterior = usuarioSesionId
+                    SesionRepository.cerrarSesion()
+                    historialViewModel.limpiar()
 
                     // Limpiar la selección del carrito.
                     carritoViewModel.iniciar("")
@@ -351,7 +357,7 @@ class MainActivity : ComponentActivity() {
 
                     // No mantener visibles los perfiles
                     // registrados de la sesión anterior.
-                    perfilViewModel.limpiarSesionRegistrada()
+                    perfilViewModel.limpiarError()
 
                     // Eliminar el estado visual guardado
                     // para el cliente que cerró sesión.
@@ -372,6 +378,9 @@ class MainActivity : ComponentActivity() {
                 }
 
                 when {
+                    mostrarBienvenida -> BienvenidaScreen(
+                        onComenzar = { mostrarBienvenida = false }
+                    )
 
                     // ---------- Login y registro ----------
                     !sesionIniciada -> {
@@ -401,8 +410,12 @@ class MainActivity : ComponentActivity() {
 
 
                             LoginScreen(
-                                onLoginSuccess = { admin ->
-                                    esAdmin = admin
+                                viewModel = loginViewModel,
+                                onLoginSuccess = { sesion ->
+                                    esAdmin = sesion.esAdmin
+                                    usuarioSesionId = sesion.usuarioId
+                                    nombreSesion = sesion.nombre
+                                    productoViewModel.refrescar()
                                     mostrarHistorial = false
                                     mostrarCarrito = false
                                     pedidoPrepararId = null
@@ -410,8 +423,8 @@ class MainActivity : ComponentActivity() {
 
                                     // Carga los pedidos del usuario desde el backend.
                                     historialViewModel.configurarSesion(
-                                        SesionRepository.usuarioId?.toString().orEmpty(),
-                                        admin
+                                        sesion.usuarioId,
+                                        sesion.esAdmin
                                     )
                                 },
 
@@ -439,78 +452,24 @@ class MainActivity : ComponentActivity() {
 
 
                                 onConfirmarPreparacion = { pedidoId ->
-
-                                    val puedeConfirmar =
-                                        pedidoId == pedidoParaPreparar.id &&
-                                                pedidoParaPreparar.estado ==
-                                                EstadoPedido.CONFIRMADO &&
-                                                prepararPedidoViewModel.pedidoCompleto()
-
+                                    val puedeConfirmar = pedidoId == pedidoParaPreparar.id &&
+                                        pedidoParaPreparar.estado == EstadoPedido.CONFIRMADO &&
+                                        prepararPedidoViewModel.pedidoCompleto()
                                     if (!puedeConfirmar) {
-
-                                        // Registrar el nuevo estado del pedido en el backend.
-                                        // error es null si salió bien, o el motivo del servidor.
-                                        historialViewModel.cambiarEstadoPedido(
-                                            pedidoId,
-                                            EstadoPedido.PREPARADO
-                                        ) { error ->
-
+                                        Toast.makeText(this@MainActivity,
+                                            "Verifica todos los productos del pedido antes de confirmar",
+                                            Toast.LENGTH_LONG).show()
+                                    } else if (!procesandoPreparacion) {
+                                        procesandoPreparacion = true
+                                        historialViewModel.cambiarEstadoPedido(pedidoId, EstadoPedido.PREPARADO) { error ->
+                                            procesandoPreparacion = false
                                             if (error == null) {
-
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    "Pedido $pedidoId preparado correctamente",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-
-                                                // Regresar al historial.
                                                 pedidoPrepararId = null
                                                 mostrarHistorial = true
-
-                                            } else {
-
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    error,
-                                                    Toast.LENGTH_LONG
-                                                ).show()
                                             }
-                                        }
-
-                                                if (actualizado) {
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "Pedido preparado correctamente",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-
-                                                    pedidoPrepararId = null
-                                                    mostrarHistorial = true
-
-                                                } else {
-
-                                                    Toast.makeText(
-                                                        this@MainActivity,
-                                                        "No se pudo actualizar el pedido",
-                                                        Toast.LENGTH_LONG
-                                                    ).show()
-                                                }
-
-                                            } catch (e: CancellationException) {
-                                                throw e
-
-                                            } catch (e: Exception) {
-
-                                                Toast.makeText(
-                                                    this@MainActivity,
-                                                    "Error al guardar la preparación",
-                                                    Toast.LENGTH_LONG
-                                                ).show()
-
-                                            } finally {
-                                                procesandoPreparacion = false
-                                            }
+                                            Toast.makeText(this@MainActivity,
+                                                error ?: "Pedido $pedidoId preparado correctamente",
+                                                Toast.LENGTH_LONG).show()
                                         }
                                     }
                                 }
@@ -614,14 +573,7 @@ class MainActivity : ComponentActivity() {
                         HomeAdmin(
                             pestanaSolicitada = pestanaDesdeHistorial,
                             onPestanaAtendida = { pestanaDesdeHistorial = null },
-                            onLogout = {
-                                SesionRepository.cerrarSesion()
-                                historialViewModel.limpiar()
-                                mostrarHistorial = false
-                                mostrarCarrito = false
-                                pedidoPrepararId = null
-                                sesionIniciada = false
-                            },
+                            onLogout = { cerrarSesionActual() },
 
                             onAbrirHistorial = {
                                 mostrarHistorial = true
@@ -652,14 +604,7 @@ class MainActivity : ComponentActivity() {
                             historialViewModel = historialViewModel,
                             perfilViewModel = perfilViewModel,
 
-                            onLogout = {
-                                SesionRepository.cerrarSesion()
-                                historialViewModel.limpiar()
-                                mostrarHistorial = false
-                                mostrarCarrito = false
-                                pedidoPrepararId = null
-                                sesionIniciada = false
-                            },
+                            onLogout = { cerrarSesionActual() },
 
                             onAbrirHistorial = {
                                 mostrarHistorial = true

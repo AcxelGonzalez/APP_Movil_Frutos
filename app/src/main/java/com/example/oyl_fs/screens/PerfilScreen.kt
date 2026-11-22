@@ -45,10 +45,20 @@ fun PerfilUsuarioScreen(
     val usuario by viewModel.perfil.collectAsState()
     val error by viewModel.error.collectAsState()
     val guardando by viewModel.guardando.collectAsState()
-    val perfil = usuario ?: return
+    val perfil = usuario
+    if (perfil == null) {
+        Column(Modifier.fillMaxSize().background(FondoPerfil).padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally) {
+            Text("Inicia sesión para ver tu perfil.", color = OscuroPerfil)
+            TextButton(onClick = onLogout) { Text("Ir al login") }
+        }
+        return
+    }
     var pantalla by rememberSaveable(perfil.id) { mutableStateOf("perfil") }
 
     fun volver() {
+        if (guardando) return
         viewModel.limpiarError()
         pantalla = when (pantalla) {
             "editar" -> "datos"
