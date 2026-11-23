@@ -73,8 +73,8 @@ vez, en el servidor, en el momento en que el pedido se confirma.
 
 ## 2. Integrantes
 
-| Integrante |
-|---|---|
+| Integrante | |
+
 | **Acxel González** |
 | **Kerly Dugarte**  |
 | **Marco Caarrasco** |
