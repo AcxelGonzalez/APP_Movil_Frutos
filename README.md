@@ -10,7 +10,7 @@ Jetpack Compose y respaldada por un backend propio de tres microservicios en Spr
 |---|---|
 | **Aplicación** | https://github.com/AcxelGonzalez/APP_Movil_Frutos |
 | **Backend** | https://github.com/fabcornejom/OYL-Backend |
-| **Tablero Trello** | *(completar con el enlace)* |
+| **Tablero Trello** | *([completar con el enlace](https://trello.com/b/CZow21QV/proyecto-app))* |
 
 ---
 
