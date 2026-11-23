@@ -745,13 +745,13 @@ probados. Así se evitan conflictos entre pantallas que se desarrollan en parale
 
 ### Tablero Trello
 
-El avance se gestionó en Trello, con columnas por etapa y tarjetas por funcionalidad.
+El avance se gestionó en Trello, con columnas por etapa, tarjetas por funcionalidad y responsabilidades.
 
 *(Agregar aquí el enlace al tablero y una captura.)*
 
 ---
 
 <p align="center">
-  Proyecto académico · Duoc UC · Escuela de Informática y Telecomunicaciones<br>
+  Duoc UC · Escuela de Informática y Telecomunicaciones<br>
   DSY1105 — Desarrollo de Aplicaciones Móviles - Docente: Cristian Gomez Vega
 </p>
