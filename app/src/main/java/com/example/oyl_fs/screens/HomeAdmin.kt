@@ -1,6 +1,21 @@
 
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.presionOYL
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.ripple.rememberRipple
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+
+import androidx.lifecycle.viewmodel.compose.viewModel as obtenerViewModel
+import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import androidx.compose.foundation.Image
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
@@ -58,7 +73,9 @@ fun HomeAdmin(
     nombre: String = "Administrador",
     pestanaSolicitada: Int? = null,
     onPestanaAtendida: () -> Unit = {},
-    lanzarEscaner: LanzadorQr = ::escanearQr
+    lanzarEscaner: LanzadorQr = ::escanearQr,
+    pestanaSeleccionada: Int? = null,
+    onSeleccionarPestana: ((Int) -> Unit)? = null
 ) {
 
     // Observa los productos actualizados del catálogo.
@@ -87,36 +104,81 @@ fun HomeAdmin(
         .take(3)
 
 
+    val perfiles by perfilViewModel.perfiles.collectAsState()
+    val perfil = perfiles.firstOrNull { it.esAdmin }
+    val avisosViewModel: com.example.oyl_fs.viewmodel.NotificacionesAdminViewModel = obtenerViewModel()
+    val leidas by avisosViewModel.leidas.collectAsState()
+    val errorPedidos by historialViewModel.error.collectAsState()
+    val errorProductos by viewModel.error.collectAsState()
+    val cargandoProductos by viewModel.cargandoProductos.collectAsState()
+    val avisos = com.example.oyl_fs.model.crearNotificacionesAdmin(pedidos, productos)
+    val idsVigentes = avisos.map { it.id }.toSet()
+    val sinLeer = avisos.count { it.id !in leidas }
+    var mostrarAvisos by remember { mutableStateOf(false) }
+    // Consulta nuevos avisos solo mientras el administrador está usando la app.
+    val cicloDeVida = LocalLifecycleOwner.current.lifecycle
+    LaunchedEffect(cicloDeVida, perfil?.id) {
+        if (perfil?.esAdmin == true) {
+            cicloDeVida.repeatOnLifecycle(Lifecycle.State.RESUMED) {
+                while (isActive) {
+                    viewModel.refrescar()
+                    historialViewModel.refrescar()
+                    delay(30_000)
+                }
+            }
+        }
+    }
+    val giroCampana = remember { androidx.compose.animation.core.Animatable(0f) }
+    var cantidadAnterior by remember { mutableStateOf(0) }
+
+    LaunchedEffect(perfil?.id) {
+        avisosViewModel.configurarUsuario(perfil?.id?.toString())
+    }
+    LaunchedEffect(sinLeer) {
+        if (sinLeer > cantidadAnterior) {
+            cantidadAnterior = sinLeer
+            giroCampana.animateTo(-14f, tween(100))
+            giroCampana.animateTo(14f, tween(150))
+            giroCampana.animateTo(-8f, tween(120))
+            giroCampana.animateTo(0f, tween(120))
+        } else {
+            cantidadAnterior = sinLeer
+            giroCampana.snapTo(0f)
+        }
+    }
+
     // Controla la pantalla seleccionada
-    var tab by rememberSaveable { mutableStateOf(0) }
+    var tabLocal by rememberSaveable { mutableStateOf(0) }
+    // MainActivity conserva la selección incluso al abrir módulos externos.
+    val tab = pestanaSeleccionada ?: tabLocal
+    fun seleccionarPestana(indice: Int) {
+        if (onSeleccionarPestana != null) onSeleccionarPestana(indice)
+        else tabLocal = indice
+    }
 
     var productoInventarioId by rememberSaveable { mutableStateOf<Int?>(null) }
     var inventarioDesdeEscaner by rememberSaveable { mutableStateOf(false) }
 
     fun volverInventario() {
         productoInventarioId = null
-        tab = if (inventarioDesdeEscaner) 6 else 0
+        seleccionarPestana(if (inventarioDesdeEscaner) 6 else 0)
         inventarioDesdeEscaner = false
     }
 
     // El historial puede solicitar una pestaña del mismo menú.
     LaunchedEffect(pestanaSolicitada) {
         if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
-            tab = pestanaSolicitada
+            seleccionarPestana(pestanaSolicitada)
             onPestanaAtendida()
         }
     }
 
 
     // Controla la animación inicial
-    var visible by remember { mutableStateOf(false) }
 
-    LaunchedEffect(Unit) {
-        visible = true
-    }
 
     BackHandler(enabled = tab != 0) {
-        if (tab == 2) volverInventario() else tab = 0
+        if (tab == 2) volverInventario() else seleccionarPestana(0)
     }
 
     Scaffold(
@@ -135,7 +197,7 @@ fun HomeAdmin(
 
                     inventarioDesdeEscaner = false
                     productoInventarioId = null
-                    tab = indice
+                    seleccionarPestana(indice)
                 }
             }
         }
@@ -147,12 +209,12 @@ fun HomeAdmin(
             6 -> Box(Modifier.fillMaxSize().padding(padding)) {
                 EscanerScreen(
                     viewModel = viewModel, esAdmin = true,
-                    onVolver = { tab = 0 },
+                    onVolver = { seleccionarPestana(0)},
                     onAbrirProducto = { id ->
                         if (viewModel.obtenerProducto(id) != null) {
                             productoInventarioId = id
                             inventarioDesdeEscaner = true
-                            tab = 2
+                            seleccionarPestana(2)
                         }
                     },
                     lanzarEscaner = lanzarEscaner
@@ -163,9 +225,9 @@ fun HomeAdmin(
             // ---------- INICIO ----------
             0 -> {
                 AnimatedVisibility(
-                    visible = visible,
-                    enter = fadeIn(tween(600)) +
-                            slideInVertically { it / 6 }
+                    visible = true,
+                    enter = androidx.compose.animation.EnterTransition.None,
+                    exit = androidx.compose.animation.ExitTransition.None
                 ) {
 
                     Column(
@@ -183,17 +245,25 @@ fun HomeAdmin(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                         LogoInicio(modifier = Modifier.weight(1f))
                         Box(Modifier.size(64.dp)) {
-                            IconoCircular(Icons.Default.Notifications, "Notificaciones", onClick = {})
-                            if (3 > 0) {
+                            Box(Modifier.graphicsLayer { rotationZ = giroCampana.value }) {
+                                IconoCircular(Icons.Default.Notifications, "Notificaciones: $sinLeer sin leer", onClick = {
+                                    mostrarAvisos = true
+                                    viewModel.refrescar()
+                                    historialViewModel.refrescar()
+                                })
+                            }
+                            if (sinLeer > 0) {
                                 Badge(modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
                                     containerColor = Color(0xFFB3261E), contentColor = Color.White) {
-                                    Text(if (3 > 99) "99+" else "${3}", fontSize = 11.sp)
+                                    androidx.compose.animation.Crossfade(targetState = sinLeer, animationSpec = tween(350)) { cantidad ->
+                                        Text(if (cantidad > 99) "99+" else "$cantidad", fontSize = 11.sp)
+                                    }
                                 }
                             }
                         }
                     }
 
-                    OutlinedButton(onClick = { tab = 6 }, modifier = Modifier.fillMaxWidth()) {
+                    OutlinedButton(onClick = { seleccionarPestana(6)}, modifier = Modifier.fillMaxWidth()) {
                         Icon(Icons.Default.QrCodeScanner, null)
                         Spacer(Modifier.width(8.dp))
                         Text("Escanear producto")
@@ -218,7 +288,7 @@ fun HomeAdmin(
                                 CriticoOYL,
                                 Modifier.weight(1f)
                             ) {
-                                tab = 1
+                                seleccionarPestana(1)
                             }
 
 
@@ -228,7 +298,7 @@ fun HomeAdmin(
                                 PrincipalOYL,
                                 Modifier.weight(1f)
                             ) {
-                                tab = 1
+                                seleccionarPestana(1)
                             }
                         }
 
@@ -236,7 +306,7 @@ fun HomeAdmin(
                         Button(
                             onClick = {
                                 // Abre el módulo de productos
-                                tab = 1
+                                seleccionarPestana(1)
                             },
 
                             colors = ButtonDefaults.buttonColors(
@@ -247,7 +317,7 @@ fun HomeAdmin(
 
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .height(52.dp)
+                                .heightIn(min = 54.dp)
                         ) {
 
                             Icon(
@@ -262,7 +332,7 @@ fun HomeAdmin(
                         }
 
                         // ---------- PRODUCTOS CON ALERTAS ----------
-                        Seccion("Atencion!!") {
+                        Seccion("Estado del inventario") {
 
                             if (stockBajo.isEmpty()) {
                                 Text(
@@ -333,7 +403,7 @@ fun HomeAdmin(
 
                                     FilledTonalButton(
                                         onClick = {
-                                            tab = 1
+                                            seleccionarPestana(1)
                                         },
 
                                         colors = ButtonDefaults.filledTonalButtonColors(
@@ -369,7 +439,7 @@ fun HomeAdmin(
                                 // Mismo estilo que Mi último pedido del Home cliente.
                                 Card(
                                     modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(20.dp),
+                                    shape = RoundedCornerShape(24.dp),
                                     colors = CardDefaults.cardColors(containerColor = Color.White)
                                 ) {
                                     Column(Modifier.padding(16.dp),
@@ -426,7 +496,7 @@ fun HomeAdmin(
                     ProductosAdmin(
                         viewModel = viewModel,
                         onVolver = {
-                            tab = 0
+                            seleccionarPestana(0)
                         }
                     )
                 }
@@ -453,7 +523,7 @@ fun HomeAdmin(
                 PerfilUsuarioScreen(
                     usuarioId = perfilViewModel.perfiles.value.firstOrNull { it.esAdmin }?.id ?: "admin-demo",
                     viewModel = perfilViewModel,
-                    onVolver = { tab = 0 },
+                    onVolver = { seleccionarPestana(0) },
                     onLogout = onLogout
                 )
             }
@@ -462,6 +532,28 @@ fun HomeAdmin(
 
     } // Cierra Scaffold
 
+    if (mostrarAvisos) {
+        AvisosAdministrador(
+            avisos = avisos,
+            leidas = leidas,
+            error = errorPedidos ?: errorProductos,
+            cargando = cargandoProductos,
+            onActualizar = { viewModel.refrescar(); historialViewModel.refrescar() },
+            onMarcarTodas = { avisosViewModel.marcarLeidas(idsVigentes, idsVigentes) },
+            onAbrir = { aviso ->
+                avisosViewModel.marcarLeidas(setOf(aviso.id), idsVigentes)
+                mostrarAvisos = false
+                when (aviso.destino) {
+                    com.example.oyl_fs.model.DestinoNotificacion.PEDIDOS -> {
+                        historialViewModel.seleccionarFiltro(EstadoPedido.PENDIENTE_VALIDACION)
+                        onAbrirHistorial()
+                    }
+                    com.example.oyl_fs.model.DestinoNotificacion.INVENTARIO -> seleccionarPestana(2)
+                }
+            },
+            onCerrar = { mostrarAvisos = false }
+        )
+    }
 } // Cierra HomeAdmin
 
 
@@ -503,9 +595,12 @@ private fun TarjetaDato(
     onClick: () -> Unit
 ) {
 
+    val interacciones = remember { MutableInteractionSource() }
     Card(
-        modifier = modifier.clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+        modifier = modifier.presionOYL(interacciones)
+            .clickable(interactionSource = interacciones, indication = rememberRipple(), onClick = onClick),
+        border = BorderStroke(1.dp, Color(0xFFEEDFCB)),
+        shape = RoundedCornerShape(24.dp),
 
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -513,7 +608,7 @@ private fun TarjetaDato(
     ) {
 
         Column(
-            modifier = Modifier.padding(14.dp)
+            modifier = Modifier.padding(16.dp)
         ) {
 
             Box(
@@ -526,12 +621,9 @@ private fun TarjetaDato(
 
             Spacer(Modifier.height(10.dp))
 
-            Text(
-                numero,
-                color = SecundarioOYL,
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold
-            )
+            androidx.compose.animation.Crossfade(numero, animationSpec = tween(450)) { valor ->
+                Text(valor, color = SecundarioOYL, fontSize = 28.sp, fontWeight = FontWeight.Bold)
+            }
 
             Text(
                 texto,
@@ -554,7 +646,7 @@ private fun Seccion(
 
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
+        shape = RoundedCornerShape(24.dp),
 
         colors = CardDefaults.cardColors(
             containerColor = Color.White
@@ -606,12 +698,14 @@ fun BarraAdmin(
 ) {
 
     NavigationBar(
-        containerColor = Color.White
+        containerColor = Color.White,
+        tonalElevation = 0.dp,
+        modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
     ) {
 
         val items = listOf(
             "Inicio" to Icons.Default.Home,
-            "Catalogo" to Icons.Default.List,
+            "Catálogo" to Icons.Default.GridView,
             "Inventario" to Icons.Default.Inventory2,
             "Pedidos" to Icons.Default.ShoppingCart,
             "Perfil" to Icons.Default.Person
@@ -629,7 +723,8 @@ fun BarraAdmin(
                 label = {
                     Text(
                         texto,
-                        fontSize = 10.sp
+                        fontSize = 11.sp,
+                        fontWeight = if (seleccion == i) FontWeight.SemiBold else FontWeight.Normal
                     )
                 },
 
@@ -641,9 +736,9 @@ fun BarraAdmin(
                 },
 
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = SecundarioOYL,
+                    selectedIconColor = Color.White,
                     selectedTextColor = SecundarioOYL,
-                    indicatorColor = FondoOYL,
+                    indicatorColor = SecundarioOYL,
                     unselectedIconColor = PrincipalOYL,
                     unselectedTextColor = PrincipalOYL
                 )
@@ -655,19 +750,93 @@ fun BarraAdmin(
 @Composable
 private fun LogoInicio(modifier: Modifier = Modifier) {
     Surface(
-        modifier = modifier.fillMaxWidth().height(76.dp),
-        shape = RoundedCornerShape(38.dp),
-        color = Color.White
+        modifier = modifier.fillMaxWidth().height(80.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFEEDFCB))
     ) {
-        Box(contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
             Image(
                 painter = painterResource(R.drawable.logo_oyl_vector),
                 contentDescription = "OYL Frutos Secos",
-                // Ajuste visual: compensa el peso del texto bajo el símbolo.
-                modifier = Modifier.fillMaxSize()
-                    .padding(horizontal = 20.dp, vertical = 12.dp)
-                    .offset(y = (-2).dp)
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                alignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize().offset(y = (-2).dp)
             )
         }
     }
+}
+
+@Composable
+private fun AvisosAdministrador(
+    avisos: List<com.example.oyl_fs.model.NotificacionAdmin>,
+    leidas: Set<String>,
+    error: String?,
+    cargando: Boolean,
+    onActualizar: () -> Unit,
+    onMarcarTodas: () -> Unit,
+    onAbrir: (com.example.oyl_fs.model.NotificacionAdmin) -> Unit,
+    onCerrar: () -> Unit
+) {
+    val entrada = remember { androidx.compose.animation.core.Animatable(0f) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        entrada.animateTo(1f, tween(500))
+    }
+    AlertDialog(
+        onDismissRequest = onCerrar,
+        modifier = Modifier.graphicsLayer {
+            alpha = entrada.value
+            scaleX = 0.88f + entrada.value * 0.12f
+            scaleY = scaleX
+        },
+        containerColor = FondoOYL,
+        icon = { Icon(Icons.Default.Notifications, null, tint = SecundarioOYL) },
+        title = { Text("Notificaciones", color = SecundarioOYL) },
+        text = {
+            Column(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                    Text("${avisos.count { it.id !in leidas }} sin leer", Modifier.weight(1f), color = PrincipalOYL)
+                    TextButton(onClick = onActualizar, enabled = !cargando) { Text("Actualizar") }
+                }
+                if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth(), color = PrincipalOYL)
+                if (error != null) {
+                    Text("No se pudieron actualizar todos los datos. $error",
+                        color = CriticoOYL, fontSize = 13.sp)
+                }
+                if (avisos.isEmpty()) {
+                    Icon(Icons.Default.NotificationsNone, null, Modifier.align(Alignment.CenterHorizontally).size(44.dp), tint = PrincipalOYL)
+                    Text(if (error == null) "No hay pedidos pendientes ni alertas de stock en los datos cargados."
+                        else "Pulsa Actualizar para volver a consultar las alertas.", color = PrincipalOYL)
+                }
+                avisos.forEach { aviso ->
+                    val sinLeer = aviso.id !in leidas
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(16.dp))
+                        .background(if (sinLeer) Color.White else Color(0xFFF2E5D4))
+                        .clickable { onAbrir(aviso) }.padding(14.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(if (aviso.destino == com.example.oyl_fs.model.DestinoNotificacion.PEDIDOS)
+                                Icons.Default.ReceiptLong else Icons.Default.WarningAmber,
+                                null, Modifier.size(20.dp), tint = PrincipalOYL)
+                            Spacer(Modifier.width(8.dp))
+                            Text(aviso.titulo, Modifier.weight(1f), color = SecundarioOYL, fontWeight = FontWeight.Bold)
+                            if (sinLeer) Box(Modifier.size(8.dp).background(CriticoOYL, CircleShape))
+                        }
+                        Text(aviso.mensaje, color = PrincipalOYL, fontSize = 13.sp)
+                        Text(if (aviso.destino == com.example.oyl_fs.model.DestinoNotificacion.PEDIDOS)
+                            "Ver pedidos →" else "Ver inventario →", color = SecundarioOYL,
+                            fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onMarcarTodas, enabled = avisos.any { it.id !in leidas }) {
+                Text("Marcar leídas")
+            }
+        },
+        confirmButton = { TextButton(onClick = onCerrar) { Text("Cerrar") } }
+    )
 }

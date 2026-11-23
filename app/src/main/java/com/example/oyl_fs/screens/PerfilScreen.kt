@@ -1,5 +1,19 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.EncabezadoOYL
+
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.PersonOutline
+import androidx.compose.material.icons.filled.ManageAccounts
+import androidx.compose.material.icons.filled.ChevronRight
+import androidx.compose.material.icons.filled.Logout
+
+import androidx.compose.foundation.BorderStroke
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -44,10 +58,12 @@ fun PerfilUsuarioScreen(
 ) {
     val perfiles by viewModel.perfiles.collectAsState()
     val errores by viewModel.errores.collectAsState()
+    val guardando by viewModel.guardando.collectAsState()
     val perfil = perfiles.find { it.id == usuarioId } ?: return
     var pantalla by rememberSaveable(usuarioId) { mutableStateOf("perfil") }
 
     fun volver() {
+        if (guardando) return
         viewModel.limpiarError()
         pantalla = when (pantalla) {
             "editar" -> "datos"
@@ -78,36 +94,47 @@ fun PerfilScreen(
 ) {
     Column(
         Modifier.fillMaxSize().background(FondoPerfil)
-            .imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(20.dp)
+            .verticalScroll(rememberScrollState()).padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(22.dp)
     ) {
-        TextButton(onClick = onVolver, modifier = Modifier.align(Alignment.Start)) {
-            Text("‹ Volver", color = OscuroPerfil)
-        }
-        Surface(color = OscuroPerfil, shape = CircleShape, modifier = Modifier.size(90.dp)) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(Icons.Default.Person, "Perfil", tint = Color.White, modifier = Modifier.size(54.dp))
+        EncabezadoOYL("Mi perfil", onVolver)
+        Surface(color = Color.White, tonalElevation = 0.dp, shape = RoundedCornerShape(28.dp),
+            border = BorderStroke(1.dp, Color(0xFFEEDFCB))) {
+            Column(Modifier.fillMaxWidth().padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Surface(color = FondoPerfil, shape = CircleShape, modifier = Modifier.size(88.dp)) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(Icons.Default.PersonOutline, null, tint = OscuroPerfil, modifier = Modifier.size(44.dp))
+                    }
+                }
+                Text("${perfil.nombre} ${perfil.apellido}".trim(), color = OscuroPerfil, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+                Text(perfil.correo, color = CafePerfil, fontSize = 14.sp,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+                Surface(color = Color(0xFFF3E8DA), shape = RoundedCornerShape(50)) {
+                    Text(if (perfil.esAdmin) "Administrador" else "Cliente OYL",
+                        color = OscuroPerfil, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp))
+                }
             }
         }
-        Text("${perfil.nombre} ${perfil.apellido}".trim(), color = OscuroPerfil,
-            fontSize = 22.sp, fontWeight = FontWeight.Bold)
-        Text(perfil.correo, color = CafePerfil)
-        Text(if (perfil.esAdmin) "Cuenta de administrador" else "Cuenta de cliente", color = CafePerfil)
         Button(
             onClick = onDatosPersonales, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)
         ) {
-            Icon(Icons.Default.Person, null)
-            Spacer(Modifier.width(10.dp))
-            Text("Datos personales", Modifier.weight(1f))
-            Text("›")
+            Icon(Icons.Default.ManageAccounts, null)
+            Spacer(Modifier.width(12.dp))
+            Text("Datos personales", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
+            Icon(Icons.Default.ChevronRight, null)
         }
-        Divider(color = CafePerfil.copy(alpha = 0.2f))
-        Button(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
-            shape = RoundedCornerShape(16.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)) { Text("Cerrar sesión") }
+        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+            border = BorderStroke(1.dp, Color(0xFFD7BEA3)), shape = RoundedCornerShape(18.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroPerfil)) {
+            Icon(Icons.Default.Logout, null, Modifier.size(20.dp))
+            Spacer(Modifier.width(10.dp))
+            Text("Cerrar sesión")
+        }
     }
 }
 
@@ -117,11 +144,11 @@ private fun DatosPersonalesScreen(
     onVolver: () -> Unit,
     onEditar: () -> Unit
 ) {
-    Column(Modifier.fillMaxSize().background(FondoPerfil)
+    Column(Modifier.fillMaxSize().background(FondoPerfil).entradaOYL("datos")
         .imePadding().verticalScroll(rememberScrollState()).padding(24.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)) {
-        TextButton(onClick = onVolver) { Text("‹ Datos personales", color = OscuroPerfil) }
-        Card(shape = RoundedCornerShape(18.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        EncabezadoOYL("Datos personales", onVolver)
+        Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = Color.White)) {
             Column(Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 DatoPerfil("Nombre", perfil.nombre)
                 DatoPerfil("Apellido", perfil.apellido)
@@ -201,7 +228,7 @@ private fun CampoPerfil(titulo: String, valor: String, error: String? = null, on
         shape = RoundedCornerShape(12.dp), modifier = Modifier.fillMaxWidth(),
         colors = TextFieldDefaults.outlinedTextFieldColors(
             textColor = OscuroPerfil, containerColor = Color.White,
-            focusedBorderColor = CafePerfil, unfocusedBorderColor = CafePerfil))
+            focusedBorderColor = CafePerfil, unfocusedBorderColor = Color(0xFFD5BEA6)))
 }
 
 @Preview(showBackground = true)

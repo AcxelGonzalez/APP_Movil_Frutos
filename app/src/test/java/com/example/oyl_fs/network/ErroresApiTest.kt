@@ -16,10 +16,10 @@ class ErroresApiTest {
         assertEquals("Correo ya registrado", error(409, "{\"message\":\"Correo ya registrado\"}").mensajeApi())
     }
     @Test fun cuerpoVacioOHtmlUsaUnMensajeLegible() {
-        assertEquals("El servidor no pudo completar la operación", error(503, "<html>sin servicio</html>").mensajeApi())
-        assertEquals("Revisa los datos ingresados", error(400, "{}").mensajeApi())
+        assertEquals("El servidor no pudo completar la operación. Inténtalo más tarde.", error(503, "<html>sin servicio</html>").mensajeApi())
+        assertEquals("Revisa los datos del formulario e inténtalo nuevamente.", error(400, "{}").mensajeApi())
     }
     @Test fun desconexionNoSeConfundeConCredencialesIncorrectas() {
-        assertEquals("No se pudo conectar con el servidor", IOException().mensajeApi())
+        assertEquals("La conexión se interrumpió. Revisa tu conexión e inténtalo nuevamente.", IOException().mensajeApi())
     }
 }

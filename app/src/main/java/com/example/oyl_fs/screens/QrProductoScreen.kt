@@ -1,5 +1,9 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -86,17 +90,16 @@ fun QrProductoScreen(producto: ProductoInfo, onVolver: () -> Unit) {
     }
 
     Column(
-        Modifier.fillMaxSize().background(fondo).verticalScroll(rememberScrollState()).padding(24.dp),
+        Modifier.fillMaxSize().entradaOYL().background(fondo).verticalScroll(rememberScrollState()).padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        TextButton(onClick = onVolver, modifier = Modifier.align(Alignment.Start)) { Text("‹ Volver al producto", color = oscuro) }
-        Text("QR del producto", color = oscuro, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        com.example.oyl_fs.ui.theme.EncabezadoOYL("QR del producto", onVolver)
         Text(producto.nombre, color = oscuro, fontWeight = FontWeight.Bold)
         Text("Código: ${producto.codigo}", color = oscuro)
         val foto = bitmap
         if (foto != null) {
-            Surface(color = Color.White, shape = RoundedCornerShape(18.dp)) {
+            Surface(color = Color.White, shape = RoundedCornerShape(24.dp)) {
                 Image(foto.asImageBitmap(), "Código QR de ${producto.nombre}", Modifier.size(260.dp).padding(8.dp))
             }
         } else if (errorQr != null) {
@@ -120,5 +123,5 @@ fun QrProductoScreen(producto: ProductoInfo, onVolver: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 private fun QrProductoPreview() {
-    MaterialTheme { QrProductoScreen(ProductosDatos.almendras, {}) }
+    com.example.oyl_fs.ui.theme.OYL_FSTheme { QrProductoScreen(ProductosDatos.almendras, {}) }
 }

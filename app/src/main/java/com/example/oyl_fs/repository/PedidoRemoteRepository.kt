@@ -8,6 +8,7 @@ import com.example.oyl_fs.network.CambiarEstadoRequest
 import com.example.oyl_fs.network.CrearPedidoRequest
 import com.example.oyl_fs.network.ItemPedidoRequest
 import com.example.oyl_fs.network.PedidoDto
+import com.example.oyl_fs.network.PedidosApi
 import com.example.oyl_fs.network.RetrofitClient
 import com.example.oyl_fs.network.mensajeApi
 import kotlinx.coroutines.CancellationException
@@ -23,6 +24,7 @@ sealed class ResultadoPedido {
 
 // Conecta la app con ms-pedidos
 class PedidoRemoteRepository(private val api: com.example.oyl_fs.network.PedidosApi = RetrofitClient.pedidos) {
+
 
     // ---------- Crear un pedido desde el carrito ----------
     suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>): ResultadoPedido {

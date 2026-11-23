@@ -9,6 +9,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.example.oyl_fs.model.EstadoPedido
 
 /**
@@ -28,16 +29,16 @@ fun EstadoPedidoChip(
     val (colorFondo, colorTexto) = when (estado) {
 
         EstadoPedido.PENDIENTE_VALIDACION ->
-            Color(0xFFFFEDD5) to Color(0xFF9A3412)
+            Color(0xFFFDE8E6) to Color(0xFFB3261E)
 
         EstadoPedido.CONFIRMADO ->
-            Color(0xFFDBEAFE) to Color(0xFF1D4ED8)
+            Color(0xFFE7F0FF) to Color(0xFF225CB5)
 
         EstadoPedido.PREPARADO ->
-            Color(0xFFFEF3C7) to Color(0xFF92400E)
+            Color(0xFFF8E8BD) to Color(0xFF795317)
 
         EstadoPedido.ENTREGADO ->
-            Color(0xFFDCFCE7) to Color(0xFF166534)
+            Color(0xFFE5F3E8) to Color(0xFF236B3A)
     }
 
     // Contenedor visual del estado.
@@ -54,6 +55,7 @@ fun EstadoPedidoChip(
                 horizontal = 12.dp,
                 vertical = 6.dp
             ),
+            fontSize = 12.sp,
             fontWeight = FontWeight.SemiBold
         )
     }

@@ -41,6 +41,8 @@ class SesionNavegacionTest {
             esperarTexto("Iniciar sesión")
             escenario.close()
             escenario = ActivityScenario.launch(MainActivity::class.java)
+            esperarTexto("Comenzar")
+            compose.onNodeWithText("Comenzar").performClick()
             esperarTexto("Iniciar sesión")
         } finally {
             escenario?.close()

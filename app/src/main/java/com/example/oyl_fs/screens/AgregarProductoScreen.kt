@@ -1,5 +1,11 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.EncabezadoOYL
+
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -169,6 +175,11 @@ fun AgregarProductoScreen(
         )
     }
 
+    LaunchedEffect(nombre, codigo, categoria, descripcion, precio, stock, stockMinimo, presentacion, imagenUri, disponible) {
+        errorFormulario = null
+        onEdicionFormulario()
+    }
+
     val contexto = LocalContext.current
     val categorias = listOf(
         "Frutos secos",
@@ -218,26 +229,14 @@ fun AgregarProductoScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().entradaOYL()
             .background(FondoAgregar)
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TextButton(onClick = onVolver) {
-                Text("‹", color = OscuroAgregar, fontSize = 30.sp)
-            }
-
-            Text(
-                text = "Agregar producto",
-                modifier = Modifier.weight(1f),
-                color = OscuroAgregar,
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold
-            )
-        }
+        EncabezadoOYL("Agregar producto", onVolver)
 
         Card(
             modifier = Modifier
@@ -247,7 +246,7 @@ fun AgregarProductoScreen(
                         arrayOf("image/jpeg", "image/png")
                     )
                 },
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Color.White
             )
@@ -338,7 +337,7 @@ fun AgregarProductoScreen(
             OutlinedButton(
                 onClick = { menuCategorias = true },
                 modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
+                shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = OscuroAgregar
                 )
@@ -480,7 +479,7 @@ fun AgregarProductoScreen(
 
         AnimatedVisibility(visible = mensaje != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
-            Text(mensaje.orEmpty(), color = Color(0xFFC0392B))
+            MensajeErrorOYL(mensaje.orEmpty())
         }
 
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -592,13 +591,13 @@ private fun CampoAgregar(
                     KeyboardType.Text
                 }
             ),
-            shape = RoundedCornerShape(12.dp),
+            shape = RoundedCornerShape(16.dp),
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 textColor = OscuroAgregar,
                 containerColor = Color.White,
                 cursorColor = OscuroAgregar,
                 focusedBorderColor = CafeAgregar,
-                unfocusedBorderColor = CafeAgregar
+                unfocusedBorderColor = Color(0xFFD5BEA6)
             ),
             modifier = Modifier
                 .fillMaxWidth()
@@ -617,7 +616,7 @@ private fun CampoAgregar(
 )
 @Composable
 private fun AgregarProductoPreview() {
-    MaterialTheme {
+    com.example.oyl_fs.ui.theme.OYL_FSTheme {
         AgregarProductoScreen(
             onVolver = {},
             onGuardar = {}

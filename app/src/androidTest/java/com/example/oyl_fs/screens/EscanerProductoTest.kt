@@ -45,7 +45,7 @@ class EscanerProductoTest {
         compose.onNodeWithText("Ver producto").performScrollTo().performClick()
         compose.onNodeWithText("Detalle del producto").assertIsDisplayed()
         compose.onNodeWithText("Almendras").assertIsDisplayed()
-        compose.onNodeWithText("‹").performClick()
+        compose.onNodeWithContentDescription("Volver").performClick()
         compose.onNodeWithText("Escanear código QR").assertIsDisplayed()
         compose.onNodeWithContentDescription("Volver").performClick()
         compose.onNodeWithText("Escanear producto").assertExists()
@@ -73,7 +73,7 @@ class EscanerProductoTest {
         compose.onNodeWithText("Guardar cambios").performScrollTo().performClick()
         compose.waitUntil(5_000) { vm.obtenerProducto(1)?.stock == 17 }
         compose.onNodeWithText("Detalle del producto").assertExists()
-        compose.onNodeWithText("‹").performScrollTo().performClick()
+        compose.onNodeWithContentDescription("Volver").performScrollTo().performClick()
         compose.onNodeWithText("Escanear código QR").assertIsDisplayed()
         assertFalse(vm.obtenerProducto(1)!!.disponible)
         assertEquals(60, vm.obtenerProducto(2)?.stock)

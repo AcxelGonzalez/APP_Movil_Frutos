@@ -46,6 +46,8 @@ class PerfilViewModel @JvmOverloads constructor(
     val perfiles = _perfiles.asStateFlow()
     private val _error = MutableStateFlow<String?>(null)
     val error = _error.asStateFlow()
+    private val _guardando = MutableStateFlow(false)
+    val guardando = _guardando.asStateFlow()
 
     private val _errores = MutableStateFlow(ErroresPerfil())
     val errores = _errores.asStateFlow()
@@ -66,6 +68,7 @@ class PerfilViewModel @JvmOverloads constructor(
     }
 
     suspend fun guardarPerfil(perfil: PerfilUsuario): Boolean {
+        if (_guardando.value) return false
         val generacion = generacionPerfil
         val actual = _perfiles.value.find { it.id == perfil.id }
         if (actual == null || actual.esAdmin != perfil.esAdmin) {
@@ -82,6 +85,7 @@ class PerfilViewModel @JvmOverloads constructor(
             rut = perfil.rut.trim(), correo = perfil.correo.trim(),
             telefono = perfil.telefono.trim(), direccion = perfil.direccion.trim()
         )
+        _guardando.value = true
         return try {
             if (remoto) {
                 val actualizado = SesionRemotaRepository.actualizarPerfil(
@@ -124,6 +128,8 @@ class PerfilViewModel @JvmOverloads constructor(
             _errores.value = ErroresPerfil(general = if (remoto) e.mensajeApi() else "No se pudo guardar el perfil")
             _error.value = _errores.value.general
             false
+        } finally {
+            _guardando.value = false
         }
     }
 

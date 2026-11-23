@@ -1,10 +1,17 @@
 
 package com.example.oyl_fs.screens
+import com.example.oyl_fs.ui.theme.entradaOYL
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.graphics.Color
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -64,19 +71,15 @@ fun RegistroScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().background(Color(0xFFFFF5E7)).entradaOYL()
             .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(24.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Text(
-            text = "Crear cuenta",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = cafe
-        )
+        com.example.oyl_fs.ui.theme.EncabezadoOYL("Crear cuenta", onIrALogin)
+        Spacer(Modifier.height(8.dp))
 
         Text(
             text = "Registra tus datos para acceder a OYL Frutos Secos",
@@ -97,6 +100,10 @@ fun RegistroScreen(
             isError = errores.alias != null,
             enabled = !estado.procesando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.alias)
@@ -114,6 +121,10 @@ fun RegistroScreen(
             isError = errores.nombre != null,
             enabled = !estado.procesando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.nombre)
@@ -152,6 +163,10 @@ fun RegistroScreen(
             isError = errores.rut != null,
             enabled = !estado.procesando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.rut)
@@ -173,6 +188,10 @@ fun RegistroScreen(
             isError = errores.telefono != null,
             enabled = !estado.procesando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.telefono)
@@ -194,6 +213,10 @@ fun RegistroScreen(
             isError = errores.clave != null,
             enabled = !estado.procesando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.clave)
@@ -215,6 +238,10 @@ fun RegistroScreen(
             isError = errores.confirmacion != null,
             enabled = !estado.procesando,
             singleLine = true,
+            shape = RoundedCornerShape(16.dp),
+            colors = TextFieldDefaults.outlinedTextFieldColors(
+                containerColor = Color.White, focusedBorderColor = cafe,
+                unfocusedBorderColor = Color(0xFFD8C4AE), cursorColor = cafe),
             modifier = Modifier.fillMaxWidth()
         )
         ErrorRegistroCampo(errores.confirmacion)

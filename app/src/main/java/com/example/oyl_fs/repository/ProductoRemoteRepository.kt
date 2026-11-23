@@ -8,6 +8,7 @@ import kotlinx.coroutines.sync.withLock
 import android.content.Context
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.network.ProductoDto
+import com.example.oyl_fs.network.ProductosApi
 import com.example.oyl_fs.network.RetrofitClient
 
 class ProductoRemoteRepository(context: Context, private val api: com.example.oyl_fs.network.ProductosApi = RetrofitClient.productos, private val database: OylDatabase = OylDatabase.obtener(context)) {

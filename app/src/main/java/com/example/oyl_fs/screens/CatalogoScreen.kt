@@ -1,5 +1,13 @@
 package com.example.oyl_fs.screens
 
+import androidx.compose.ui.Alignment
+
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+import com.example.oyl_fs.ui.theme.presionOYL
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.material.ripple.rememberRipple
+
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.material3.Text
@@ -39,15 +47,30 @@ private val CafeOscuroCatalogo = Color(0xFF4B2E15)
 fun CatalogoAdmin(
     viewModel: ProductoViewModel,
     onProductoClick: (ProductoInfo) -> Unit,
-    onAgregarProducto: () -> Unit
+    onAgregarProducto: () -> Unit,
+    onVolver: () -> Unit = {}
 ) {
     val productos by viewModel.productos.collectAsState()
+    val cargando by viewModel.cargandoProductos.collectAsState()
+    val error by viewModel.error.collectAsState()
+    Column(Modifier.fillMaxSize()) {
+        if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+        if (error != null) {
+            Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                MensajeErrorOYL(error.orEmpty())
+                TextButton(onClick = { viewModel.refrescar() }) { Text("Reintentar") }
+            }
+        }
+        Box(Modifier.weight(1f)) {
 
     CatalogoScreen(
         productos = productos,
         onProductoClick = onProductoClick,
-        onAgregarProducto = onAgregarProducto
+        onAgregarProducto = onAgregarProducto,
+        onVolver = onVolver
     )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -55,7 +78,8 @@ fun CatalogoAdmin(
 fun CatalogoScreen(
     productos: List<ProductoInfo>,
     onProductoClick: (ProductoInfo) -> Unit,
-    onAgregarProducto: () -> Unit
+    onAgregarProducto: () -> Unit,
+    onVolver: () -> Unit = {}
 ) {
     var busqueda by rememberSaveable { mutableStateOf("") }
     var categoria by rememberSaveable { mutableStateOf("Todos") }
@@ -80,25 +104,20 @@ fun CatalogoScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Productos",
-            color = CafeOscuroCatalogo,
-            fontSize = 22.sp,
-            fontWeight = FontWeight.Bold
-        )
+        com.example.oyl_fs.ui.theme.EncabezadoOYL("Catálogo", onVolver)
 
         OutlinedTextField(
             value = busqueda,
             onValueChange = { busqueda = it },
             placeholder = { Text("Buscar productos...") },
             singleLine = true,
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(18.dp),
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 textColor = CafeOscuroCatalogo,
                 containerColor = Color.White,
                 cursorColor = CafeOscuroCatalogo,
                 focusedBorderColor = CafeCatalogo,
-                unfocusedBorderColor = CafeCatalogo
+                unfocusedBorderColor = Color(0xFFD8C4AE)
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -160,7 +179,7 @@ fun CatalogoScreen(
 
         // Dos productos por fila.
         LazyVerticalGrid(
-            columns = GridCells.Fixed(2),
+            columns = GridCells.Adaptive(minSize = 154.dp),
             modifier = Modifier
                 .fillMaxWidth()
                 .weight(1f),
@@ -186,75 +205,48 @@ private fun TarjetaCatalogo(
     producto: ProductoInfo,
     onClick: () -> Unit
 ) {
+    val interacciones = remember { MutableInteractionSource() }
     Card(
         modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick),
-        shape = RoundedCornerShape(18.dp),
+            .fillMaxWidth().presionOYL(interacciones)
+            .clickable(interactionSource = interacciones, indication = rememberRipple(), onClick = onClick),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         )
     ) {
-        Column(
-            modifier = Modifier.padding(12.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            ImagenProducto(
-                producto = producto,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(100.dp)
-                    .clip(RoundedCornerShape(14.dp))
-            )
-
-            TextoTarjetaProducto(
-                text = producto.nombre,
-                color = CafeOscuroCatalogo,
-                fontWeight = FontWeight.Bold
-            )
-
-            TextoTarjetaProducto(
-                text = producto.presentacion,
-                color = CafeCatalogo,
-                fontSize = 12.sp
-            )
-
-            Text(
-                text = "$" + "%,d"
-                    .format(producto.precio)
-                    .replace(',', '.'),
-                color = CafeOscuroCatalogo,
-                fontWeight = FontWeight.Bold
-            )
-
-            Text(
-                text = "Stock: ${producto.stock} uds",
-                color = CafeCatalogo,
-                fontSize = 12.sp
-            )
-
-            Text(
-                text = when {
-                    !producto.disponible -> "Inactivo"
-                    producto.stock <= 0 -> "Sin stock"
-                    else -> "En stock"
-                },
-                color = CafeOscuroCatalogo,
-                fontSize = 12.sp
-            )
-
-            Button(
-                onClick = onClick,
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = CafeOscuroCatalogo,
-                    contentColor = Color.White
-                )
-            ) {
-                Text("Ver detalle")
+        Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
+            Box(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp))) {
+                ImagenProducto(producto, Modifier.fillMaxSize())
+                Surface(color = Color.White.copy(alpha = 0.95f), shape = RoundedCornerShape(8.dp),
+                    modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)) {
+                    Text(producto.presentacion, color = CafeCatalogo, fontSize = 10.sp,
+                        maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
+                }
+                if (!producto.disponible || producto.stock <= 0) {
+                    Surface(color = Color(0xFFFDE8E6), shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.align(Alignment.TopEnd).padding(5.dp)) {
+                        Text(if (!producto.disponible) "Inactivo" else "Sin stock",
+                            color = Color(0xFFB3261E), fontSize = 9.sp,
+                            modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp))
+                    }
+                }
             }
-
+            TextoTarjetaProducto(producto.nombre, color = CafeOscuroCatalogo,
+                fontWeight = FontWeight.Bold, fontSize = 14.sp)
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("$" + "%,d".format(producto.precio).replace(',', '.'),
+                    color = CafeOscuroCatalogo, fontWeight = FontWeight.Bold,
+                    fontSize = 16.sp, modifier = Modifier.weight(1f))
+                Text("${producto.stock} uds", color = CafeCatalogo, fontSize = 10.sp)
+            }
+            Button(onClick = onClick, modifier = Modifier.fillMaxWidth(),
+                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 6.dp),
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = CafeOscuroCatalogo, contentColor = Color.White)) {
+                Text("Ver detalle", fontSize = 12.sp)
+            }
         }
     }
 }
@@ -406,12 +398,10 @@ fun ProductosAdmin(
         }
 
         else -> Column(Modifier.fillMaxSize()) {
-            TextButton(onClick = onVolver) {
-                Text("‹ Volver al menú", color = CafeOscuroCatalogo)
-            }
             Box(Modifier.weight(1f)) {
                 CatalogoAdmin(
                     viewModel = viewModel,
+                    onVolver = onVolver,
                     onProductoClick = { seleccionado ->
                         viewModel.limpiarError()
                         productoId = seleccionado.id
@@ -430,7 +420,7 @@ fun ProductosAdmin(
 @Preview(showBackground = true)
 @Composable
 private fun CatalogoPreview() {
-    MaterialTheme {
+    com.example.oyl_fs.ui.theme.OYL_FSTheme {
         CatalogoScreen(
             productos = ProductosDatos.productos,
             onProductoClick = {},
@@ -447,7 +437,7 @@ private fun TextoTarjetaProducto(
     fontSize: TextUnit = 16.sp,
     lineas: Int = 2
 ) {
-    val altoLinea = (fontSize.value * 1.5f).sp
+    val altoLinea = (fontSize.value * 1.3f).sp
     val alto = with(LocalDensity.current) { (altoLinea.value * lineas).sp.toDp() }
     Text(
         text = text,

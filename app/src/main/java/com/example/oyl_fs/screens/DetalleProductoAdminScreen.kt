@@ -1,8 +1,11 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.EncabezadoOYL
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalInspectionMode
 import androidx.compose.ui.platform.LocalDensity
 
 import com.example.oyl_fs.model.ProductoInfo
@@ -35,11 +38,14 @@ fun DetalleProductoAdminScreen(
     producto: ProductoInfo,
     onGenerarQr: () -> Unit
 ) {
-    val entrada = remember(producto.id) { Animatable(0f) }
-    val desplazamiento = with(LocalDensity.current) { 18.dp.toPx() }
+    val vistaPrevia = LocalInspectionMode.current
+    val entrada = remember(producto.id) { Animatable(if (vistaPrevia) 1f else 0f) }
+    val desplazamiento = with(LocalDensity.current) { 40.dp.toPx() }
     LaunchedEffect(producto.id) {
-        withFrameNanos { }
-        entrada.animateTo(1f, tween(650))
+        if (!vistaPrevia) {
+            withFrameNanos { }
+            entrada.animateTo(1f, tween(850))
+        }
     }
 
     var confirmarEliminar by remember(producto.id) {
@@ -73,25 +79,7 @@ fun DetalleProductoAdminScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            TextButton(onClick = onVolver) {
-                Text(
-                    text = "‹",
-                    color = OscuroProductoAdmin,
-                    fontSize = 30.sp
-                )
-            }
-
-            Text(
-                text = "Detalle del producto",
-                color = OscuroProductoAdmin,
-                fontSize = 20.sp,
-                fontWeight = FontWeight.Bold,
-                modifier = Modifier.weight(1f)
-            )
-        }
+        EncabezadoOYL("Detalle del producto", onVolver)
 
         // Muestra una imagen de drawable o del teléfono.
         ImagenProducto(
@@ -99,12 +87,12 @@ fun DetalleProductoAdminScreen(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(210.dp)
-                .clip(RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(24.dp))
         )
 
         Card(
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(18.dp),
+            shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = Color.White
             )
@@ -173,7 +161,7 @@ fun DetalleProductoAdminScreen(
         OutlinedButton(
             onClick = onGenerarQr,
             modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
+            shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroProductoAdmin)
         ) { Text("Generar QR del producto") }
 
@@ -218,7 +206,7 @@ fun DetalleProductoAdminScreen(
             OutlinedButton(
                 onClick = onEditar,
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = OscuroProductoAdmin
                 )
@@ -229,7 +217,7 @@ fun DetalleProductoAdminScreen(
             OutlinedButton(
                 onClick = { confirmarEliminar = true },
                 modifier = Modifier.weight(1f),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 colors = ButtonDefaults.outlinedButtonColors(
                     contentColor = RojoProductoAdmin
                 )
@@ -278,7 +266,7 @@ private fun SeccionProductoAdmin(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         )
@@ -309,7 +297,7 @@ private fun DatoProductoAdmin(
 ) {
     Card(
         modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
+        shape = RoundedCornerShape(20.dp),
         colors = CardDefaults.cardColors(
             containerColor = Color.White
         )
@@ -342,7 +330,7 @@ private fun DatoProductoAdmin(
 )
 @Composable
 private fun DetalleProductoAdminPreview() {
-    MaterialTheme {
+    com.example.oyl_fs.ui.theme.OYL_FSTheme {
         DetalleProductoAdminScreen(
             producto = ProductosDatos.almendras,
             onVolver = {},

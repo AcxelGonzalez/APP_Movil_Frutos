@@ -1,5 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.OYL_FS" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.OYL_FS.Base" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFF5E7</item>
+        <item name="android:statusBarColor">#4B2E15</item>
+        <item name="android:navigationBarColor">#4B2E15</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+    <style name="Theme.OYL_FS" parent="Theme.OYL_FS.Base" />
 </resources>

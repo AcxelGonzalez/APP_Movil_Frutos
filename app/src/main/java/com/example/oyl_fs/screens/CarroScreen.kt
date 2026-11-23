@@ -1,5 +1,11 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.core.tween
 import com.example.oyl_fs.model.ProductoInfo
@@ -137,10 +143,9 @@ fun CarroContenido(
                 Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(onClick = onVolver) {
-                    Icon(Icons.Default.ArrowBack, "Volver", tint = SecundarioOYL)
-                }
-                Text("Mi carrito", fontWeight = FontWeight.Bold, color = SecundarioOYL, fontSize = 20.sp)
+                BotonVolverOYL(onVolver)
+                Spacer(Modifier.width(14.dp))
+                com.example.oyl_fs.ui.theme.TituloPantallaOYL("Mi carrito", Modifier.weight(1f))
             }
         },
         bottomBar = {
@@ -176,7 +181,7 @@ private fun FilaCarrito(
 ) {
     Card(
         modifier = Modifier.fillMaxWidth().animateContentSize(),
-        shape = RoundedCornerShape(18.dp),
+        shape = RoundedCornerShape(24.dp),
         colors = CardDefaults.cardColors(containerColor = Color.White)
     ) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -216,12 +221,10 @@ private fun FilaCarrito(
                 Spacer(Modifier.height(8.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     BotonCantidad(Icons.Default.Remove, "Disminuir", onDisminuir)
-                    Text(
-                        "${item.cantidad}",
-                        modifier = Modifier.padding(horizontal = 14.dp),
-                        fontWeight = FontWeight.Bold,
-                        color = SecundarioOYL
-                    )
+                    Crossfade(targetState = item.cantidad, animationSpec = tween(350)) { cantidad ->
+                        Text("$cantidad", modifier = Modifier.padding(horizontal = 14.dp),
+                            fontWeight = FontWeight.Bold, color = SecundarioOYL)
+                    }
                     BotonCantidad(Icons.Default.Add, "Aumentar", onAumentar)
                 }
             }
@@ -231,7 +234,9 @@ private fun FilaCarrito(
                 IconButton(onClick = onQuitar) {
                     Icon(Icons.Default.Delete, "Quitar", tint = PrincipalOYL)
                 }
-                Text(formatoPrecio(item.subtotal), fontWeight = FontWeight.Bold, color = SecundarioOYL)
+                Crossfade(targetState = item.subtotal, animationSpec = tween(450)) { subtotal ->
+                    Text(formatoPrecio(subtotal), fontWeight = FontWeight.Bold, color = SecundarioOYL)
+                }
             }
         }
     }
@@ -252,6 +257,15 @@ private fun BotonCantidad(icono: ImageVector, descripcion: String, onClick: () -
 }
 @Composable
 private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
+    val pulso = remember { Animatable(1f) }
+    var totalAnterior by remember { mutableStateOf(estado.total) }
+    LaunchedEffect(estado.total) {
+        if (estado.total != totalAnterior) {
+            totalAnterior = estado.total
+            pulso.animateTo(1.10f, tween(140))
+            pulso.animateTo(1f, spring(dampingRatio = 0.65f))
+        }
+    }
     Surface(color = Color.White, shadowElevation = 8.dp) {
         Column(Modifier.fillMaxWidth().padding(20.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -261,7 +275,8 @@ private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
                     modifier = Modifier.weight(1f)
                 )
                 // Transición entre importes exactos, sin modificar el cálculo del pedido.
-                Crossfade(targetState = estado.total, animationSpec = tween(450)) { total ->
+                Crossfade(targetState = estado.total, animationSpec = tween(650),
+                    modifier = Modifier.graphicsLayer { scaleX = pulso.value; scaleY = pulso.value }) { total ->
                     Text(
                         formatoPrecio(total),
                         fontSize = 22.sp,
@@ -274,7 +289,7 @@ private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
             Button(
                 onClick = onConfirmar,
                 colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
-                shape = RoundedCornerShape(16.dp),
+                shape = RoundedCornerShape(20.dp),
                 modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
             ) {
                 Text("Confirmar pedido")

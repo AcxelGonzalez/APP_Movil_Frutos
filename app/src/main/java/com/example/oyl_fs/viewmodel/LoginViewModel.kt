@@ -225,4 +225,10 @@ class LoginViewModel(
             }
         }
     }
+    fun limpiarError() { limpiarErrorUsuario(); limpiarErrorContrasena() }
+
+    fun iniciarSesionRemota(usuario: String, contrasena: String, onExito: (SesionIdentificada) -> Unit) {
+        iniciarSesion(usuario, contrasena, onExito)
+    }
+
 }

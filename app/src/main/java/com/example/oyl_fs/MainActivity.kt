@@ -1,5 +1,7 @@
 package com.example.oyl_fs
 
+import com.example.oyl_fs.screens.BienvenidaScreen
+
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.lifecycleScope
 
@@ -156,6 +158,7 @@ class MainActivity : ComponentActivity() {
             OYL_FSTheme {
 
                 val perfiles by perfilViewModel.perfiles.collectAsState()
+                var mostrarBienvenida by rememberSaveable { mutableStateOf(true) }
 
                 // Observa los pedidos del administrador.
                 // Permite actualizar el pedido si cambia su estado.
@@ -197,6 +200,7 @@ class MainActivity : ComponentActivity() {
                 var procesandoPreparacion by remember {
                     mutableStateOf(false)
                 }
+                var pestanaHome by rememberSaveable { mutableStateOf(0) }
                 var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
 
                 // Navegación al carrito.
@@ -261,6 +265,7 @@ class MainActivity : ComponentActivity() {
                     errorPreparacion = null
                     try {
                         if (sesion != null) {
+                            mostrarBienvenida = false
                             perfilViewModel.activarRemoto(requireNotNull(SesionRemotaRepository.usuario.value))
                             productoViewModel.refrescar()
                             carritoViewModel.iniciar(if (sesion.esAdmin) "" else sesion.usuarioId)
@@ -273,6 +278,7 @@ class MainActivity : ComponentActivity() {
                             mostrarHistorial = false
                             mostrarCarrito = false
                             pedidoPrepararId = null
+                            pestanaHome = 0
                             pestanaDesdeHistorial = null
                         }
                     } catch (e: CancellationException) {
@@ -310,7 +316,10 @@ class MainActivity : ComponentActivity() {
                                 }
                             }
 
-                            // ---------- Login y registro ----------
+                            // ---------- Bienvenida, login y registro ----------
+                            !sesionIniciada && mostrarBienvenida -> BienvenidaScreen(
+                                onComenzar = { mostrarBienvenida = false }
+                            )
                             !sesionIniciada -> {
 
                                 if (mostrarRegistro) {
@@ -524,6 +533,8 @@ class MainActivity : ComponentActivity() {
                             esAdmin -> {
 
                                 HomeAdmin(
+                                    pestanaSeleccionada = pestanaHome,
+                                    onSeleccionarPestana = { pestanaHome = it },
                                     pestanaSolicitada = pestanaDesdeHistorial,
                                     onPestanaAtendida = { pestanaDesdeHistorial = null },
                                     onLogout = {
@@ -550,6 +561,8 @@ class MainActivity : ComponentActivity() {
 
                                 estadoHomeCliente.SaveableStateProvider(usuarioSesionId) {
                                 HomeCliente(
+                                    pestanaSeleccionada = pestanaHome,
+                                    onSeleccionarPestana = { pestanaHome = it },
                                     pestanaSolicitada = pestanaDesdeHistorial,
                                     onPestanaAtendida = { pestanaDesdeHistorial = null },
 

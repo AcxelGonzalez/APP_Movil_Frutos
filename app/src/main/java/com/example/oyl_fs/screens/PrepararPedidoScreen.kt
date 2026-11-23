@@ -1,6 +1,10 @@
 
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import com.example.oyl_fs.ui.theme.entradaOYL
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +39,7 @@ fun PrepararPedidoScreen(
     val contexto = LocalContext.current
 
 
+    // recibe cambios del viewmodel
     val cantidades by viewModel.cantidadesEscaneadas.collectAsState()
 
     val productosPreparacion by viewModel
@@ -78,7 +83,7 @@ fun PrepararPedidoScreen(
 
     Column(
         modifier = Modifier
-            .fillMaxSize()
+            .fillMaxSize().entradaOYL()
             .background(FondoOYL)
             .verticalScroll(rememberScrollState())
             .padding(20.dp),
@@ -87,21 +92,10 @@ fun PrepararPedidoScreen(
 
         // ---------- Encabezado ----------
         Row {
-            IconButton(onClick = onVolver) {
-                Icon(
-                    Icons.Default.ArrowBack,
-                    contentDescription = "Volver",
-                    tint = SecundarioOYL
-                )
-            }
+            BotonVolverOYL(onVolver)
 
             Column {
-                Text(
-                    "Preparar pedido",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = SecundarioOYL
-                )
+                com.example.oyl_fs.ui.theme.TituloPantallaOYL("Preparar pedido", Modifier.fillMaxWidth())
 
                 Text(
                     pedido.id,
@@ -118,6 +112,7 @@ fun PrepararPedidoScreen(
         // ---------- Productos del pedido ----------
         productosPreparacion.forEach { producto ->
 
+            // actualizar contador y barra de progreso de los productos
             val verificadas = cantidades[producto.productoId] ?: 0
             val completado = verificadas == producto.cantidad
 

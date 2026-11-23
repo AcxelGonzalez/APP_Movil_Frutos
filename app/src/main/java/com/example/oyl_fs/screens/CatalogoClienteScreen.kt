@@ -1,5 +1,10 @@
 package com.example.oyl_fs.screens
 
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import com.example.oyl_fs.ui.theme.MensajeErrorOYL
+
+
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.Spring
@@ -64,6 +69,8 @@ fun ProductosCliente(
     onAbrirCarrito: () -> Unit
 ) {
     val productos by productoViewModel.productos.collectAsState()
+    val cargando by productoViewModel.cargandoProductos.collectAsState()
+    val error by productoViewModel.error.collectAsState()
     val carrito by carritoViewModel.uiState.collectAsState()
     var productoId by rememberSaveable { mutableStateOf<Int?>(null) }
     val seleccionado = productos.find { it.id == productoId && it.disponible }
@@ -94,6 +101,15 @@ fun ProductosCliente(
             onAbrirCarrito = onAbrirCarrito
         )
     } else {
+        Column(Modifier.fillMaxSize()) {
+            if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (error != null) {
+                Column(Modifier.fillMaxWidth().padding(16.dp)) {
+                    MensajeErrorOYL(error.orEmpty())
+                    TextButton(onClick = { productoViewModel.refrescar() }) { Text("Reintentar") }
+                }
+            }
+            Box(Modifier.weight(1f)) {
         CatalogoClienteScreen(
             productos = productos.filter { it.disponible },
             onVolver = onVolver,
@@ -104,6 +120,8 @@ fun ProductosCliente(
             totalCarrito = carrito.total,
             onAbrirCarrito = onAbrirCarrito
         )
+            }
+        }
     }
 }
 
@@ -139,16 +157,14 @@ fun CatalogoClienteScreen(
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            IconButton(onClick = onVolver) {
-                Icon(Icons.Default.ArrowBack, "Volver al inicio", tint = OscuroCliente)
-            }
-            Text("Productos", color = OscuroCliente, fontSize = 22.sp,
-                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            BotonVolverOYL(onVolver)
+            com.example.oyl_fs.ui.theme.TituloPantallaOYL("Catálogo", Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
             // El contador se dibuja dentro del botón para mantenerlo alineado.
-            Box(Modifier.size(56.dp)) {
+            Box(Modifier.size(48.dp)) {
                 FilledIconButton(onClick = onAbrirCarrito, modifier = Modifier.fillMaxSize(),
                     colors = IconButtonDefaults.filledIconButtonColors(containerColor = OscuroCliente)) {
-                    Icon(Icons.Default.ShoppingCart, "Abrir carrito: $cantidadEnCarrito unidades", tint = Color.White)
+                    Icon(Icons.Default.ShoppingCart, "Abrir carrito: $cantidadEnCarrito unidades", tint = Color.White, modifier = Modifier.size(22.dp))
                 }
                 if (cantidadEnCarrito > 0) {
                     Badge(Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
@@ -169,10 +185,10 @@ fun CatalogoClienteScreen(
                 }
             },
             singleLine = true,
-            shape = RoundedCornerShape(50),
+            shape = RoundedCornerShape(18.dp),
             colors = TextFieldDefaults.outlinedTextFieldColors(
                 textColor = OscuroCliente, containerColor = Color.White,
-                focusedBorderColor = CafeCliente, unfocusedBorderColor = CafeCliente
+                focusedBorderColor = CafeCliente, unfocusedBorderColor = Color(0xFFD8C4AE)
             ),
             modifier = Modifier.fillMaxWidth()
         )
@@ -203,7 +219,7 @@ fun CatalogoClienteScreen(
             }
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(minSize = 140.dp),
+            columns = GridCells.Adaptive(minSize = 154.dp),
             modifier = Modifier.weight(1f),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -211,7 +227,9 @@ fun CatalogoClienteScreen(
         ) {
             items(filtrados, key = { it.id }) { producto ->
                 Card(
-                    shape = RoundedCornerShape(18.dp),
+                    modifier = Modifier,
+                    border = BorderStroke(1.dp, Color(0xFFEEDFCB)),
+                    shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
                     Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -231,14 +249,16 @@ fun CatalogoClienteScreen(
                             OutlinedButton(
                                 onClick = { onDetalle(producto) },
                                 modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(2.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroCliente)
                             ) { Text("Detalle", fontSize = 11.sp) }
                             Button(
                                 onClick = { productoParaAgregarId = producto.id; cantidad = 1 },
                                 enabled = unidadesDisponibles(producto) > 0,
                                 modifier = Modifier.weight(1f),
-                                contentPadding = PaddingValues(2.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 6.dp),
+                                shape = RoundedCornerShape(12.dp),
                                 colors = ButtonDefaults.buttonColors(containerColor = OscuroCliente)
                             ) { Text("Agregar", fontSize = 11.sp) }
                         }
@@ -247,7 +267,7 @@ fun CatalogoClienteScreen(
             }
         }
         if (cantidadEnCarrito > 0) {
-            Surface(color = Color.White, shape = RoundedCornerShape(18.dp),
+            Surface(color = Color.White, shape = RoundedCornerShape(24.dp),
                 border = BorderStroke(1.dp, CafeCliente.copy(alpha = 0.15f))) {
                 Row(Modifier.fillMaxWidth().padding(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -352,7 +372,7 @@ fun CatalogoClienteScreen(
 @Preview(showBackground = true)
 @Composable
 private fun CatalogoClientePreview() {
-    MaterialTheme {
+    com.example.oyl_fs.ui.theme.OYL_FSTheme {
         CatalogoClienteScreen(
             productos = ProductosDatos.productos,
             onVolver = {}, onDetalle = {}, onAgregar = { _, _ -> false },
@@ -419,7 +439,7 @@ private fun TextoTarjetaProducto(
     fontSize: TextUnit = 16.sp,
     lineas: Int = 2
 ) {
-    val altoLinea = (fontSize.value * 1.5f).sp
+    val altoLinea = (fontSize.value * 1.3f).sp
     val alto = with(LocalDensity.current) { (altoLinea.value * lineas).sp.toDp() }
     Text(
         text = text,
