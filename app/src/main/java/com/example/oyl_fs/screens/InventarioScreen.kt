@@ -51,6 +51,7 @@ fun InventarioScreen(
     // Observamos el catálogo actualizado.
     val productos by viewModel.productos.collectAsState()
     val error by viewModel.error.collectAsState()
+    val movimiento by viewModel.movimientoStock.collectAsState()
     val cargando by viewModel.cargandoProductos.collectAsState()
     var abiertoDesdeQr by rememberSaveable { mutableStateOf(false) }
 
@@ -78,7 +79,8 @@ fun InventarioScreen(
                 viewModel.limpiarError()
                 productoId = productoInicialId
                 abiertoDesdeQr = true
-                pantalla = "editar"
+                viewModel.iniciarMovimientoStock(productoInicialId)
+                pantalla = "movimiento"
             }
             onProductoInicialAtendido()
             if (!existe) onVolver()
@@ -91,10 +93,11 @@ fun InventarioScreen(
 
     // Regresamos a la pantalla anterior.
     fun volver() {
+        if (movimiento.procesando) return
         viewModel.limpiarError()
 
         when (pantalla) {
-            "editar", "qr" -> pantalla = "detalle"
+            "editar", "qr", "movimiento" -> pantalla = "detalle"
             "detalle" -> {
                 productoId = null
                 pantalla = "inventario"
@@ -140,6 +143,27 @@ fun InventarioScreen(
                     },
                     onGenerarQr = {
                         pantalla = "qr"
+                    },
+                    onMovimientoStock = {
+                        viewModel.iniciarMovimientoStock(productoSeleccionado.id)
+                        pantalla = "movimiento"
+                    }
+                )
+            }
+        }
+
+        "movimiento" -> {
+            if (productoSeleccionado != null) {
+                MovimientoInventarioScreen(
+                    producto = productoSeleccionado,
+                    estado = movimiento,
+                    onVolver = { volver() },
+                    onRegistrar = { tipo, cantidad ->
+                        viewModel.registrarMovimientoStock(productoSeleccionado.id, tipo, cantidad)
+                    },
+                    onRevisarInventario = {
+                        viewModel.refrescar()
+                        volver()
                     }
                 )
             }

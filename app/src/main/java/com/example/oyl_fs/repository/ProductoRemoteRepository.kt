@@ -1,5 +1,8 @@
 package com.example.oyl_fs.repository
 
+import androidx.room.withTransaction
+import kotlinx.coroutines.CancellationException
+import com.example.oyl_fs.network.AjusteStockRequest
 import com.example.oyl_fs.data.local.OylDatabase
 import com.example.oyl_fs.data.local.aEntidad
 import retrofit2.HttpException
@@ -27,6 +30,27 @@ class ProductoRemoteRepository(context: Context, private val api: com.example.oy
             producto.aEntidad(if (producto.imagen == 0) null else contexto.resources.getResourceEntryName(producto.imagen))
         })
         lista
+    }
+
+    data class MovimientoRegistrado(val producto: ProductoInfo, val cacheActualizada: Boolean)
+
+    suspend fun ajustarStock(id: Int, cambio: Int): MovimientoRegistrado = cargaMutex.withLock {
+        require(id > 0 && cambio != 0) { "Movimiento de stock inválido" }
+        val producto = api.ajustarStock(id.toLong(), AjusteStockRequest(cambio)).aProductoInfo()
+        check(producto.id == id && producto.stock >= 0) { "Respuesta de stock inválida" }
+        // Un fallo local posterior al éxito HTTP no debe invitar a repetir el movimiento.
+        val cacheActualizada = try {
+            val entidad = producto.aEntidad(if (producto.imagen == 0) null else contexto.resources.getResourceEntryName(producto.imagen))
+            database.withTransaction {
+                if (database.productoDao().actualizar(entidad) == 0) database.productoDao().insertar(entidad)
+            }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+        MovimientoRegistrado(producto, cacheActualizada)
     }
 
     suspend fun crear(producto: ProductoInfo): ProductoInfo =

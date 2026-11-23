@@ -51,6 +51,8 @@ class IntegracionRemotaRoomTest {
         override suspend fun obtener(id: Long) = lista.first { it.id == id }
         override suspend fun crear(producto: ProductoDto) = producto.copy(id = 902)
         override suspend fun actualizar(id: Long, producto: ProductoDto) = producto.copy(id = id)
+        override suspend fun ajustarStock(id: Long, ajuste: com.example.oyl_fs.network.AjusteStockRequest): ProductoDto =
+            throw UnsupportedOperationException("Los casos existentes no simulan movimientos de inventario")
         override suspend fun eliminar(id: Long): Response<Unit> = if (borrado == 204) Response.success(Unit) else Response.error(borrado, "{}".toResponseBody())
     }
     private class Pedidos : PedidosApi {

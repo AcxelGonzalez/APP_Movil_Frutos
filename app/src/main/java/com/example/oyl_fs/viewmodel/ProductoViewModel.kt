@@ -1,5 +1,10 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.model.TipoMovimientoStock
+import com.example.oyl_fs.model.ValidacionMovimientoStock
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
+import retrofit2.HttpException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.lifecycle.ViewModel
@@ -17,11 +22,74 @@ import kotlinx.coroutines.flow.collect
 import com.example.oyl_fs.network.mensajeApi
 import com.example.oyl_fs.repository.ProductoRemoteRepository
 
+data class MovimientoStockUiState(
+    val productoId: Int? = null,
+    val procesando: Boolean = false,
+    val error: String? = null,
+    val resultadoIncierto: Boolean = false,
+    val confirmado: ProductoInfo? = null,
+    val advertencia: String? = null
+)
+
 class ProductoViewModel(
     private val roomRepository: ProductoRoomRepository? = null,
     // Si se entrega, el backend (ms-productos) es la fuente de datos.
     private val remoteRepository: ProductoRemoteRepository? = null
 ) : ViewModel() {
+
+    private val _movimientoStock = MutableStateFlow(MovimientoStockUiState())
+    val movimientoStock = _movimientoStock.asStateFlow()
+
+    fun iniciarMovimientoStock(productoId: Int) {
+        if (_movimientoStock.value.procesando) return
+        _movimientoStock.value = MovimientoStockUiState(productoId = productoId)
+    }
+
+    fun registrarMovimientoStock(productoId: Int, tipo: TipoMovimientoStock, cantidadTexto: String) {
+        val anterior = _movimientoStock.value
+        if (anterior.productoId != productoId || anterior.procesando || anterior.confirmado != null || anterior.resultadoIncierto) return
+        val errorCantidad = ValidacionMovimientoStock.errorCantidad(cantidadTexto)
+        if (errorCantidad != null) {
+            _movimientoStock.value = MovimientoStockUiState(productoId, error = errorCantidad)
+            return
+        }
+        val remoto = remoteRepository
+        if (productoId <= 0 || remoto == null) {
+            _movimientoStock.value = MovimientoStockUiState(productoId, error = "Los movimientos de inventario requieren conexión con el servidor.")
+            return
+        }
+        // Se activa antes de lanzar la corrutina para bloquear pulsaciones repetidas.
+        _movimientoStock.value = MovimientoStockUiState(productoId, procesando = true)
+        val cambio = tipo.cambio(cantidadTexto.trim().toInt())
+        viewModelScope.launch {
+            try {
+                val resultado = remoto.ajustarStock(productoId, cambio)
+                _productos.value = _productos.value.map { if (it.id == productoId) resultado.producto else it }
+                _movimientoStock.value = MovimientoStockUiState(
+                    productoId = productoId,
+                    confirmado = resultado.producto,
+                    advertencia = if (resultado.cacheActualizada) null else
+                        "El movimiento fue registrado, pero no se pudo actualizar la copia local. Vuelve a actualizar el inventario antes de usar el catálogo guardado."
+                )
+            } catch (e: CancellationException) {
+                if (currentCoroutineContext().isActive) movimientoIncierto(productoId)
+                throw e
+            } catch (e: Exception) {
+                if (e is HttpException && e.code() in listOf(400, 401, 403, 404, 409, 422)) {
+                    _movimientoStock.value = MovimientoStockUiState(productoId, error = e.mensajeApi())
+                } else {
+                    movimientoIncierto(productoId)
+                }
+            }
+        }
+    }
+
+    private fun movimientoIncierto(productoId: Int) {
+        _movimientoStock.value = MovimientoStockUiState(
+            productoId = productoId, resultadoIncierto = true,
+            error = "No se pudo confirmar el resultado. El movimiento podría haberse registrado. Actualiza y revisa las existencias antes de registrar otro movimiento."
+        )
+    }
 
     private val cargaMutex = Mutex()
 
