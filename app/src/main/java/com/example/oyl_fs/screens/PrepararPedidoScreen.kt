@@ -39,6 +39,7 @@ fun PrepararPedidoScreen(
     val contexto = LocalContext.current
 
 
+    // recibe cambios del viewmodel
     val cantidades by viewModel.cantidadesEscaneadas.collectAsState()
 
     val productosPreparacion by viewModel
@@ -111,6 +112,7 @@ fun PrepararPedidoScreen(
         // ---------- Productos del pedido ----------
         productosPreparacion.forEach { producto ->
 
+            // actualizar contador y barra de progreso de los productos
             val verificadas = cantidades[producto.productoId] ?: 0
             val completado = verificadas == producto.cantidad
 

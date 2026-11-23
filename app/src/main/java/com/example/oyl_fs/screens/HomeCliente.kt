@@ -206,14 +206,6 @@ fun HomeCliente(
 
         when (tab) {
             /*
-             * PESTAÑA TIENDAS
-             *
-             * Integra MapaScreen dentro de HomeCliente.
-             *
-             * El mapa obtiene sus puntos desde MapaViewModel
-             * y PuntoRetiroRepository.
-             *
-             * El botón Volver regresa al inicio del cliente.
              */
             2 -> {
                 Box(
