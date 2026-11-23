@@ -753,5 +753,5 @@ El avance se gestionó en Trello, con columnas por etapa y tarjetas por funciona
 
 <p align="center">
   Proyecto académico · Duoc UC · Escuela de Informática y Telecomunicaciones<br>
-  DSY1105 — Desarrollo de Aplicaciones Móviles
+  DSY1105 — Desarrollo de Aplicaciones Móviles - Docente: Cristian Gomez Vega
 </p>
