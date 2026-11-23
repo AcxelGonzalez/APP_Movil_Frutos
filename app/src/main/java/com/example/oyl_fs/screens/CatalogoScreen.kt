@@ -260,6 +260,7 @@ fun ProductosAdmin(
 ) {
     var pantalla by rememberSaveable { mutableStateOf("catalogo") }
     var productoId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var avisoGuardado by rememberSaveable { mutableStateOf<String?>(null) }
 
     val productos by viewModel.productos.collectAsState()
     val producto = productos.find { it.id == productoId }
@@ -299,14 +300,22 @@ fun ProductosAdmin(
     when (pantalla) {
         "agregar" -> AgregarProductoAdmin(
             viewModel = viewModel,
-            onVolver = { volver() }
+            onVolver = { volver() },
+            onGuardado = { mensaje ->
+                avisoGuardado = mensaje
+                pantalla = "catalogo"
+            }
         )
 
         "editar" -> if (producto != null) {
             EditarProductoAdmin(
                 producto = producto,
                 viewModel = viewModel,
-                onVolver = { volver() }
+                onVolver = { volver() },
+                onGuardado = { mensaje ->
+                    avisoGuardado = mensaje
+                    pantalla = if (productos.any { it.id == productoId }) "detalle" else "catalogo"
+                }
             )
         }
 
@@ -316,6 +325,7 @@ fun ProductosAdmin(
 
         "detalle" -> if (producto != null) {
             Column(Modifier.fillMaxSize()) {
+                AvisoGuardadoProducto(avisoGuardado) { avisoGuardado = null }
 
                 if (eliminando) {
                     LinearProgressIndicator(
@@ -347,6 +357,7 @@ fun ProductosAdmin(
                         },
                         onEditar = {
                             if (!eliminando) {
+                                avisoGuardado = null
                                 viewModel.limpiarError()
                                 pantalla = "editar"
                             }
@@ -357,6 +368,7 @@ fun ProductosAdmin(
                             // Impide procesar solicitudes repetidas.
                             if (!eliminando) {
 
+                                avisoGuardado = null
                                 eliminando = true
 
                                 // Guardamos el ID antes de comenzar
@@ -398,16 +410,19 @@ fun ProductosAdmin(
         }
 
         else -> Column(Modifier.fillMaxSize()) {
+            AvisoGuardadoProducto(avisoGuardado) { avisoGuardado = null }
             Box(Modifier.weight(1f)) {
                 CatalogoAdmin(
                     viewModel = viewModel,
                     onVolver = onVolver,
                     onProductoClick = { seleccionado ->
+                        avisoGuardado = null
                         viewModel.limpiarError()
                         productoId = seleccionado.id
                         pantalla = "detalle"
                     },
                     onAgregarProducto = {
+                        avisoGuardado = null
                         viewModel.limpiarError()
                         pantalla = "agregar"
                     }

@@ -69,7 +69,8 @@ private val OscuroEditar = Color(0xFF4B2E15)
 fun EditarProductoAdmin(
     producto: ProductoInfo,
     viewModel: ProductoViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onGuardado: ((String) -> Unit)? = null
 ) {
 
     val error by viewModel.error.collectAsState()
@@ -114,7 +115,11 @@ fun EditarProductoAdmin(
                             )
 
                         if (actualizado) {
-                            onVolver()
+                            val mensaje = mensajeGuardadoProducto(
+                                editado = true,
+                                catalogoPendiente = viewModel.errorCatalogo.value != null
+                            )
+                            if (onGuardado != null) onGuardado(mensaje) else onVolver()
                         }
 
                     } finally {

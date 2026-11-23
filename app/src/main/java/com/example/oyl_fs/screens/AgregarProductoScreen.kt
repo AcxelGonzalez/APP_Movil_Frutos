@@ -70,7 +70,8 @@ private val OscuroAgregar = Color(0xFF4B2E15)
 @Composable
 fun AgregarProductoAdmin(
     viewModel: ProductoViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onGuardado: ((String) -> Unit)? = null
 ) {
 
     val error by viewModel.error.collectAsState()
@@ -113,7 +114,11 @@ fun AgregarProductoAdmin(
                         // Solo salir si el guardado
                         // finalizó correctamente.
                         if (guardado) {
-                            onVolver()
+                            val mensaje = mensajeGuardadoProducto(
+                                editado = false,
+                                catalogoPendiente = viewModel.errorCatalogo.value != null
+                            )
+                            if (onGuardado != null) onGuardado(mensaje) else onVolver()
                         }
 
                     } finally {
