@@ -276,4 +276,40 @@ class CarritoViewModelTest {
         assertEquals(listOf(item), vm.uiState.value.items)
         assertNull(vm.mensaje.value)
     }
+    @Test fun alAgregarUnProductoSeCalculaElTotalDesdeElFlujoPersistido() = runTest {
+        cargar(items = emptyList())
+        coEvery { repo.agregar("a", producto, 2) } coAnswers {
+            cuenta("a").value = listOf(item)
+            true
+        }
+        assertTrue(vm.agregarProducto(producto, 2))
+        runCurrent()
+        assertEquals(2, vm.uiState.value.cantidadProductos)
+        assertEquals(2000L, vm.uiState.value.total)
+        assertFalse(vm.uiState.value.estaVacio)
+    }
+
+    @Test fun disminuirHastaCeroQuitaElProductoCuandoElRepositorioLoConfirma() = runTest {
+        cargar(items = listOf(item.copy(cantidad = 1)))
+        coEvery { repo.ajustar("a", 4, -1) } coAnswers {
+            cuenta("a").value = emptyList()
+            true
+        }
+        vm.disminuir(vm.uiState.value.items.single())
+        runCurrent()
+        assertTrue(vm.uiState.value.estaVacio)
+        assertEquals(0L, vm.uiState.value.total)
+        coVerify(exactly = 1) { repo.ajustar("a", 4, -1) }
+    }
+
+    @Test fun catalogoSinProductoImpideConfirmarSinBorrarElCarrito() = runTest {
+        cargar()
+        cuenta("a").value = listOf(item.copy(stockDisponible = 0))
+        runCurrent()
+        assertEquals(0, vm.uiState.value.items.single().stockDisponible)
+        assertFalse(vm.validarAntesDeConfirmar())
+        assertEquals("Stock insuficiente: Almendras", vm.mensaje.value)
+        assertEquals(2, vm.uiState.value.cantidadProductos)
+    }
+
 }
