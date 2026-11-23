@@ -24,8 +24,20 @@ android {
         }
     }
 
+    // Datos del almacén de claves con el que se firma el APK de release.
+    signingConfigs {
+        create("release") {
+            storeFile = file("../keystore/oyl.jks")
+            storePassword = "oyl2026"
+            keyAlias = "oyl"
+            keyPassword = "oyl2026"
+        }
+    }
+
     buildTypes {
         release {
+            // Aplica la firma anterior al compilar en modo release.
+            signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
@@ -40,7 +52,7 @@ android {
         jvmTarget = "17"
     }
     buildFeatures {
-        compose = true 
+        compose = true
     }
     composeOptions {
         kotlinCompilerExtensionVersion = "1.4.3"
