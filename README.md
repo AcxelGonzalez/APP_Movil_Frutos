@@ -1,8 +1,7 @@
 # OYL Frutos Secos — Aplicación Móvil
 > Asignatura **DSY1105 — Desarrollo de Aplicaciones Móviles** · Duoc UC · Docente: Cristian Gomez Vega
 
-Aplicación Android nativa para la tienda **OYL Frutos Secos**, construida en Kotlin con
-Jetpack Compose y respaldada por un backend propio de tres microservicios en Spring Boot.
+Aplicación Android nativa para la tienda **OYL Frutos Secos**.
 
 | | |
 |---|---|
