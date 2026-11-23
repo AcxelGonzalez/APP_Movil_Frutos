@@ -118,12 +118,8 @@ fun HistorialScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Text(
-                        text = if (esAdmin) "Pedidos" else "Mis pedidos",
-                        fontSize = 26.sp,
-                        color = SecundarioHistorial,
-                        fontWeight = FontWeight.Bold
-                    )
+                    com.example.oyl_fs.ui.theme.TituloPantallaOYL(
+                        if (esAdmin) "Pedidos" else "Mis pedidos", Modifier.fillMaxWidth())
                 },
 
                 navigationIcon = {

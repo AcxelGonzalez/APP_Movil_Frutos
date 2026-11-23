@@ -47,7 +47,8 @@ private val CafeOscuroCatalogo = Color(0xFF4B2E15)
 fun CatalogoAdmin(
     viewModel: ProductoViewModel,
     onProductoClick: (ProductoInfo) -> Unit,
-    onAgregarProducto: () -> Unit
+    onAgregarProducto: () -> Unit,
+    onVolver: () -> Unit = {}
 ) {
     val productos by viewModel.productos.collectAsState()
     val cargando by viewModel.cargandoProductos.collectAsState()
@@ -65,7 +66,8 @@ fun CatalogoAdmin(
     CatalogoScreen(
         productos = productos,
         onProductoClick = onProductoClick,
-        onAgregarProducto = onAgregarProducto
+        onAgregarProducto = onAgregarProducto,
+        onVolver = onVolver
     )
         }
     }
@@ -76,7 +78,8 @@ fun CatalogoAdmin(
 fun CatalogoScreen(
     productos: List<ProductoInfo>,
     onProductoClick: (ProductoInfo) -> Unit,
-    onAgregarProducto: () -> Unit
+    onAgregarProducto: () -> Unit,
+    onVolver: () -> Unit = {}
 ) {
     var busqueda by rememberSaveable { mutableStateOf("") }
     var categoria by rememberSaveable { mutableStateOf("Todos") }
@@ -101,12 +104,7 @@ fun CatalogoScreen(
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Text(
-            text = "Catálogo de productos",
-            color = CafeOscuroCatalogo,
-            fontSize = 26.sp,
-            fontWeight = FontWeight.Bold
-        )
+        com.example.oyl_fs.ui.theme.EncabezadoOYL("Catálogo", onVolver)
 
         OutlinedTextField(
             value = busqueda,
@@ -400,12 +398,10 @@ fun ProductosAdmin(
         }
 
         else -> Column(Modifier.fillMaxSize()) {
-            TextButton(onClick = onVolver) {
-                Text("‹ Volver al menú", color = CafeOscuroCatalogo)
-            }
             Box(Modifier.weight(1f)) {
                 CatalogoAdmin(
                     viewModel = viewModel,
+                    onVolver = onVolver,
                     onProductoClick = { seleccionado ->
                         viewModel.limpiarError()
                         productoId = seleccionado.id

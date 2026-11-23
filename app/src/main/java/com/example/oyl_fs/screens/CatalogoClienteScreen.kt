@@ -155,8 +155,8 @@ fun CatalogoClienteScreen(
     ) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             BotonVolverOYL(onVolver)
-            Text("Catálogo", color = OscuroCliente, fontSize = 26.sp,
-                fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+            com.example.oyl_fs.ui.theme.TituloPantallaOYL("Catálogo", Modifier.weight(1f))
+            Spacer(Modifier.width(8.dp))
             // El contador se dibuja dentro del botón para mantenerlo alineado.
             Box(Modifier.size(48.dp)) {
                 FilledIconButton(onClick = onAbrirCarrito, modifier = Modifier.fillMaxSize(),

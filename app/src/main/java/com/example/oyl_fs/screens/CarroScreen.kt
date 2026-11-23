@@ -130,7 +130,7 @@ fun CarroContenido(
             ) {
                 BotonVolverOYL(onVolver)
                 Spacer(Modifier.width(14.dp))
-                Text("Mi carrito", fontWeight = FontWeight.Bold, color = SecundarioOYL, fontSize = 24.sp)
+                com.example.oyl_fs.ui.theme.TituloPantallaOYL("Mi carrito", Modifier.weight(1f))
             }
         },
         bottomBar = {
