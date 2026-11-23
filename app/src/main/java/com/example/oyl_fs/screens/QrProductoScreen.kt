@@ -94,8 +94,7 @@ fun QrProductoScreen(producto: ProductoInfo, onVolver: () -> Unit) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
-        Row(Modifier.fillMaxWidth()) { BotonVolverOYL(onVolver) }
-        Text("QR del producto", color = oscuro, fontSize = 22.sp, fontWeight = FontWeight.Bold)
+        com.example.oyl_fs.ui.theme.EncabezadoOYL("QR del producto", onVolver)
         Text(producto.nombre, color = oscuro, fontWeight = FontWeight.Bold)
         Text("Código: ${producto.codigo}", color = oscuro)
         val foto = bitmap

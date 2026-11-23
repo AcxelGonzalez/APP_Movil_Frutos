@@ -54,12 +54,7 @@ fun EscanerScreen(
         // ---------- Encabezado ----------
         Row(verticalAlignment = Alignment.CenterVertically) {
             BotonVolverOYL(onVolver)
-            Text(
-                "Escanear producto",
-                fontSize = 22.sp,
-                fontWeight = FontWeight.Bold,
-                color = SecundarioOYL
-            )
+            com.example.oyl_fs.ui.theme.TituloPantallaOYL("Escanear producto", Modifier.weight(1f))
         }
 
         Text(mensaje, color = PrincipalOYL, fontSize = 13.sp)

@@ -197,12 +197,8 @@ private fun InventarioListado(
             Column(
                 modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = "Inventario",
-                    color = OscuroInventario,
-                    fontSize = 26.sp,
-                    fontWeight = FontWeight.Bold
-                )
+                com.example.oyl_fs.ui.theme.TituloPantallaOYL("Inventario", Modifier.fillMaxWidth())
+                Spacer(Modifier.height(8.dp))
 
                 Text(
                     text = "Control de existencias",

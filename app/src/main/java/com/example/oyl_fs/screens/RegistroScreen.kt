@@ -89,12 +89,8 @@ fun RegistroScreen(
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
 
-        Text(
-            text = "Crear cuenta",
-            fontSize = 28.sp,
-            fontWeight = FontWeight.Bold,
-            color = cafe
-        )
+        com.example.oyl_fs.ui.theme.EncabezadoOYL("Crear cuenta", onIrALogin)
+        Spacer(Modifier.height(8.dp))
 
         Text(
             text = "Registra tus datos para acceder a OYL Frutos Secos",
@@ -148,6 +144,8 @@ fun RegistroScreen(
             value = correo,
             onValueChange = { correo = it; error = "" },
             label = { Text("Correo electrónico *") },
+            leadingIcon = { Icon(Icons.Default.Email, contentDescription = null) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
             isError = intentoEnvio && !correoValido.matches(correo.trim()),
             enabled = !cargando,
             singleLine = true,
@@ -187,6 +185,7 @@ fun RegistroScreen(
             value = direccion,
             onValueChange = { direccion = it; error = "" },
             label = { Text("Dirección (opcional)") },
+            leadingIcon = { Icon(Icons.Default.LocationOn, contentDescription = null) },
             enabled = !cargando,
             singleLine = true,
             shape = RoundedCornerShape(16.dp),

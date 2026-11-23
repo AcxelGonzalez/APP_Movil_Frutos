@@ -94,12 +94,7 @@ fun PrepararPedidoScreen(
             BotonVolverOYL(onVolver)
 
             Column {
-                Text(
-                    "Preparar pedido",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = SecundarioOYL
-                )
+                com.example.oyl_fs.ui.theme.TituloPantallaOYL("Preparar pedido", Modifier.fillMaxWidth())
 
                 Text(
                     pedido.id,

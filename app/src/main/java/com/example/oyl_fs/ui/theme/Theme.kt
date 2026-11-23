@@ -1,5 +1,7 @@
 package com.example.oyl_fs.ui.theme
 
+import androidx.compose.foundation.layout.defaultMinSize
+
 import android.app.Activity
 import androidx.compose.material3.Shapes
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -165,13 +167,30 @@ fun BotonVolverOYL(onVolver: () -> Unit) {
 }
 
 @Composable
+fun TituloPantallaOYL(titulo: String, modifier: Modifier = Modifier) {
+    androidx.compose.material3.Surface(
+        modifier = modifier,
+        color = Color.White,
+        shape = RoundedCornerShape(12.dp),
+        tonalElevation = 0.dp
+    ) {
+        androidx.compose.foundation.layout.Box(
+            Modifier.defaultMinSize(minHeight = 40.dp).padding(horizontal = 14.dp, vertical = 6.dp),
+            contentAlignment = androidx.compose.ui.Alignment.CenterStart
+        ) {
+            androidx.compose.material3.Text(titulo,
+                color = Color(0xFF4B2E15), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                fontSize = 20.sp, lineHeight = 26.sp, letterSpacing = (-0.3).sp)
+        }
+    }
+}
+
+@Composable
 fun EncabezadoOYL(titulo: String, onVolver: () -> Unit, modifier: Modifier = Modifier) {
     androidx.compose.foundation.layout.Row(modifier.fillMaxWidth(),
         verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
-        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(14.dp)) {
+        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(8.dp)) {
         BotonVolverOYL(onVolver)
-        androidx.compose.material3.Text(titulo, modifier = Modifier.weight(1f),
-            color = Color(0xFF4B2E15), fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-            fontSize = 24.sp, lineHeight = 30.sp, letterSpacing = (-0.4).sp)
+        TituloPantallaOYL(titulo, Modifier.weight(1f))
     }
 }

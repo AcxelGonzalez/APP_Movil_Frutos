@@ -42,7 +42,7 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
     ) {
 
         val compacto = maxHeight < 700.dp
-        val altoImagen = if (compacto) 285.dp else 345.dp
+        val altoTarjeta = maxHeight * 0.62f
 
         // DECORACIONES
         Canvas(modifier = Modifier.fillMaxSize()) {
@@ -96,9 +96,8 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
         // CONTENIDO
         Column(
             modifier = Modifier
-                .fillMaxSize()
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.SpaceBetween
+                .fillMaxSize(),
+            verticalArrangement = Arrangement.Top
         ) {
 
             // LOGO
@@ -109,16 +108,16 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
                 contentDescription = "Logo OYL Frutos Secos",
                 contentScale = ContentScale.Fit,
                 modifier = Modifier
-                    .padding(start = 26.dp, top = 18.dp)
-                    .width(145.dp)
-                    .height(65.dp)
+                    .padding(start = 24.dp, top = 12.dp)
+                    .width(if (compacto) 125.dp else 145.dp)
+                    .height(if (compacto) 54.dp else 65.dp)
             )
 
             // BOWL
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(altoImagen),
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
                 Image(
@@ -135,7 +134,7 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
 
             // TARJETA INFERIOR BLANCA
             Surface(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().heightIn(max = altoTarjeta),
                 shape = RoundedCornerShape(
                     topStart = 46.dp,
                     topEnd = 46.dp
@@ -148,14 +147,20 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(
-                            start = 28.dp,
-                            end = 28.dp,
-                            top = 30.dp,
-                            bottom = 30.dp
+                            start = 24.dp,
+                            end = 24.dp,
+                            top = if (compacto) 20.dp else 26.dp,
+                            bottom = 20.dp
                         ),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
 
+                    // El texto puede desplazarse con letra grande; el botón queda visible.
+                    Column(
+                        modifier = Modifier.weight(1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(if (compacto) 10.dp else 14.dp)
+                    ) {
                     Text(
                         text = "BIENVENIDO A OYL",
                         color = marronClaro,
@@ -167,8 +172,8 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
                     Text(
                         text = "Lo bueno\nempieza aquí.",
                         color = marron,
-                        fontSize = if (compacto) 34.sp else 38.sp,
-                        lineHeight = if (compacto) 39.sp else 44.sp,
+                        fontSize = if (compacto) 30.sp else 36.sp,
+                        lineHeight = if (compacto) 35.sp else 41.sp,
                         fontWeight = FontWeight.ExtraBold,
                         letterSpacing = (-1.3).sp
                     )
@@ -176,13 +181,11 @@ fun BienvenidaScreen(onComenzar: () -> Unit) {
                     Text(
                         text = "Encuentra tus frutos secos favoritos y disfruta cada mezcla.",
                         color = marronClaro,
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp
+                        fontSize = if (compacto) 14.sp else 16.sp,
+                        lineHeight = if (compacto) 20.sp else 24.sp
                     )
 
-                    Spacer(
-                        modifier = Modifier.height(4.dp)
-                    )
+                    }
 
                     // BOTÓN
                     Button(
