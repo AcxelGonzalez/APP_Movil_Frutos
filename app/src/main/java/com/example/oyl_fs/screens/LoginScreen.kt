@@ -62,7 +62,7 @@ fun LoginScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LoginContenido(
+internal fun LoginContenido(
     estado: LoginUiState,
     onLimpiarError: () -> Unit,
     onIngresar: (String, String) -> Unit,
