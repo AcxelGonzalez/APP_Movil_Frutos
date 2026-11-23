@@ -153,9 +153,8 @@ fun EditarProductoScreen(
     var precio by rememberSaveable(producto.id) {
         mutableStateOf(producto.precio.toString())
     }
-    var stock by rememberSaveable(producto.id) {
-        mutableStateOf(producto.stock.toString())
-    }
+    // El stock se consulta; las existencias se cambian mediante movimientos.
+    val stock = producto.stock.toString()
     var stockMinimo by rememberSaveable(producto.id) {
         mutableStateOf(producto.stockMinimo.toString())
     }
@@ -413,18 +412,16 @@ fun EditarProductoScreen(
         }
 
         CampoEditar(
-            titulo = "Stock actual *",
+            titulo = "Stock actual (solo lectura)",
             valor = stock,
             icono = Icons.Default.Inventory,
-            error = erroresFormulario.stock,
-            numerico = true
-        ) {
-            stock = it
-            erroresFormulario = erroresFormulario.copy(
-                stock = null
-            )
-            onEdicionFormulario()
-        }
+            soloLectura = true
+        ) { }
+        Text(
+            text = "Para cambiar existencias, registra una entrada o salida desde Inventario.",
+            color = CafeEditar,
+            fontSize = 12.sp
+        )
 
         CampoEditar(
             titulo = "Stock mínimo *",
@@ -547,6 +544,7 @@ private fun CampoEditar(
     error: String? = null,
     numerico: Boolean = false,
     multilinea: Boolean = false,
+    soloLectura: Boolean = false,
     onCambio: (String) -> Unit
 ) {
     Column(
@@ -560,11 +558,9 @@ private fun CampoEditar(
 
         OutlinedTextField(
             value = valor,
+            readOnly = soloLectura,
             onValueChange = { texto ->
-                if (
-                    !numerico ||
-                    texto.all { it in '0'..'9' }
-                ) {
+                if (!soloLectura && (!numerico || texto.all { it in '0'..'9' })) {
                     onCambio(texto)
                 }
             },

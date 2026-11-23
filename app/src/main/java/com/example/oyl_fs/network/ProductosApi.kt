@@ -21,6 +21,7 @@ interface ProductosApi {
     @POST("api/productos")
     suspend fun crear(@Body producto: ProductoDto): ProductoDto
 
+    // PUT edita la ficha; el servidor conserva el stock vigente aunque el DTO incluya stock.
     @PUT("api/productos/{id}")
     suspend fun actualizar(@Path("id") id: Long, @Body producto: ProductoDto): ProductoDto
 
