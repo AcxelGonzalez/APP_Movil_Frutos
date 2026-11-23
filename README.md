@@ -73,12 +73,12 @@ vez, en el servidor, en el momento en que el pedido se confirma.
 
 ## 2. Integrantes
 
-| Integrante | Responsabilidad principal |
+| Integrante |
 |---|---|
-| **Acxel González** | Pantallas de inicio (cliente y administrador), login, inventario y CRUD de productos |
-| **Kerly** *(apellido por completar)* | Registro de usuarios, perfil y catálogo |
-| **Marco** *(apellido por completar)* | Mapa de tiendas, historial de pedidos y contacto |
-| **Fabián Cornejo** | Carrito de compras, escáner QR y backend Spring Boot |
+| **Acxel González** |
+| **Kerly Dugarte**  |
+| **Marco Caarrasco** |
+| **Fabián Cornejo** |
 
 El trabajo se repartió por pantalla desde el inicio del proyecto, según la hoja de ruta
 acordada por el equipo, y se integró mediante ramas separadas por persona.
