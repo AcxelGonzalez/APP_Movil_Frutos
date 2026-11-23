@@ -42,6 +42,7 @@ class PedidoRoomRepository(
     )
 
     private val dao = database.pedidoDao()
+    private val puntosRetiro = PuntoRetiroRepository(database)
 
     /**
      * Observa todos los pedidos.
@@ -320,7 +321,8 @@ class PedidoRoomRepository(
             return null
         }
 
-        val puntos = PuntoRetiroRepository.obtenerPuntos()
+        val puntos = if (entrega?.modalidad == com.example.oyl_fs.model.ModalidadEntrega.RETIRO)
+            puntosRetiro.obtenerPuntos() else emptyList()
         if (entrega != null && ValidacionEntregaPedido.validar(entrega, puntos).hayErrores()) return null
         val entregaConfirmada = entrega?.let { ValidacionEntregaPedido.normalizar(it, puntos) }
 

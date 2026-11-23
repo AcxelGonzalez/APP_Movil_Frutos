@@ -3,6 +3,7 @@ package com.example.oyl_fs.repository
 import android.content.Context
 import androidx.room.withTransaction
 import com.example.oyl_fs.data.local.OylDatabase
+import com.example.oyl_fs.model.ModalidadEntrega
 import com.example.oyl_fs.model.EntregaPedido
 import com.example.oyl_fs.model.ItemCarrito
 import com.example.oyl_fs.model.Pedido
@@ -17,13 +18,16 @@ class CompraRemotaRepository(
     private val pedidos: PedidoRemoteRepository = PedidoRemoteRepository(),
     private val complementos: DatosLocalesRemotosRepository = DatosLocalesRemotosRepository(context)
 ) {
+    private val puntosRetiro = PuntoRetiroRepository(database)
+
     data class Confirmada(val pedido: Pedido, val advertencia: String? = null)
 
     suspend fun confirmar(usuarioId: String, items: List<ItemCarrito>, entrega: EntregaPedido): Confirmada {
         val id = requireNotNull(usuarioId.toLongOrNull()) { "Inicia sesión nuevamente" }
         require(id > 0 && items.isNotEmpty()) { "El carrito está vacío" }
         require(items.map { it.productoId }.distinct().size == items.size) { "Carrito inválido" }
-        val entregaValidada = ValidacionEntregaPedido.normalizar(entrega, PuntoRetiroRepository.obtenerPuntos())
+        val puntos = if (entrega.modalidad == ModalidadEntrega.RETIRO) puntosRetiro.obtenerPuntos() else emptyList()
+        val entregaValidada = ValidacionEntregaPedido.normalizar(entrega, puntos)
         // Releer el servidor antes de enviar, para detectar cambios de precio o stock.
         val catalogo = productos.listar().associateBy { it.id.toString() }
         var total = 0L

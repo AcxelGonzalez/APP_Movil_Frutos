@@ -14,12 +14,13 @@ import com.example.oyl_fs.screens.ProductosDatos
 /**
  * Base de datos local OYL Frutos Secos.
  *
- * Versión 5:
+ * Versión 6:
  * - productos
  * - pedidos
  * - detalle_pedidos
  * - usuarios
  * - carrito por cliente
+ * - puntos de retiro de demostración
  */
 @Database(
     entities = [
@@ -27,15 +28,18 @@ import com.example.oyl_fs.screens.ProductosDatos
         PedidoEntity::class,
         DetallePedidoEntity::class,
         UsuarioEntity::class,
-        CarritoEntity::class
+        CarritoEntity::class,
+        PuntoRetiroEntity::class
     ],
-    version = 5,
+    version = 6,
     exportSchema = false
 )
 
 abstract class OylDatabase : RoomDatabase() {
 
     abstract fun productoDao(): ProductoDao
+
+    abstract fun puntoRetiroDao(): PuntoRetiroDao
 
     abstract fun carritoDao(): CarritoDao
 
@@ -72,15 +76,16 @@ abstract class OylDatabase : RoomDatabase() {
 
                     // Permite actualizar instalaciones antiguas:
                     //
-                    // v1 -> v2 -> v3 -> v4 -> v5
-                    // v2 -> v3 -> v4 -> v5
+                    // v1 -> v2 -> v3 -> v4 -> v5 -> v6
+                    // v2 -> v3 -> v4 -> v5 -> v6
                     //
                     // No elimina registros anteriores.
                     .addMigrations(
                         MIGRATION_1_2,
                         MIGRATION_2_3,
                         MIGRATION_3_4,
-                        MIGRATION_4_5
+                        MIGRATION_4_5,
+                        MIGRATION_5_6
                     )
 
 

@@ -23,7 +23,7 @@ class EntregaPedidoRoomTest {
     private val retiro = EntregaPedido(ModalidadEntrega.RETIRO, "Cliente ficticio", "+56 9 1234 5678", puntoRetiroId = "T01")
     private val items = listOf(ItemCarrito("1", "Almendras", "500 g", 1000, 2, 10))
 
-    private fun abrirBase() = Room.databaseBuilder(contexto, OylDatabase::class.java, nombre).addMigrations(MIGRATION_4_5).build()
+    private fun abrirBase() = Room.databaseBuilder(contexto, OylDatabase::class.java, nombre).addMigrations(MIGRATION_4_5, MIGRATION_5_6).build()
     @Before fun preparar() = runBlocking {
         base = abrirBase()
         base.productoDao().insertar(ProductoEntity(1, "Almendras", "TEST-1", "Frutos secos", "Prueba", "500 g",

@@ -19,7 +19,8 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.ui.unit.dp
 import com.example.oyl_fs.model.*
-import com.example.oyl_fs.repository.PuntoRetiroRepository
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.oyl_fs.viewmodel.MapaViewModel
 import com.example.oyl_fs.ui.components.EstadoPedidoChip
 import java.text.NumberFormat
 import java.util.Locale
@@ -32,7 +33,8 @@ internal fun precioPedido(valor: Long): String = "$" + NumberFormat.getIntegerIn
 @Composable
 fun ConfirmacionPedidoScreen(
     items: List<ItemCarrito>, perfil: PerfilUsuario?, procesando: Boolean,
-    error: String?, onVolver: () -> Unit, onConfirmar: (EntregaPedido) -> Unit
+    error: String?, onVolver: () -> Unit, onConfirmar: (EntregaPedido) -> Unit,
+    puntosViewModel: MapaViewModel = viewModel()
 ) {
     var modalidadNombre by rememberSaveable { mutableStateOf(ModalidadEntrega.RETIRO.name) }
     val modalidad = ModalidadEntrega.valueOf(modalidadNombre)
@@ -41,7 +43,8 @@ fun ConfirmacionPedidoScreen(
     var direccion by rememberSaveable { mutableStateOf(perfil?.direccion.orEmpty()) }
     var puntoId by rememberSaveable { mutableStateOf("") }
     var errores by remember { mutableStateOf(ErroresEntrega()) }
-    val puntos = PuntoRetiroRepository.obtenerPuntos()
+    val estadoPuntos by puntosViewModel.uiState.collectAsState()
+    val puntos = estadoPuntos.puntos
     val datos = EntregaPedido(modalidad, nombre, telefono, direccion, puntoId)
     Column(Modifier.fillMaxSize().background(FondoConfirmacion).imePadding()
         .verticalScroll(rememberScrollState()).padding(20.dp),
@@ -75,6 +78,17 @@ fun ConfirmacionPedidoScreen(
             modifier = Modifier.fillMaxWidth())
         if (modalidad == ModalidadEntrega.RETIRO) {
             Text("Selecciona dónde retirar", fontWeight = FontWeight.Bold)
+            if (estadoPuntos.cargando) {
+                LinearProgressIndicator(Modifier.fillMaxWidth())
+                Text("Cargando puntos de retiro…")
+            }
+            estadoPuntos.error?.let { mensaje ->
+                Text(mensaje, color = MaterialTheme.colorScheme.error)
+                TextButton(onClick = puntosViewModel::reintentar, enabled = !procesando) { Text("Reintentar puntos de retiro") }
+            }
+            if (!estadoPuntos.cargando && estadoPuntos.error == null && puntos.isEmpty()) {
+                Text("No hay puntos de retiro disponibles.", color = MaterialTheme.colorScheme.error)
+            }
             puntos.forEach { punto ->
                 Row(Modifier.fillMaxWidth().selectable(selected = puntoId == punto.id, enabled = !procesando,
                     role = Role.RadioButton, onClick = { puntoId = punto.id; errores = errores.copy(puntoRetiro = null) }),
@@ -100,7 +114,9 @@ fun ConfirmacionPedidoScreen(
         Button(onClick = {
             errores = ValidacionEntregaPedido.validar(datos, puntos)
             if (!errores.hayErrores()) onConfirmar(ValidacionEntregaPedido.normalizar(datos, puntos))
-        }, enabled = !procesando && items.isNotEmpty() && items.all { it.stockSuficiente }, modifier = Modifier.fillMaxWidth()) {
+        }, enabled = !procesando && items.isNotEmpty() && items.all { it.stockSuficiente } &&
+                (modalidad != ModalidadEntrega.RETIRO || (!estadoPuntos.cargando && estadoPuntos.error == null && puntos.isNotEmpty())),
+            modifier = Modifier.fillMaxWidth()) {
             Text(if (procesando) "Registrando pedido…" else "Finalizar pedido")
         }
     }
