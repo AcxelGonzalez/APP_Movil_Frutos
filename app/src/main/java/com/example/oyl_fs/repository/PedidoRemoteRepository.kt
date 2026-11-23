@@ -8,6 +8,7 @@ import com.example.oyl_fs.network.CambiarEstadoRequest
 import com.example.oyl_fs.network.CrearPedidoRequest
 import com.example.oyl_fs.network.ItemPedidoRequest
 import com.example.oyl_fs.network.PedidoDto
+import com.example.oyl_fs.network.PedidosApi
 import com.example.oyl_fs.network.RetrofitClient
 import com.example.oyl_fs.network.mensajeApi
 import kotlinx.coroutines.CancellationException
@@ -24,6 +25,10 @@ sealed class ResultadoPedido {
 // Conecta la app con ms-pedidos
 object PedidoRemoteRepository {
 
+    // Conexión con ms-pedidos. En la app usa la real; en las pruebas
+    // se reemplaza por una falsa para no depender del servidor.
+    internal var api: PedidosApi = RetrofitClient.pedidos
+
     // ---------- Crear un pedido desde el carrito ----------
     suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>): ResultadoPedido {
         // El backend usa ids numéricos; el carrito guarda el id como texto
@@ -34,7 +39,7 @@ object PedidoRemoteRepository {
         }
 
         return try {
-            val pedido = RetrofitClient.pedidos.crear(CrearPedidoRequest(usuarioId, itemsRequest))
+            val pedido = api.crear(CrearPedidoRequest(usuarioId, itemsRequest))
             ResultadoPedido.Exito(pedido)
         } catch (e: CancellationException) {
             throw e
@@ -47,7 +52,7 @@ object PedidoRemoteRepository {
     // ---------- Consultar pedidos ----------
     // Todos los pedidos (administrador)
     suspend fun listarTodos(): Result<List<Pedido>> = try {
-        Result.success(RetrofitClient.pedidos.listar().map { it.aPedido() })
+        Result.success(api.listar().map { it.aPedido() })
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -56,7 +61,7 @@ object PedidoRemoteRepository {
 
     // Solo los pedidos de un cliente
     suspend fun listarPorUsuario(usuarioId: Long): Result<List<Pedido>> = try {
-        Result.success(RetrofitClient.pedidos.listarPorUsuario(usuarioId).map { it.aPedido() })
+        Result.success(api.listarPorUsuario(usuarioId).map { it.aPedido() })
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
@@ -68,7 +73,7 @@ object PedidoRemoteRepository {
         val id = idNumerico(pedidoId)
             ?: return Result.failure(IllegalArgumentException("Pedido no válido"))
         return try {
-            val actualizado = RetrofitClient.pedidos.cambiarEstado(
+            val actualizado = api.cambiarEstado(
                 id, CambiarEstadoRequest(nuevoEstado.name)
             )
             Result.success(actualizado.aPedido())

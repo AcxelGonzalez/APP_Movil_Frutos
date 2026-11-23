@@ -8,10 +8,6 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
 /*
  * Función para abrir la cámara y escanear códigos QR.
- *
- * @param context Contexto necesario para abrir el escáner.
- * @param alLeer Se ejecuta con el texto del QR cuando se leyó correctamente.
- * @param alFallar Se ejecuta con un mensaje si se canceló o falló.
  */
 fun escanearQr(
     context: Context,

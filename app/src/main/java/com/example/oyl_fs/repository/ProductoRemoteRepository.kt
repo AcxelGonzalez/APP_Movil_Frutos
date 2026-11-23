@@ -3,12 +3,16 @@ package com.example.oyl_fs.repository
 import android.content.Context
 import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.network.ProductoDto
+import com.example.oyl_fs.network.ProductosApi
 import com.example.oyl_fs.network.RetrofitClient
 
-class ProductoRemoteRepository(context: Context) {
+class ProductoRemoteRepository(
+    context: Context,
+    // En la app usa la API real; en las pruebas se reemplaza por una falsa
+    private val api: ProductosApi = RetrofitClient.productos
+) {
 
     private val contexto = context.applicationContext
-    private val api = RetrofitClient.productos
 
     suspend fun listar(): List<ProductoInfo> =
         api.listar().map { it.aProductoInfo() }
