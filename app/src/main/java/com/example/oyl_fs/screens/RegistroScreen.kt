@@ -166,12 +166,12 @@ fun RegistroScreen(
                 telefono = it; error = ""
                 viewModel.limpiarError(CampoRegistro.TELEFONO)
             },
-            label = { Text("Teléfono (opcional)") },
+            label = { Text("Teléfono") },
             leadingIcon = { Icon(Icons.Default.Phone, null) },
             keyboardOptions = KeyboardOptions(
                 keyboardType = KeyboardType.Phone
             ),
-            isError = error.isNotEmpty(),
+            isError = intentoEnvio && telefono.isBlank(),
             enabled = !cargando,
             singleLine = true,
             shape = RoundedCornerShape(16.dp),
@@ -259,7 +259,7 @@ fun RegistroScreen(
                 intentoEnvio = true
                 // Primero se validan los datos en el teléfono
                 error = when {
-                    nombre.isBlank() || alias.isBlank() || correo.isBlank() ->
+                    nombre.isBlank() || alias.isBlank() || correo.isBlank() || telefono.isBlank() ->
                         "Completa todos los campos obligatorios"
                     alias.trim().length !in 3..20 ->
                         "El usuario debe tener entre 3 y 20 caracteres"
