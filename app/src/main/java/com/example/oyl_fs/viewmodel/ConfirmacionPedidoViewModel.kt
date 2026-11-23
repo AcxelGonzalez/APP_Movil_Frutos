@@ -9,6 +9,8 @@ import com.example.oyl_fs.model.ItemCarrito
 import com.example.oyl_fs.model.Pedido
 import com.example.oyl_fs.repository.PedidoRoomRepository
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
@@ -55,6 +57,12 @@ class ConfirmacionPedidoViewModel @JvmOverloads constructor(
                         error = "No se pudo confirmar: revisa los datos y el stock. Si cambió un precio, quita el producto del carrito y agrégalo nuevamente.")
                 }
             } catch (e: CancellationException) {
+                // Una cancelación de la espera no prueba que el servidor haya rechazado
+                // el pedido. Liberar la pantalla activa sin reenviar ni inventar un fallo.
+                if (currentCoroutineContext().isActive) {
+                    _estado.value = ConfirmacionPedidoUiState(usuarioId,
+                        error = "Se canceló la espera de confirmación. Revisa Mis pedidos antes de volver a confirmar: el pedido podría haberse registrado.")
+                }
                 throw e
             } catch (e: Exception) {
                 _estado.value = ConfirmacionPedidoUiState(usuarioId,

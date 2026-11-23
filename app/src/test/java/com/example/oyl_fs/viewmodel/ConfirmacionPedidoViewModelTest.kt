@@ -119,7 +119,8 @@ class ConfirmacionPedidoViewModelTest {
 
     @Test fun muestraElComprobanteRealDevueltoSinReconstruirSuNumeroNiImportes() = runTest {
         iniciar()
-        val confirmado = pedido.copy(id = "PED-987", total = 2400, fecha = 1800000000000)
+        val confirmado = pedido.copy(id = "PED-987", total = 2400, fecha = 1800000000000,
+            productos = pedido.productos.map { it.copy(precioUnitario = 1200) })
         coEvery { remoto.confirmar("7", items, entrega) } returns CompraRemotaRepository.Confirmada(confirmado)
         confirmar()
         runCurrent()
@@ -206,13 +207,14 @@ class ConfirmacionPedidoViewModelTest {
         coVerify(exactly = 1) { remoto.confirmar(any(), any(), any()) }
     }
 
-    @Test fun cancelarLaCorrutinaNoGeneraUnErrorDeNegocioNiUnComprobanteFicticio() = runTest {
+    @Test fun cancelacionConViewModelActivoLiberaLaEsperaYAdvierteSinComprobanteFicticio() = runTest {
         iniciar()
         coEvery { remoto.confirmar(any(), any(), any()) } throws CancellationException("Cancelada")
         confirmar()
         runCurrent()
-        assertNull(vm.estado.value.error)
+        assertEquals("Se canceló la espera de confirmación. Revisa Mis pedidos antes de volver a confirmar: el pedido podría haberse registrado.", vm.estado.value.error)
         assertNull(vm.estado.value.pedido)
+        assertFalse(vm.estado.value.procesando)
         coVerify(exactly = 1) { remoto.confirmar(any(), any(), any()) }
     }
 
@@ -224,11 +226,35 @@ class ConfirmacionPedidoViewModelTest {
         }
         confirmar()
         runCurrent()
+        val enviando = vm.estado.value
         almacen.clear()
         runCurrent()
         assertTrue(cancelado)
         assertNull(vm.estado.value.pedido)
         assertNull(vm.estado.value.error)
+        assertEquals(enviando, vm.estado.value)
+    }
+
+    @Test fun despuesDeCancelarPermiteSalirOCambiarDeCuentaSinOtroEnvio() = runTest {
+        iniciar()
+        coEvery { remoto.confirmar(any(), any(), any()) } throws CancellationException("Cancelada")
+        confirmar()
+        runCurrent()
+        vm.iniciar("8")
+        assertEquals(ConfirmacionPedidoUiState("8"), vm.estado.value)
+        coVerify(exactly = 1) { remoto.confirmar(any(), any(), any()) }
+    }
+
+    @Test fun cancelacionDeRoomTambienLiberaElIndicadorYNoInventaUnPedido() = runTest {
+        val modelo = nuevo(usarLocal = true)
+        coEvery { local.registrarCompraDesdeCarrito(any(), any(), any()) } throws CancellationException("Cancelada")
+        modelo.iniciar("7")
+        modelo.confirmar("7", items, entrega)
+        runCurrent()
+        assertFalse(modelo.estado.value.procesando)
+        assertNull(modelo.estado.value.pedido)
+        assertTrue(modelo.estado.value.error.orEmpty().contains("Revisa Mis pedidos"))
+        coVerify(exactly = 0) { remoto.confirmar(any(), any(), any()) }
     }
 
     @Test fun compatibilidadRoomUsaSoloElRepositorioLocalYConservaElComprobante() = runTest {
