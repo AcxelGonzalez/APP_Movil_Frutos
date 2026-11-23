@@ -1,7 +1,5 @@
 # OYL Frutos Secos — Aplicación Móvil
-
-> **Sincronización Automatizada de Catálogo e Inventario Multi-Canal**
-> Asignatura **DSY1105 — Desarrollo de Aplicaciones Móviles** · Duoc UC
+> Asignatura **DSY1105 — Desarrollo de Aplicaciones Móviles** · Duoc UC · Docente: Cristian Gomez Vega
 
 Aplicación Android nativa para la tienda **OYL Frutos Secos**, construida en Kotlin con
 Jetpack Compose y respaldada por un backend propio de tres microservicios en Spring Boot.
