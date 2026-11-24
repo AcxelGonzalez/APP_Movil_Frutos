@@ -19,6 +19,8 @@ class CredencialPeticion internal constructor(val token: String, val idSesion: S
 data class SesionActiva(val identidad: SesionIdentificada, val idSesion: String, val venceEnMillis: Long)
 data class InvalidacionSesion(val idSesion: String, val mensaje: String)
 
+data class PerfilRemotoConfirmado internal constructor(val usuario: UsuarioDto, val idSesion: String)
+
 object SesionRemotaRepository {
     private val candado = Any()
     private var preferencias: SharedPreferences? = null
@@ -169,7 +171,8 @@ object SesionRemotaRepository {
     } catch (e: CancellationException) { throw e
     } catch (e: Exception) { Result.failure(e) }
 
-    suspend fun actualizarPerfil(solicitud: ActualizarPerfilRequest, api: UsuariosApi = RetrofitClient.usuarios): Result<UsuarioDto> {
+    // La confirmación HTTP se conserva antes de intentar cualquier escritura local.
+    suspend fun confirmarActualizacionPerfil(solicitud: ActualizarPerfilRequest, api: UsuariosApi = RetrofitClient.usuarios): Result<PerfilRemotoConfirmado> {
         val inicio = synchronized(candado) { actual }
             ?: return Result.failure(IllegalStateException("No hay una sesión iniciada"))
         return try {
@@ -179,16 +182,37 @@ object SesionRemotaRepository {
             val actualizado = api.actualizar(inicio.usuario.id, solicitud)
             validar(actualizado)
             require(actualizado.id == inicio.usuario.id && actualizado.rol == inicio.usuario.rol) { "Respuesta de usuario inválida" }
-            withContext(Dispatchers.IO) {
-                synchronized(candado) {
-                    check(actual?.idSesion == inicio.idSesion) { "La sesión cambió" }
-                    val nueva = Persistida(actualizado, inicio.accessToken, inicio.expiresAtEpochSeconds, inicio.idSesion)
-                    persistir(nueva)
-                    actual = nueva; _usuario.value = actualizado
-                }
+            synchronized(candado) {
+                check(actual?.idSesion == inicio.idSesion && !vencida(inicio)) { "La sesión cambió" }
+                actual = Persistida(actualizado, inicio.accessToken, inicio.expiresAtEpochSeconds, inicio.idSesion)
+                _usuario.value = actualizado
             }
-            Result.success(actualizado)
+            Result.success(PerfilRemotoConfirmado(actualizado, inicio.idSesion))
         } catch (e: CancellationException) { throw e
         } catch (e: Exception) { Result.failure(e) }
     }
+
+    // Solo disco: no hace solicitudes HTTP ni vuelve a editar el perfil remoto.
+    suspend fun persistirPerfilConfirmado(confirmacion: PerfilRemotoConfirmado): Boolean = withContext(Dispatchers.IO) {
+        synchronized(candado) {
+            val vigente = actual
+            check(vigente != null && vigente.idSesion == confirmacion.idSesion &&
+                vigente.usuario == confirmacion.usuario && !vencida(vigente)) { "La sesión cambió" }
+            try {
+                persistir(vigente)
+                true
+            } catch (e: CancellationException) { throw e
+            } catch (_: Exception) { false }
+        }
+    }
+
+    // Compatibilidad con consumidores que solo necesitan el usuario actualizado.
+    suspend fun actualizarPerfil(solicitud: ActualizarPerfilRequest, api: UsuariosApi = RetrofitClient.usuarios): Result<UsuarioDto> = try {
+        val confirmacion = confirmarActualizacionPerfil(solicitud, api).getOrThrow()
+        check(persistirPerfilConfirmado(confirmacion)) {
+            "El perfil se guardó en el servidor, pero no se pudo guardar la sesión en este dispositivo."
+        }
+        Result.success(confirmacion.usuario)
+    } catch (e: CancellationException) { throw e
+    } catch (e: Exception) { Result.failure(e) }
 }

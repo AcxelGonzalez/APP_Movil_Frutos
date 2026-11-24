@@ -38,10 +38,31 @@ class PerfilViewModel @JvmOverloads constructor(
     private var generacionPerfil = 0L
     private var revisionAvatar = 0L
 
+    private data class GuardadoRemotoPendiente(
+        val confirmacion: com.example.oyl_fs.repository.PerfilRemotoConfirmado,
+        val solicitud: ActualizarPerfilRequest,
+        var rut: String,
+        var apellido: String,
+        var sesionPersistida: Boolean = false,
+        var copiaPersistida: Boolean = false
+    )
+    // No es un registro duradero: solo se conserva durante la sesión en esta app.
+    private var guardadoRemotoPendiente: GuardadoRemotoPendiente? = null
+
     suspend fun activarRemoto(usuario: UsuarioDto) {
         remoto = true
         val generacion = ++generacionPerfil
         limpiarAvisosAvatar()
+        val pendiente = guardadoRemotoPendiente?.takeIf {
+            it.confirmacion.idSesion == SesionRemotaRepository.sesionActual()?.idSesion &&
+                it.confirmacion.usuario.id == usuario.id
+        }
+        guardadoRemotoPendiente = pendiente
+        if (pendiente != null) {
+            _perfiles.value = listOf(perfilConfirmado(pendiente))
+            avisarGuardadoPendiente(pendiente)
+            return
+        }
         _perfiles.value = emptyList()
         val perfil = complementos.perfil(usuario)
         if (generacion != generacionPerfil) return
@@ -175,6 +196,80 @@ class PerfilViewModel @JvmOverloads constructor(
         )
     }
 
+    private fun perfilConfirmado(pendiente: GuardadoRemotoPendiente): PerfilUsuario {
+        val usuario = pendiente.confirmacion.usuario
+        return PerfilUsuario(
+            id = usuario.id.toString(), esAdmin = usuario.rol == "ADMIN",
+            nombre = usuario.nombre, correo = usuario.correo,
+            telefono = usuario.telefono.orEmpty(), direccion = usuario.direccion.orEmpty(),
+            rut = pendiente.rut, apellido = pendiente.apellido,
+            avatarArchivo = _perfiles.value.firstOrNull { it.id == usuario.id.toString() }?.avatarArchivo
+        )
+    }
+
+    private fun avisarGuardadoPendiente(pendiente: GuardadoRemotoPendiente) {
+        if (pendiente.sesionPersistida && pendiente.copiaPersistida) {
+            limpiarError()
+            return
+        }
+        val falta = when {
+            !pendiente.sesionPersistida && !pendiente.copiaPersistida -> "la sesión y la copia local del perfil, incluido RUT y apellido"
+            !pendiente.sesionPersistida -> "la sesión"
+            else -> "la copia local del perfil, incluido RUT y apellido"
+        }
+        val mensaje = "El perfil se guardó en el servidor, pero falta guardar $falta en este teléfono. Pulsa Guardar con los mismos datos para reintentar solo el guardado local. No cierres la app: lo pendiente se conserva únicamente en memoria."
+        _errores.value = ErroresPerfil(general = mensaje)
+        _error.value = mensaje
+    }
+
+    private suspend fun guardarPerfilRemoto(perfil: PerfilUsuario, generacion: Long): Boolean {
+        val sesion = requireNotNull(SesionRemotaRepository.sesionActual()) { "No hay una sesión iniciada" }
+        check(sesion.identidad.usuarioId == perfil.id) { "La sesión cambió" }
+        val solicitud = ActualizarPerfilRequest(perfil.nombre, perfil.correo, perfil.telefono, perfil.direccion)
+        val pendiente = guardadoRemotoPendiente?.takeIf {
+            it.confirmacion.idSesion == sesion.idSesion && it.solicitud == solicitud
+        } ?: run {
+            val confirmado = SesionRemotaRepository.confirmarActualizacionPerfil(solicitud).getOrThrow()
+            check(confirmado.usuario.id.toString() == perfil.id && (confirmado.usuario.rol == "ADMIN") == perfil.esAdmin) {
+                "La respuesta no corresponde al perfil activo"
+            }
+            if (SesionRemotaRepository.sesionActual()?.idSesion != confirmado.idSesion) return false
+            GuardadoRemotoPendiente(confirmado, solicitud, perfil.rut, perfil.apellido).also {
+                guardadoRemotoPendiente = it
+            }
+        }
+        if (pendiente.rut != perfil.rut || pendiente.apellido != perfil.apellido) {
+            pendiente.rut = perfil.rut
+            pendiente.apellido = perfil.apellido
+            pendiente.copiaPersistida = false
+        }
+        fun sigueActivo() = perfilActivo(perfil.id, generacion) &&
+            SesionRemotaRepository.sesionActual()?.idSesion == pendiente.confirmacion.idSesion
+        if (!sigueActivo()) return false
+        _perfiles.value = listOf(perfilConfirmado(pendiente))
+        if (!pendiente.sesionPersistida) {
+            pendiente.sesionPersistida = SesionRemotaRepository.persistirPerfilConfirmado(pendiente.confirmacion)
+        }
+        if (!sigueActivo()) return false
+        if (!pendiente.copiaPersistida) {
+            pendiente.copiaPersistida = try {
+                complementos.guardarPerfil(pendiente.confirmacion.usuario, pendiente.rut, pendiente.apellido)
+                true
+            } catch (e: CancellationException) { throw e
+            } catch (_: Exception) { false }
+        }
+        if (!sigueActivo()) return false
+        _perfiles.value = listOf(perfilConfirmado(pendiente))
+        return if (pendiente.sesionPersistida && pendiente.copiaPersistida) {
+            guardadoRemotoPendiente = null
+            limpiarError()
+            true
+        } else {
+            avisarGuardadoPendiente(pendiente)
+            false // Mantener el editor abierto para que el aviso se vea y permita reintentar.
+        }
+    }
+
     suspend fun guardarPerfil(perfil: PerfilUsuario): Boolean {
         if (_guardando.value) return false
         val generacion = generacionPerfil
@@ -196,17 +291,7 @@ class PerfilViewModel @JvmOverloads constructor(
         _guardando.value = true
         return try {
             if (remoto) {
-                val actualizado = SesionRemotaRepository.actualizarPerfil(
-                    ActualizarPerfilRequest(guardado.nombre, guardado.correo, guardado.telefono, guardado.direccion)
-                ).getOrThrow()
-                check(actualizado.id.toString() == perfil.id && (actualizado.rol == "ADMIN") == perfil.esAdmin) {
-                    "La respuesta no corresponde al perfil activo"
-                }
-                val guardadoLocal = complementos.guardarPerfil(actualizado, guardado.rut, guardado.apellido)
-                if (generacion != generacionPerfil) return false
-                _perfiles.value = listOf(guardadoLocal.copy(avatarArchivo = _perfiles.value.firstOrNull { it.id == perfil.id }?.avatarArchivo))
-                limpiarError()
-                return true
+                return guardarPerfilRemoto(guardado, generacion)
             }
             if (perfil.id in setOf("admin-demo", "cliente-demo")) {
                 withContext(Dispatchers.IO) {
@@ -230,6 +315,10 @@ class PerfilViewModel @JvmOverloads constructor(
             limpiarError()
             true
         } catch (e: CancellationException) {
+            if (perfilActivo(perfil.id, generacion)) guardadoRemotoPendiente?.takeIf {
+                it.confirmacion.idSesion == SesionRemotaRepository.sesionActual()?.idSesion &&
+                    it.solicitud == ActualizarPerfilRequest(guardado.nombre, guardado.correo, guardado.telefono, guardado.direccion)
+            }?.let(::avisarGuardadoPendiente)
             throw e
         } catch (e: Exception) {
             if (generacion != generacionPerfil) return false
@@ -253,6 +342,7 @@ class PerfilViewModel @JvmOverloads constructor(
     suspend fun activarClienteRegistrado(usuario: UsuarioEntity) {
         if (usuario.id.isBlank()) return
         remoto = false
+        guardadoRemotoPendiente = null
         generacionPerfil++
         limpiarAvisosAvatar()
         var actual = usuario
@@ -289,6 +379,7 @@ class PerfilViewModel @JvmOverloads constructor(
      */
     fun limpiarSesionRegistrada() {
         generacionPerfil++
+        guardadoRemotoPendiente = null
         limpiarAvisosAvatar()
 
         if (remoto) {
