@@ -131,12 +131,15 @@ fun CatalogoClienteScreen(
     productos: List<ProductoInfo>,
     onVolver: () -> Unit,
     onDetalle: (ProductoInfo) -> Unit,
-    onAgregar: (ProductoInfo, Int) -> Boolean,
+    onAgregar: suspend (ProductoInfo, Int) -> Boolean,
     unidadesDisponibles: (ProductoInfo) -> Int = { it.stock },
     cantidadEnCarrito: Int = 0,
     totalCarrito: Long = 0L,
     onAbrirCarrito: () -> Unit = {}
 ) {
+    val scope = rememberCoroutineScope()
+    var guardando by remember { mutableStateOf(false) }
+
     var productoParaAgregarId by rememberSaveable { mutableStateOf<Int?>(null) }
     var cantidad by rememberSaveable { mutableStateOf(1) }
     var confirmacion by rememberSaveable { mutableStateOf<String?>(null) }
@@ -229,29 +232,20 @@ fun CatalogoClienteScreen(
                     shape = RoundedCornerShape(24.dp),
                     colors = CardDefaults.cardColors(containerColor = Color.White)
                 ) {
-                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Box(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(14.dp))) {
-                            ImagenProducto(producto, Modifier.fillMaxSize().clickable { onDetalle(producto) })
-                            Surface(color = Color.White.copy(alpha = 0.95f), shape = RoundedCornerShape(8.dp),
-                                modifier = Modifier.align(Alignment.BottomStart).padding(5.dp)) {
-                                Text(producto.presentacion, fontSize = 10.sp, color = CafeCliente,
-                                    maxLines = 1, overflow = TextOverflow.Ellipsis,
-                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp))
-                            }
-                            if (unidadesDisponibles(producto) <= 0) {
-                                Surface(color = Color(0xFFFDE8E6), shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.align(Alignment.TopEnd).padding(5.dp)) {
-                                    Text(if (producto.stock <= 0) "Sin stock" else "Límite en carrito",
-                                        color = Color(0xFFB3261E), fontSize = 9.sp,
-                                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 3.dp))
-                                }
-                            }
-                        }
-                        TextoTarjetaProducto(producto.nombre, color = OscuroCliente,
-                            fontWeight = FontWeight.Bold, fontSize = 14.sp)
-                        Text("$" + "%,d".format(producto.precio).replace(',', '.'),
-                            color = OscuroCliente, fontWeight = FontWeight.Bold, fontSize = 17.sp)
-                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
+                    Column(Modifier.padding(10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                        ImagenProducto(producto, Modifier.fillMaxWidth().height(100.dp)
+                            .clip(RoundedCornerShape(14.dp)).clickable { onDetalle(producto) })
+                        TextoTarjetaProducto(producto.nombre, color = OscuroCliente, fontWeight = FontWeight.Bold)
+                        TextoTarjetaProducto(producto.presentacion, color = CafeCliente, fontSize = 12.sp)
+                        TextoTarjetaProducto("Stock: ${producto.stock}", color = CafeCliente, fontSize = 12.sp)
+                        TextoTarjetaProducto("$" + "%,d".format(producto.precio).replace(',', '.'),
+                            color = OscuroCliente, fontWeight = FontWeight.Bold, lineas = 1)
+                        TextoTarjetaProducto(when {
+                            producto.stock <= 0 -> "Sin stock"
+                            unidadesDisponibles(producto) <= 0 -> "Límite en carrito"
+                            else -> "Disponible"
+                        }, color = CafeCliente, fontSize = 12.sp, lineas = 1)
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                             OutlinedButton(
                                 onClick = { onDetalle(producto) },
                                 modifier = Modifier.weight(1f),
@@ -350,10 +344,18 @@ fun CatalogoClienteScreen(
             },
             confirmButton = {
                 Button(colors = ButtonDefaults.buttonColors(containerColor = OscuroCliente),
-                    shape = RoundedCornerShape(12.dp), enabled = limite > 0, onClick = {
-                    if (onAgregar(productoParaAgregar, cantidadActual)) {
-                        confirmacion = "${productoParaAgregar.nombre} · $cantidadActual ${if (cantidadActual == 1) "unidad" else "unidades"} en tu carrito."
-                        productoParaAgregarId = null
+                    shape = RoundedCornerShape(12.dp), enabled = limite > 0 && !guardando, onClick = {
+                    if (!guardando) {
+                        guardando = true
+                        val solicitada = cantidadActual
+                        scope.launch {
+                            try {
+                                if (onAgregar(productoParaAgregar, solicitada)) {
+                                    confirmacion = "${productoParaAgregar.nombre} · $solicitada en tu carrito."
+                                    productoParaAgregarId = null
+                                }
+                            } finally { guardando = false }
+                        }
                     }
                 }) { Text("Agregar") }
             },

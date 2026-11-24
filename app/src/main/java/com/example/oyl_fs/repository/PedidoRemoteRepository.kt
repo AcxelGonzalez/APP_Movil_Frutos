@@ -23,29 +23,32 @@ sealed class ResultadoPedido {
 }
 
 // Conecta la app con ms-pedidos
-object PedidoRemoteRepository {
+class PedidoRemoteRepository(private val api: com.example.oyl_fs.network.PedidosApi = RetrofitClient.pedidos) {
 
-    // Conexión con ms-pedidos. En la app usa la real; en las pruebas
-    // se reemplaza por una falsa para no depender del servidor.
-    internal var api: PedidosApi = RetrofitClient.pedidos
 
-    // ---------- Crear un pedido desde el carrito ----------
-    suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>): ResultadoPedido {
+    // Transporte de bajo nivel: la clave debe haberse guardado antes en IntentoCompraRepository.
+    // La app utiliza CompraRemotaRepository para conservar el intento y recuperarlo.
+    suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>, clavePersistida: String): ResultadoPedido {
         // El backend usa ids numéricos; el carrito guarda el id como texto
+        if (usuarioId <= 0 || items.isEmpty() || items.any { it.cantidad <= 0 }) return ResultadoPedido.Error("Carrito inválido")
         val itemsRequest = items.map {
             val id = it.productoId.toLongOrNull()
                 ?: return ResultadoPedido.Error("El producto \"${it.nombre}\" no tiene un id válido")
-            ItemPedidoRequest(productoId = id, cantidad = it.cantidad)
+            if (id <= 0) return ResultadoPedido.Error("Identificador de producto inválido")
+            ItemPedidoRequest(productoId = id, cantidad = it.cantidad, precioEsperado = it.precio)
         }
 
         return try {
-            val pedido = api.crear(CrearPedidoRequest(usuarioId, itemsRequest))
+            val respuesta = api.crear(clavePersistida, CrearPedidoRequest(usuarioId, itemsRequest))
+            if (respuesta.estado != "COMPLETADA") return ResultadoPedido.Error(respuesta.mensaje ?: "La compra sigue en revisión. Consulta el intento guardado.")
+            val pedido = requireNotNull(respuesta.pedido) { "Comprobante no disponible; conserva la clave original" }
+            require(pedido.usuarioId == usuarioId && pedido.id > 0) { "El servidor respondió con un pedido inesperado. Revisa Mis pedidos antes de volver a comprar." }
             ResultadoPedido.Exito(pedido)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             // Sin stock, producto inexistente, servidor apagado, etc.
-            ResultadoPedido.Error(e.mensajeApi())
+            ResultadoPedido.Error(if (e is java.io.IOException || (e is retrofit2.HttpException && e.code() >= 500)) "No se pudo confirmar la respuesta del servidor. Revisa Mis pedidos antes de volver a comprar: el pedido podría haberse registrado." else e.mensajeApi())
         }
     }
 
@@ -86,13 +89,16 @@ object PedidoRemoteRepository {
 
     // ---------- Conversión backend -> modelo de la app ----------
     // El backend usa id numérico (7); la app lo muestra como "PED-007"
-    private fun textoId(id: Long) = "PED-" + id.toString().padStart(3, '0')
+    private fun textoId(id: Long): String {
+        require(id > 0) { "Identificador de pedido inválido" }
+        return "PED-" + id.toString().padStart(3, '0')
+    }
 
-    private fun idNumerico(texto: String): Long? = texto.removePrefix("PED-").toLongOrNull()
+    private fun idNumerico(texto: String): Long? = texto.removePrefix("PED-").toLongOrNull()?.takeIf { it > 0 }
 
-    private fun PedidoDto.aPedido() = Pedido(
+    fun PedidoDto.aPedido() = Pedido(
         id = textoId(id),
-        usuarioId = usuarioId.toString(),
+        usuarioId = usuarioId.also { require(it > 0) { "Identificador de usuario inválido" } }.toString(),
         fecha = parsearFecha(fecha),
         productos = detalles.map {
             DetallePedido(
@@ -102,17 +108,18 @@ object PedidoRemoteRepository {
                 precioUnitario = it.precioUnitario
             )
         },
-        total = total.toInt(),
+        total = total.also { require(it in 0..Int.MAX_VALUE.toLong()) { "Total de pedido fuera de rango" } }.toInt(),
         estado = EstadoPedido.values().firstOrNull { it.name == estado }
-            ?: EstadoPedido.PENDIENTE_VALIDACION
+            ?: error("Estado de pedido desconocido: $estado"),
+        cancelacionEnRevision = cancelacionEnRevision
     )
 
-    // El servidor manda la fecha como "2026-11-21T20:51:07.934514" (hora UTC)
-    private fun parsearFecha(texto: String): Long = try {
+    // LocalDateTime llega sin zona: la integración existente lo interpreta como UTC.
+    private fun parsearFecha(texto: String): Long {
+        require(Regex("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?").matches(texto)) { "Fecha de pedido inválida" }
         val formato = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
         formato.timeZone = TimeZone.getTimeZone("UTC")
-        formato.parse(texto.take(19))?.time ?: 0L
-    } catch (e: Exception) {
-        0L
+        formato.isLenient = false
+        return requireNotNull(formato.parse(texto.take(19))) { "Fecha de pedido inválida" }.time
     }
 }

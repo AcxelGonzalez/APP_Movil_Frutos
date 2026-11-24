@@ -29,7 +29,12 @@ class ProductoRemoteRepositoryTest {
         every { contexto.resources } returns resources
         every { contexto.packageName } returns "com.example.oyl_fs"
         every { resources.getIdentifier("almendras", "drawable", any()) } returns 123
-        return ProductoRemoteRepository(contexto, api)
+        every { resources.getResourceEntryName(123) } returns "almendras"
+        val base = mockk<com.example.oyl_fs.data.local.OylDatabase>()
+        val dao = mockk<com.example.oyl_fs.data.local.ProductoDao>()
+        every { base.productoDao() } returns dao
+        coEvery { dao.reemplazarCache(any()) } returns Unit
+        return ProductoRemoteRepository(contexto, api, base)
     }
 
     private fun dto(imagenUrl: String?) = ProductoDto(
@@ -85,6 +90,7 @@ class ProductoRemoteRepositoryTest {
     fun eliminarDevuelveFalsoSiElProductoYaNoExistia() = runBlocking {
         val respuesta: Response<Unit> = mockk()
         every { respuesta.isSuccessful } returns false
+        every { respuesta.code() } returns 404
         coEvery { api.eliminar(9L) } returns respuesta
 
         assertFalse(repositorio().eliminar(9))

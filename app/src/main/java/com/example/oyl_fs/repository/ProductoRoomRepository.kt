@@ -132,6 +132,9 @@ class ProductoRoomRepository(
     suspend fun insertar(
         producto: ProductoInfo
     ): Long {
+        com.example.oyl_fs.util.ValidacionLongitud.errorPresentacion(producto.presentacion)?.let {
+            throw IllegalArgumentException(it)
+        }
 
         val entidad = producto.aEntidad(
             imagenDrawableNombre =
@@ -169,6 +172,9 @@ class ProductoRoomRepository(
     suspend fun actualizar(
         producto: ProductoInfo
     ): Boolean {
+        com.example.oyl_fs.util.ValidacionLongitud.errorPresentacion(producto.presentacion)?.let {
+            throw IllegalArgumentException(it)
+        }
 
         val anterior = dao.obtenerPorId(producto.id)
             ?: return false

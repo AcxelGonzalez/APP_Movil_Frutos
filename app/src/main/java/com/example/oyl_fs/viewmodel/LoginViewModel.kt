@@ -43,20 +43,22 @@ sealed class ResultadoLogin {
 /**
  * Estado visual del formulario Login.
  */
+
 data class LoginUiState(
     val procesando: Boolean = false,
-    val error: String? = null
+    val error: String? = null,
+    val errorUsuario: String? = null,
+    val errorContrasena: String? = null
 )
 
 /**
- * Autenticación local de OYL Frutos Secos.
- *
- * Conserva las cuentas académicas admin
- * y cliente, pero también comprueba los
- * usuarios registrados mediante Room.
+ * MainActivity autentica contra ms-usuarios.
+ * El modo local conserva compatibilidad con cuentas anteriores y pruebas;
+ * no se usa como alternativa cuando falla el servidor.
  */
 class LoginViewModel(
-    private val usuarios: UsuarioRoomRepository
+    private val usuarios: UsuarioRoomRepository,
+    private val remoto: Boolean = false
 ) : ViewModel() {
 
     private val _estado =
@@ -64,9 +66,17 @@ class LoginViewModel(
 
     val estado = _estado.asStateFlow()
 
-    fun limpiarError() {
+    fun limpiarErrorUsuario() {
         _estado.value = _estado.value.copy(
-            error = null
+            error = null,
+            errorUsuario = null
+        )
+    }
+
+    fun limpiarErrorContrasena() {
+        _estado.value = _estado.value.copy(
+            error = null,
+            errorContrasena = null
         )
     }
 
@@ -87,6 +97,16 @@ class LoginViewModel(
         if (alias.isBlank() || contrasena.isEmpty()) {
             return ResultadoLogin.Error(
                 "Completa usuario y contraseña."
+            )
+        }
+
+        if (remoto) {
+            com.example.oyl_fs.util.ValidacionContrasena.errorMaximo(contrasena)?.let {
+                return ResultadoLogin.Error(it)
+            }
+            return com.example.oyl_fs.repository.SesionRemotaRepository.iniciarSesion(alias, contrasena).fold(
+                onSuccess = { ResultadoLogin.Exito(SesionIdentificada(it.id.toString(), it.nombre, it.rol == "ADMIN", false)) },
+                onFailure = { ResultadoLogin.Error(it.mensajeApi()) }
             )
         }
 
@@ -144,7 +164,28 @@ class LoginViewModel(
         onExito: (SesionIdentificada) -> Unit
     ) {
 
+
         if (_estado.value.procesando) return
+
+        val errorUsuario = if (usuario.isBlank()) {
+            "Ingresa tu usuario."
+        } else {
+            null
+        }
+
+        val errorContrasena = if (contrasena.isEmpty()) {
+            "Ingresa tu contraseña."
+        } else {
+            if (remoto) com.example.oyl_fs.util.ValidacionContrasena.errorMaximo(contrasena) else null
+        }
+
+        if (errorUsuario != null || errorContrasena != null) {
+            _estado.value = LoginUiState(
+                errorUsuario = errorUsuario,
+                errorContrasena = errorContrasena
+            )
+            return
+        }
 
         _estado.value = LoginUiState(
             procesando = true
@@ -187,37 +228,10 @@ class LoginViewModel(
             }
         }
     }
-    // Conserva el acceso al backend y comparte su estado con la pantalla.
-    fun iniciarSesionRemota(
-        usuario: String,
-        contrasena: String,
-        onExito: (SesionIdentificada) -> Unit
-    ) {
-        if (_estado.value.procesando) return
-        if (usuario.isBlank() || contrasena.isEmpty()) {
-            _estado.value = LoginUiState(error = "Completa usuario y contraseña")
-            return
-        }
-        _estado.value = LoginUiState(procesando = true)
-        viewModelScope.launch {
-            try {
-                com.example.oyl_fs.repository.SesionRepository
-                    .iniciarSesion(usuario.trim(), contrasena)
-                    .onSuccess { cuenta ->
-                        onExito(SesionIdentificada(
-                            usuarioId = cuenta.id.toString(),
-                            nombre = cuenta.nombre,
-                            esAdmin = cuenta.rol == "ADMIN",
-                            esDemo = false
-                        ))
-                    }
-                    .onFailure { error ->
-                        _estado.value = LoginUiState(error = error.mensajeApi(esLogin = true))
-                    }
-            } finally {
-                _estado.value = _estado.value.copy(procesando = false)
-            }
-        }
+    fun limpiarError() { limpiarErrorUsuario(); limpiarErrorContrasena() }
+
+    fun iniciarSesionRemota(usuario: String, contrasena: String, onExito: (SesionIdentificada) -> Unit) {
+        iniciarSesion(usuario, contrasena, onExito)
     }
 
 }

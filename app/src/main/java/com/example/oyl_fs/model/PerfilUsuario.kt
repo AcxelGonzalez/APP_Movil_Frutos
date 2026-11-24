@@ -9,5 +9,6 @@ data class PerfilUsuario(
     val rut: String = "",
     val correo: String = "",
     val telefono: String = "",
-    val direccion: String = ""
+    val direccion: String = "",
+    val avatarArchivo: String? = null
 )

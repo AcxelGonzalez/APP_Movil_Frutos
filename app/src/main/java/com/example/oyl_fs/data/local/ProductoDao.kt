@@ -39,6 +39,22 @@ class StockNoDisponibleException :
  */
 @Dao
 interface ProductoDao {
+    // Solo retira la ficha de la caché; conserva carritos e historial.
+    @Query("DELETE FROM productos WHERE id = :id")
+    suspend fun quitarDeCache(id: Int)
+
+    @Query("DELETE FROM productos")
+    suspend fun vaciarCache()
+
+    @Insert(onConflict = OnConflictStrategy.ABORT)
+    suspend fun insertarCache(productos: List<ProductoEntity>)
+
+    @Transaction
+    suspend fun reemplazarCache(productos: List<ProductoEntity>) {
+        vaciarCache()
+        insertarCache(productos)
+    }
+
 
     /**
      * Observa todos los productos.

@@ -41,14 +41,20 @@ private val RojoInventario = Color(0xFFC0392B)
 @Composable
 fun InventarioScreen(
     viewModel: ProductoViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    productoInicialId: Int? = null,
+    onProductoInicialAtendido: () -> Unit = {}
 ) {
     val scope = rememberCoroutineScope()
     var eliminando by remember { mutableStateOf(false) }
+    var avisoGuardado by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Observamos el catálogo actualizado.
     val productos by viewModel.productos.collectAsState()
     val error by viewModel.error.collectAsState()
+    val movimiento by viewModel.movimientoStock.collectAsState()
+    val cargando by viewModel.cargandoProductos.collectAsState()
+    var abiertoDesdeQr by rememberSaveable { mutableStateOf(false) }
 
     // Controlamos la navegación dentro del inventario.
     var pantalla by rememberSaveable {
@@ -64,15 +70,48 @@ fun InventarioScreen(
         it.id == productoId
     }
 
+    // Un solo efecto coordina la selección inicial y las eliminaciones. Dos
+    // efectos separados podían interpretar la selección inicial como inexistente.
+    LaunchedEffect(productoInicialId, productos, cargando, productoId, pantalla) {
+        if (cargando) return@LaunchedEffect
+        if (productoInicialId != null) {
+            val existe = productos.any { it.id == productoInicialId }
+            if (existe) {
+                viewModel.limpiarError()
+                productoId = productoInicialId
+                abiertoDesdeQr = true
+                avisoGuardado = null
+                viewModel.iniciarMovimientoStock(productoInicialId)
+                pantalla = "movimiento"
+            }
+            onProductoInicialAtendido()
+            if (!existe) onVolver()
+        } else if (pantalla != "inventario" && !(pantalla == "movimiento" && movimiento.pendiente != null) && productos.none { it.id == productoId }) {
+            productoId = null
+            pantalla = "inventario"
+            if (abiertoDesdeQr) onVolver()
+        }
+    }
+
+    // Recuperar el registro de esta cuenta incluso si el producto salió del catálogo.
+    LaunchedEffect(movimiento.pendiente?.clave) {
+        movimiento.pendiente?.let {
+            productoId = it.producto.id
+            pantalla = "movimiento"
+        }
+    }
+
     // Regresamos a la pantalla anterior.
     fun volver() {
+        if (movimiento.procesando) return
         viewModel.limpiarError()
 
         when (pantalla) {
-            "editar", "qr" -> pantalla = "detalle"
+            "editar", "qr", "movimiento" -> pantalla = "detalle"
             "detalle" -> {
                 productoId = null
                 pantalla = "inventario"
+                if (abiertoDesdeQr) onVolver()
             }
             else -> onVolver()
         }
@@ -83,46 +122,70 @@ fun InventarioScreen(
         volver()
     }
 
-    // Si se elimina un producto, regresamos al listado.
-    LaunchedEffect(productos, productoId, pantalla) {
-        if (pantalla != "inventario" &&
-            productoSeleccionado == null
-        ) {
-            productoId = null
-            pantalla = "inventario"
-        }
-    }
-
     when (pantalla) {
 
         // ---------- DETALLE ----------
         "detalle" -> {
             if (productoSeleccionado != null) {
-                DetalleProductoAdminScreen(
-                    producto = productoSeleccionado,
-                    onVolver = { volver() },
-                    onEditar = {
-                        viewModel.limpiarError()
-                        pantalla = "editar"
-                    },
-                    onEliminar = {
-                        if (!eliminando) {
-                            eliminando = true
-                            val idEliminar = productoSeleccionado.id
-                            scope.launch {
-                                try {
-                                    if (viewModel.eliminarProductoPersistente(idEliminar)) {
-                                        productoId = null
-                                        pantalla = "inventario"
+                Column(Modifier.fillMaxSize()) {
+                    AvisoGuardadoProducto(avisoGuardado) { avisoGuardado = null }
+                    Box(Modifier.weight(1f)) {
+                        DetalleProductoAdminScreen(
+                            producto = productoSeleccionado,
+                            onVolver = { volver() },
+                            onEditar = {
+                                avisoGuardado = null
+                                viewModel.limpiarError()
+                                pantalla = "editar"
+                            },
+                            onEliminar = {
+                                if (!eliminando) {
+                                    avisoGuardado = null
+                                    eliminando = true
+                                    val idEliminar = productoSeleccionado.id
+                                    scope.launch {
+                                        try {
+                                            if (viewModel.eliminarProductoPersistente(idEliminar)) {
+                                                productoId = null
+                                                pantalla = "inventario"
+                                                if (abiertoDesdeQr) onVolver()
+                                            }
+                                        } finally {
+                                            eliminando = false
+                                        }
                                     }
-                                } finally {
-                                    eliminando = false
                                 }
+                            },
+                            onGenerarQr = {
+                                pantalla = "qr"
+                            },
+                            onMovimientoStock = {
+                                avisoGuardado = null
+                                viewModel.iniciarMovimientoStock(productoSeleccionado.id)
+                                pantalla = "movimiento"
                             }
-                        }
+                        )
+                    }
+                }
+            }
+        }
+
+        "movimiento" -> {
+            val productoMovimiento = movimiento.pendiente?.producto ?: productoSeleccionado
+            if (productoMovimiento != null) {
+                MovimientoInventarioScreen(
+                    producto = productoMovimiento,
+                    estado = movimiento,
+                    onVolver = { volver() },
+                    onRegistrar = { tipo, cantidad ->
+                        viewModel.registrarMovimientoStock(productoMovimiento.id, tipo, cantidad)
                     },
-                    onGenerarQr = {
-                        pantalla = "qr"
+                    onConsultar = { viewModel.recuperarMovimientoStock(continuar = false) },
+                    onContinuar = { viewModel.recuperarMovimientoStock(continuar = true) },
+                    onCerrarResultado = { viewModel.cerrarMovimientoStock() },
+                    onRevisarInventario = {
+                        viewModel.refrescar()
+                        volver()
                     }
                 )
             }
@@ -134,7 +197,11 @@ fun InventarioScreen(
                 EditarProductoAdmin(
                     producto = productoSeleccionado,
                     viewModel = viewModel,
-                    onVolver = { volver() }
+                    onVolver = { volver() },
+                    onGuardado = { mensaje ->
+                        avisoGuardado = mensaje
+                        pantalla = if (productos.any { it.id == productoId }) "detalle" else "inventario"
+                    }
                 )
             }
         }
@@ -151,15 +218,21 @@ fun InventarioScreen(
 
         // ---------- INVENTARIO ----------
         else -> {
-            InventarioListado(
-                productos = productos,
-                error = error,
-                onProductoClick = { seleccionado ->
-                    viewModel.limpiarError()
-                    productoId = seleccionado.id
-                    pantalla = "detalle"
+            Column(Modifier.fillMaxSize()) {
+                AvisoGuardadoProducto(avisoGuardado) { avisoGuardado = null }
+                Box(Modifier.weight(1f)) {
+                    InventarioListado(
+                        productos = productos,
+                        error = error,
+                        onProductoClick = { seleccionado ->
+                            avisoGuardado = null
+                            viewModel.limpiarError()
+                            productoId = seleccionado.id
+                            pantalla = "detalle"
+                        }
+                    )
                 }
-            )
+            }
         }
     }
 }

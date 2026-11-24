@@ -55,6 +55,8 @@ import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.model.EstadoPedido
 import com.example.oyl_fs.model.ProductoInfo
+import com.example.oyl_fs.util.LanzadorQr
+import com.example.oyl_fs.util.escanearQr
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
@@ -77,6 +79,7 @@ fun HomeCliente(
     onAbrirCarrito: () -> Unit,
     pestanaSolicitada: Int? = null,
     onPestanaAtendida: () -> Unit = {},
+    lanzarEscaner: LanzadorQr = ::escanearQr,
     pestanaSeleccionada: Int? = null,
     onSeleccionarPestana: ((Int) -> Unit)? = null
 ) {
@@ -173,15 +176,18 @@ fun HomeCliente(
     }
 
 
+    var detalleDesdeEscaner by rememberSaveable { mutableStateOf(false) }
+    fun volverDetalle() {
+        productoDetalleId = null
+        seleccionarPestana(if (detalleDesdeEscaner) 6 else 0)
+        detalleDesdeEscaner = false
+    }
+
+    var visible by remember { mutableStateOf(false) }
 
 
     BackHandler(enabled = tab != 0) {
-        if (tab == 5) {
-            // Salimos del detalle y volvemos al inicio.
-            productoDetalleId = null
-        }
-
-        seleccionarPestana(0)
+        if (tab == 5) volverDetalle() else seleccionarPestana(0)
     }
 
     Scaffold(
@@ -197,7 +203,7 @@ fun HomeCliente(
                 if (indice == 3) {
                     onAbrirHistorial()
                 } else {
-                    // Las demás pestañas conservan su comportamiento.
+                    detalleDesdeEscaner = false
                     seleccionarPestana(indice)
                 }
             }
@@ -205,6 +211,21 @@ fun HomeCliente(
     ) { padding ->
 
         when (tab) {
+            6 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                EscanerScreen(
+                    viewModel = productoViewModel, esAdmin = false,
+                    onVolver = { seleccionarPestana(0)},
+                    onAbrirProducto = { id ->
+                        if (productoViewModel.obtenerProducto(id)?.disponible == true) {
+                            productoDetalleId = id
+                            detalleDesdeEscaner = true
+                            seleccionarPestana(5)
+                        }
+                    },
+                    lanzarEscaner = lanzarEscaner
+                )
+            }
+
             /*
              */
             2 -> {
@@ -251,8 +272,7 @@ fun HomeCliente(
                         disponibleParaAgregar = unidadesDisponibles,
 
                         onVolver = {
-                            productoDetalleId = null
-                            seleccionarPestana(0)
+                            volverDetalle()
                         },
 
                         onAgregar = { cantidad ->
@@ -267,8 +287,7 @@ fun HomeCliente(
 
                 } else {
                     LaunchedEffect(productoDetalleId) {
-                        productoDetalleId = null
-                        seleccionarPestana(0)
+                        volverDetalle()
                     }
                 }
             }
@@ -315,14 +334,10 @@ fun HomeCliente(
                         }
                     }
 
-                    Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                        Text(
-                            "Hola, ${nombre.trim().substringBefore(" ")}",
-                            color = SecundarioOYL,
-                            fontSize = 27.sp,
-                            fontWeight = FontWeight.Bold,
-                            lineHeight = 33.sp
-                        )
+                    OutlinedButton(onClick = { seleccionarPestana(6)}, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Escanear producto")
                     }
 
                     // ---------- abrir catalogo ----------
@@ -513,6 +528,7 @@ fun HomeCliente(
                                                 .background(SecundarioOYL)
                                                 .clickable {
                                                     productoDetalleId = p.id
+                                                    detalleDesdeEscaner = false
                                                     seleccionarPestana(5)
                                                 },
                                             contentAlignment = Alignment.Center

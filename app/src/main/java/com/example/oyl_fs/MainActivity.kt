@@ -13,6 +13,12 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 
 import android.os.Bundle
+import androidx.compose.foundation.layout.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.material3.*
+import com.example.oyl_fs.viewmodel.SesionViewModel
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoViewModel
 
 import android.widget.Toast
 
@@ -39,80 +45,36 @@ import com.example.oyl_fs.viewmodel.PrepararPedidoViewModel
 import com.example.oyl_fs.viewmodel.RegistroViewModel
 import com.example.oyl_fs.viewmodel.LoginViewModel
 
+import com.example.oyl_fs.repository.DatosLocalesRemotosRepository
+import com.example.oyl_fs.repository.ProductoRemoteRepository
+import com.example.oyl_fs.repository.SesionRemotaRepository
 import com.example.oyl_fs.repository.UsuarioRoomRepository
-import com.example.oyl_fs.repository.ProductoRoomRepository
-import com.example.oyl_fs.repository.PedidoRoomRepository
 
 import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
-import com.example.oyl_fs.repository.ProductoRemoteRepository
-import com.example.oyl_fs.repository.SesionRepository
-
 class MainActivity : ComponentActivity() {
+
+    override fun onResume() {
+        super.onResume()
+        ViewModelProvider(this)[SesionViewModel::class.java].verificarVigencia()
+    }
+
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
 
-        /**
-         * Repositorio compartido de pedidos.
-         *
-         * Gestiona la persistencia en SQLite.
-         */
-        val pedidoRoomRepository = PedidoRoomRepository(
-            applicationContext
-        )
-
-        /**
-         * HistorialViewModel utiliza los pedidos
-         * almacenados en Room.
-         */
-        val historialViewModel = ViewModelProvider(
-            this,
-            object : ViewModelProvider.Factory {
-
-                override fun <T : ViewModel> create(
-                    modelClass: Class<T>
-                ): T {
-
-                    require(
-                        modelClass.isAssignableFrom(
-                            HistorialViewModel::class.java
-                        )
-                    )
-
-                    @Suppress("UNCHECKED_CAST")
-                    return HistorialViewModel(
-                        pedidoRoomRepository
-                    ) as T
-                }
+        val historialViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                require(modelClass.isAssignableFrom(HistorialViewModel::class.java))
+                @Suppress("UNCHECKED_CAST")
+                return HistorialViewModel(
+                    remoto = true,
+                    complementos = DatosLocalesRemotosRepository(applicationContext),
+                    cancelacionesRepository = com.example.oyl_fs.repository.CancelacionPedidoRepository(applicationContext)
+                ) as T
             }
-        )[HistorialViewModel::class.java]
-
-        /**
-         * Carga los pedidos de demostración
-         * solamente cuando corresponde.
-         *
-         * No descuenta stock durante esta carga.
-         */
-        lifecycleScope.launch {
-            try {
-                pedidoRoomRepository
-                    .inicializarPedidosDemoUnaVez(
-                        applicationContext
-                    )
-
-            } catch (e: CancellationException) {
-                throw e
-
-            } catch (e: Exception) {
-                Toast.makeText(
-                    this@MainActivity,
-                    "No se pudieron inicializar los pedidos",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
-        }
+        })[HistorialViewModel::class.java]
 
         // ViewModel para gestionar los productos.
         val productoViewModel = ViewModelProvider(this, object : ViewModelProvider.Factory {
@@ -120,7 +82,8 @@ class MainActivity : ComponentActivity() {
                 require(modelClass.isAssignableFrom(ProductoViewModel::class.java))
                 @Suppress("UNCHECKED_CAST")
                 return ProductoViewModel(
-                    remoteRepository = ProductoRemoteRepository(applicationContext)
+                    remoteRepository = ProductoRemoteRepository(applicationContext),
+                    movimientosRepository = com.example.oyl_fs.repository.MovimientoInventarioRepository(applicationContext)
                 ) as T
             }
         })[ProductoViewModel::class.java]
@@ -136,12 +99,7 @@ class MainActivity : ComponentActivity() {
             PerfilViewModel::class.java
         ]
 
-        /**
-         * ViewModel encargado del registro de clientes.
-         *
-         * Utiliza UsuarioRoomRepository, conectado
-         * a la base SQLite versión 3.
-         */
+        // Registro remoto; el RUT se conserva como complemento local.
         val registroViewModel = ViewModelProvider(
             this,
             object : ViewModelProvider.Factory {
@@ -158,7 +116,8 @@ class MainActivity : ComponentActivity() {
 
                     @Suppress("UNCHECKED_CAST")
                     return RegistroViewModel(
-                        UsuarioRoomRepository(applicationContext)
+                        UsuarioRoomRepository(applicationContext),
+                        DatosLocalesRemotosRepository(applicationContext)
                     ) as T
                 }
             }
@@ -189,7 +148,7 @@ class MainActivity : ComponentActivity() {
 
                     @Suppress("UNCHECKED_CAST")
                     return LoginViewModel(
-                        usuarioRoomRepository
+                        usuarioRoomRepository, remoto = true
                     ) as T
                 }
             }
@@ -200,18 +159,14 @@ class MainActivity : ComponentActivity() {
             PrepararPedidoViewModel::class.java
         ]
 
+        val sesionViewModel = ViewModelProvider(this)[SesionViewModel::class.java]
+        val confirmacionPedidoViewModel = ViewModelProvider(this)[ConfirmacionPedidoViewModel::class.java]
+
         setContent {
             OYL_FSTheme {
 
+                val perfiles by perfilViewModel.perfiles.collectAsState()
                 var mostrarBienvenida by rememberSaveable { mutableStateOf(true) }
-
-                // Usuario que inició sesión (datos del backend).
-                val usuarioSesion by SesionRepository.usuario.collectAsState()
-
-                // Observa los productos del catálogo compartido.
-                val productosActuales by productoViewModel
-                    .productos
-                    .collectAsState()
 
                 // Observa los pedidos del administrador.
                 // Permite actualizar el pedido si cambia su estado.
@@ -219,56 +174,20 @@ class MainActivity : ComponentActivity() {
                     .pedidosParaAdmin
                     .collectAsState()
 
-                /**
-                 * Sesión actual.
-                 *
-                 * Por ahora se conserva solamente en memoria.
-                 * Si Android termina el proceso, se solicitará
-                 * nuevamente el inicio de sesión.
-                 */
-                var sesionIniciada by remember {
-                    mutableStateOf(false)
-                }
+                val estadoSesion by sesionViewModel.estado.collectAsState()
+                val sesion = estadoSesion.sesion
+                val sesionIniciada = sesion != null
+                val esAdmin = sesion?.esAdmin ?: false
+                val usuarioSesionId = sesion?.usuarioId.orEmpty()
+                val nombreSesion = sesion?.nombre.orEmpty()
+                var datosSesionListos by remember(usuarioSesionId) { mutableStateOf(false) }
+                var errorPreparacion by remember(usuarioSesionId) { mutableStateOf<String?>(null) }
+                var reintentoSesion by remember { mutableStateOf(0) }
 
-                var esAdmin by remember {
-                    mutableStateOf(false)
-                }
-
-                /**
-                 * Identificador exclusivo del usuario
-                 * que inició sesión.
-                 */
-                var usuarioSesionId by remember {
-                    mutableStateOf("")
-                }
-
-                /**
-                 * Mantener actualizado el carrito
-                 * solamente del cliente autenticado.
-                 */
-                LaunchedEffect(
-                    productosActuales,
-                    usuarioSesionId,
-                    esAdmin
-                ) {
-
-                    if (
-                        usuarioSesionId.isNotBlank() &&
-                        !esAdmin
-                    ) {
-
-                        carritoViewModel.sincronizarConCatalogo(
-                            clienteId = usuarioSesionId,
-                            productos = productosActuales
-                        )
+                LaunchedEffect(estadoSesion.error) {
+                    estadoSesion.error?.let {
+                        Toast.makeText(this@MainActivity, it, Toast.LENGTH_LONG).show()
                     }
-                }
-
-                /**
-                 * Nombre visible del usuario autenticado.
-                 */
-                var nombreSesion by remember {
-                    mutableStateOf("")
                 }
 
                 // Navegación a historial.
@@ -284,11 +203,13 @@ class MainActivity : ComponentActivity() {
                 // Conserva catálogo, filtros y desplazamiento al volver del carrito.
                 val estadoHomeCliente = rememberSaveableStateHolder()
 
-                var procesandoCompra by remember { mutableStateOf(false) }
+                val estadoCompra by confirmacionPedidoViewModel.estado.collectAsState()
+                val procesandoCompra = estadoCompra.procesando
                 var procesandoPreparacion by remember {
                     mutableStateOf(false)
                 }
                 var pestanaHome by rememberSaveable { mutableStateOf(0) }
+                var pestanaDesdeHistorial by rememberSaveable { mutableStateOf<Int?>(null) }
 
                 // Navegación al carrito.
                 var mostrarCarrito by rememberSaveable {
@@ -340,282 +261,349 @@ class MainActivity : ComponentActivity() {
                  * las cuentas ni los carritos de otros clientes.
                  */
                 fun cerrarSesionActual() {
-
-                    val idAnterior = usuarioSesionId
-                    SesionRepository.cerrarSesion()
-                    historialViewModel.limpiar()
-
-                    // Limpiar la selección del carrito.
-                    carritoViewModel.iniciar("")
-
-                    // El Historial deja de estar asociado
-                    // con el usuario anterior.
-                    historialViewModel.configurarSesion(
-                        usuarioId = "",
-                        esAdmin = false
-                    )
-
-                    // No mantener visibles los perfiles
-                    // registrados de la sesión anterior.
-                    perfilViewModel.limpiarError()
-
-                    // Eliminar el estado visual guardado
-                    // para el cliente que cerró sesión.
-                    if (idAnterior.isNotBlank() && !esAdmin) {
-                        estadoHomeCliente.removeState(idAnterior)
+                    if (procesandoCompra || procesandoPreparacion) {
+                        Toast.makeText(this@MainActivity, "Espera a que termine la operación", Toast.LENGTH_SHORT).show()
+                        return
                     }
-
-                    mostrarHistorial = false
-                    mostrarCarrito = false
-                    mostrarRegistro = false
-                    pedidoPrepararId = null
-                    pestanaHome = 0
-
-                    usuarioSesionId = ""
-                    nombreSesion = ""
-                    esAdmin = false
-                    sesionIniciada = false
+                    sesionViewModel.cerrar()
                 }
 
-                when {
-                    mostrarBienvenida -> BienvenidaScreen(
-                        onComenzar = { mostrarBienvenida = false }
-                    )
-
-                    // ---------- Login y registro ----------
-                    !sesionIniciada -> {
-
-                        if (mostrarRegistro) {
-
-
-                            RegistroScreen(
-                                viewModel = registroViewModel,
-
-                                onRegistrado = {
-                                    mostrarRegistro = false
-
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "Cuenta creada correctamente. Inicia sesión con tu alias y contraseña.",
-                                        Toast.LENGTH_LONG
-                                    ).show()
-                                },
-
-                                onIrALogin = {
-                                    mostrarRegistro = false
-                                }
-                            )
-
+                LaunchedEffect(sesion, reintentoSesion) {
+                    datosSesionListos = false
+                    errorPreparacion = null
+                    try {
+                        if (sesion != null) {
+                            mostrarBienvenida = false
+                            perfilViewModel.activarRemoto(requireNotNull(SesionRemotaRepository.usuario.value))
+                            productoViewModel.refrescar()
+                            productoViewModel.configurarSesionInventario()
+                            carritoViewModel.iniciar(if (sesion.esAdmin) "" else sesion.usuarioId)
+                            historialViewModel.configurarSesion(sesion.usuarioId, sesion.esAdmin)
+                            datosSesionListos = true
                         } else {
-
-
-                            LoginScreen(
-                                viewModel = loginViewModel,
-                                onLoginSuccess = { sesion ->
-                                    esAdmin = sesion.esAdmin
-                                    usuarioSesionId = sesion.usuarioId
-                                    nombreSesion = sesion.nombre
-                                    productoViewModel.refrescar()
-                                    mostrarHistorial = false
-                                    mostrarCarrito = false
-                                    pedidoPrepararId = null
-                                    sesionIniciada = true
-
-                                    // Carga los pedidos del usuario desde el backend.
-                                    historialViewModel.configurarSesion(
-                                        sesion.usuarioId,
-                                        sesion.esAdmin
-                                    )
-                                },
-
-                                onIrARegistro = {
-                                    mostrarRegistro = true
-                                }
-                            )
+                            carritoViewModel.iniciar("")
+                            historialViewModel.configurarSesion("", false)
+                            perfilViewModel.limpiarSesionRegistrada()
+                            productoViewModel.configurarSesionInventario()
+                            mostrarHistorial = false
+                            mostrarCarrito = false
+                            pedidoPrepararId = null
+                            pestanaHome = 0
+                            pestanaDesdeHistorial = null
                         }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        errorPreparacion = "No se pudieron recuperar los datos de la cuenta"
                     }
+                }
 
-                    // ---------- Preparar pedido mediante QR ----------
-                    pedidoPrepararId != null && esAdmin -> {
-
-                        if (pedidoParaPreparar != null) {
-
-                            PrepararPedidoScreen(
-                                pedido = pedidoParaPreparar,
-                                viewModel = prepararPedidoViewModel,
-
-                                onVolver = {
-                                    // Regresar al historial del administrador.
-                                    pedidoPrepararId = null
-                                    mostrarHistorial = true
-                                },
-
-
-                                onConfirmarPreparacion = { pedidoId ->
-                                    val puedeConfirmar = pedidoId == pedidoParaPreparar.id &&
-                                        pedidoParaPreparar.estado == EstadoPedido.CONFIRMADO &&
-                                        prepararPedidoViewModel.pedidoCompleto()
-                                    if (!puedeConfirmar) {
-                                        Toast.makeText(this@MainActivity,
-                                            "Verifica todos los productos del pedido antes de confirmar",
-                                            Toast.LENGTH_LONG).show()
-                                    } else if (!procesandoPreparacion) {
-                                        procesandoPreparacion = true
-                                        historialViewModel.cambiarEstadoPedido(pedidoId, EstadoPedido.PREPARADO) { error ->
-                                            procesandoPreparacion = false
-                                            if (error == null) {
-                                                pedidoPrepararId = null
-                                                mostrarHistorial = true
-                                            }
-                                            Toast.makeText(this@MainActivity,
-                                                error ?: "Pedido $pedidoId preparado correctamente",
-                                                Toast.LENGTH_LONG).show()
-                                        }
-                                    }
-                                }
-                            )
-
-                        } else {
-
-                            // Si el pedido ya no existe, regresar al historial.
-                            LaunchedEffect(pedidoPrepararId) {
-                                pedidoPrepararId = null
-                                mostrarHistorial = true
+                val errorCatalogo by productoViewModel.errorCatalogo.collectAsState()
+                val cargandoCatalogo by productoViewModel.cargandoProductos.collectAsState()
+                Column(Modifier.fillMaxSize()) {
+                    if (sesionIniciada && datosSesionListos) {
+                        if (cargandoCatalogo) LinearProgressIndicator(Modifier.fillMaxWidth())
+                        errorCatalogo?.let { mensaje ->
+                            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                Text(mensaje, modifier = Modifier.weight(1f), color = MaterialTheme.colorScheme.error)
+                                TextButton(onClick = { productoViewModel.refrescar() }, enabled = !cargandoCatalogo) { Text("Reintentar catálogo") }
                             }
                         }
                     }
+                    Box(Modifier.weight(1f)) {
+                        when {
+                            estadoSesion.restaurando || estadoSesion.procesando || (sesionIniciada && !datosSesionListos) -> {
+                                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                                    if (errorPreparacion == null) {
+                                        CircularProgressIndicator()
+                                    } else {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(errorPreparacion.orEmpty())
+                                            Button(onClick = { reintentoSesion++ }) { Text("Reintentar") }
+                                            TextButton(onClick = { cerrarSesionActual() }) { Text("Cerrar sesión") }
+                                        }
+                                    }
+                                }
+                            }
 
-                    // ---------- Carrito ----------
-                    mostrarCarrito && !esAdmin -> {
+                            // ---------- Bienvenida, login y registro ----------
+                            !sesionIniciada && mostrarBienvenida -> BienvenidaScreen(
+                                onComenzar = { mostrarBienvenida = false }
+                            )
+                            !sesionIniciada -> {
 
-                        CarroScreen(
-                            // Identificador temporal del cliente.
-                            clienteId = usuarioSesionId,
+                                if (mostrarRegistro) {
 
-                            // ViewModel compartido con HomeCliente.
-                            vm = carritoViewModel,
 
-                            onVolver = {
-                                mostrarCarrito = false
-                            },
+                                    RegistroScreen(
+                                        viewModel = registroViewModel,
 
-                            // La compra ahora la procesa el backend (ms-pedidos):
-                            // valida el stock, lo descuenta y crea el pedido.
-                            onConfirmar = { _ ->
-                                // El pedido se crea a nombre del usuario que inició sesión.
-                                val usuarioId = SesionRepository.usuarioId
+                                        onRegistrado = {
+                                            mostrarRegistro = false
 
-                                if (usuarioId == null) {
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "Inicia sesión nuevamente",
-                                        Toast.LENGTH_LONG
-                                    ).show()
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "Cuenta creada correctamente. Inicia sesión con tu alias y contraseña.",
+                                                Toast.LENGTH_LONG
+                                            ).show()
+                                        },
+
+                                        onIrALogin = {
+                                            mostrarRegistro = false
+                                        }
+                                    )
+
                                 } else {
-                                    carritoViewModel.enviarPedido(usuarioId) {
-                                        // Solo se ejecuta si el pedido fue aceptado.
-                                        // Vuelve a pedir el catálogo para ver el stock real.
-                                        productoViewModel.refrescar()
-                                        mostrarCarrito = false
+
+
+                                    LoginScreen(
+                                        viewModel = loginViewModel,
+
+                                        onLoginSuccess = { identificada ->
+                                            mostrarHistorial = false
+                                            mostrarCarrito = false
+                                            mostrarRegistro = false
+                                            pedidoPrepararId = null
+                                            pestanaDesdeHistorial = null
+                                            sesionViewModel.iniciar(identificada)
+                                        },
+
+                                        onIrARegistro = {
+                                            mostrarRegistro = true
+                                        }
+                                    )
+                                }
+                            }
+
+                            // ---------- Preparar pedido mediante QR ----------
+                            pedidoPrepararId != null && esAdmin -> {
+
+                                if (pedidoParaPreparar != null) {
+
+                                    PrepararPedidoScreen(
+                                        pedido = pedidoParaPreparar,
+                                        viewModel = prepararPedidoViewModel,
+
+                                        onVolver = {
+                                            // Regresar al historial del administrador.
+                                            pedidoPrepararId = null
+                                            mostrarHistorial = true
+                                        },
+
+
+                                        onConfirmarPreparacion = { pedidoId ->
+
+                                            val puedeConfirmar =
+                                                pedidoId == pedidoParaPreparar.id &&
+                                                        pedidoParaPreparar.estado ==
+                                                        EstadoPedido.CONFIRMADO &&
+                                                        prepararPedidoViewModel.pedidoCompleto()
+
+                                            if (!puedeConfirmar) {
+
+                                                Toast.makeText(
+                                                    this@MainActivity,
+                                                    "El pedido no cumple los requisitos de preparación",
+                                                    Toast.LENGTH_LONG
+                                                ).show()
+
+                                            } else if (!procesandoPreparacion) {
+
+                                                procesandoPreparacion = true
+
+                                                lifecycleScope.launch {
+
+                                                    try {
+
+                                                        val actualizado = historialViewModel
+                                                            .cambiarEstadoPedidoPersistente(
+                                                                pedidoId = pedidoId,
+                                                                nuevoEstado = EstadoPedido.PREPARADO
+                                                            )
+
+                                                        if (actualizado) {
+
+                                                            Toast.makeText(
+                                                                this@MainActivity,
+                                                                "Pedido preparado correctamente",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+
+                                                            pedidoPrepararId = null
+                                                            mostrarHistorial = true
+
+                                                        } else {
+
+                                                            Toast.makeText(
+                                                                this@MainActivity,
+                                                                "No se pudo actualizar el pedido",
+                                                                Toast.LENGTH_LONG
+                                                            ).show()
+                                                        }
+
+                                                    } catch (e: CancellationException) {
+                                                        throw e
+
+                                                    } catch (e: Exception) {
+
+                                                        Toast.makeText(
+                                                            this@MainActivity,
+                                                            "Error al guardar la preparación",
+                                                            Toast.LENGTH_LONG
+                                                        ).show()
+
+                                                    } finally {
+                                                        procesandoPreparacion = false
+                                                    }
+                                                }
+                                            }
+                                        }
+                                    )
+
+                                } else {
+
+                                    // Si el pedido ya no existe, regresar al historial.
+                                    LaunchedEffect(pedidoPrepararId) {
+                                        pedidoPrepararId = null
                                         mostrarHistorial = true
                                     }
                                 }
                             }
 
-                        )
-                    }
+                            // ---------- Carrito ----------
+                            mostrarCarrito && !esAdmin -> {
 
-                    // ---------- Historial ----------
-                    mostrarHistorial -> {
+                                CarroScreen(
+                                    // Identificador del cliente autenticado.
+                                    clienteId = usuarioSesionId,
 
-                        HistorialScreen(
-                            // Identificadores temporales de prueba.
-                            usuarioId = usuarioSesionId,
+                                    // ViewModel compartido con HomeCliente.
+                                    vm = carritoViewModel,
 
-                            esAdmin = esAdmin,
-                            viewModel = historialViewModel,
-                            onNavegar = { indice ->
-                                pestanaHome = indice
-                                mostrarHistorial = false
-                            },
+                                    onVolver = {
+                                        mostrarCarrito = false
+                                    },
 
-                            onVolver = {
-                                mostrarHistorial = false
-                            },
 
-                            // Se ejecuta cuando el administrador
-                            // selecciona "Preparar pedido (QR)".
-                            onPrepararPedido = { pedido ->
+                                    perfil = perfiles.find { it.id == usuarioSesionId },
+                                    confirmacionVm = confirmacionPedidoViewModel,
+                                    onMisPedidos = {
+                                        mostrarCarrito = false
+                                        historialViewModel.refrescar()
+                                        productoViewModel.refrescar()
+                                        mostrarHistorial = true
+                                    }
 
-                                if (
-                                    esAdmin &&
-                                    pedido.estado == EstadoPedido.CONFIRMADO
-                                ) {
+                                )
+                            }
 
-                                    pedidoPrepararId = pedido.id
-                                    mostrarHistorial = false
+                            // ---------- Historial ----------
+                            mostrarHistorial -> {
 
-                                } else {
+                                HistorialScreen(
+                                    // Identidad y rol de la sesión actual.
+                                    usuarioId = usuarioSesionId,
 
-                                    Toast.makeText(
-                                        this@MainActivity,
-                                        "El pedido debe estar confirmado",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
+                                    esAdmin = esAdmin,
+                                    viewModel = historialViewModel,
+                                    onNavegar = { indice ->
+                                        pestanaDesdeHistorial = indice
+                                        mostrarHistorial = false
+                                    },
+
+                                    onVolver = {
+                                        mostrarHistorial = false
+                                    },
+
+                                    // Se ejecuta cuando el administrador
+                                    // selecciona "Preparar pedido (QR)".
+                                    onPrepararPedido = { pedido ->
+
+                                        if (
+                                            esAdmin &&
+                                            pedido.estado == EstadoPedido.CONFIRMADO
+                                        ) {
+
+                                            pedidoPrepararId = pedido.id
+                                            mostrarHistorial = false
+
+                                        } else {
+
+                                            Toast.makeText(
+                                                this@MainActivity,
+                                                "El pedido debe estar confirmado",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
+                                        }
+                                    }
+                                )
+                            }
+
+                            // ---------- Home administrador ----------
+                            esAdmin -> {
+
+                                HomeAdmin(
+                                    pestanaSeleccionada = pestanaHome,
+                                    onSeleccionarPestana = { pestanaHome = it },
+                                    pestanaSolicitada = pestanaDesdeHistorial,
+                                    onPestanaAtendida = { pestanaDesdeHistorial = null },
+                                    onLogout = {
+                                        cerrarSesionActual()
+                                    },
+
+                                    onAbrirHistorial = {
+                                        mostrarHistorial = true
+                                    },
+
+                                    // Catálogo y ViewModels compartidos.
+                                    viewModel = productoViewModel,
+                                    historialViewModel = historialViewModel,
+                                    perfilViewModel = perfilViewModel,
+
+                                    nombre = perfiles.find {
+                                        it.id == usuarioSesionId
+                                    }?.nombre ?: "Administrador"
+                                )
+                            }
+
+                            // ---------- Home cliente ----------
+                            else -> {
+
+                                estadoHomeCliente.SaveableStateProvider(usuarioSesionId) {
+                                HomeCliente(
+                                    pestanaSeleccionada = pestanaHome,
+                                    onSeleccionarPestana = { pestanaHome = it },
+                                    pestanaSolicitada = pestanaDesdeHistorial,
+                                    onPestanaAtendida = { pestanaDesdeHistorial = null },
+
+                                    nombre = perfiles.find {
+                                        it.id == usuarioSesionId
+                                    }?.nombre ?: nombreSesion,
+
+
+                                    // Identificador del cliente autenticado.
+                                    clienteId = usuarioSesionId,
+
+                                    // Compartimos el catálogo y el carrito.
+                                    productoViewModel = productoViewModel,
+                                    carritoViewModel = carritoViewModel,
+                                    historialViewModel = historialViewModel,
+                                    perfilViewModel = perfilViewModel,
+
+                                    onLogout = {
+                                        cerrarSesionActual()
+                                    },
+
+                                    onAbrirHistorial = {
+                                        mostrarHistorial = true
+                                    },
+
+                                    onAbrirCarrito = {
+                                        mostrarCarrito = true
+                                    }
+                                )
                                 }
                             }
-                        )
-                    }
-
-                    // ---------- Home administrador ----------
-                    esAdmin -> {
-
-                        HomeAdmin(
-                            pestanaSeleccionada = pestanaHome,
-                            onSeleccionarPestana = { pestanaHome = it },
-                            onLogout = { cerrarSesionActual() },
-
-                            onAbrirHistorial = {
-                                mostrarHistorial = true
-                            },
-
-                            // Catálogo y ViewModels compartidos.
-                            viewModel = productoViewModel,
-                            historialViewModel = historialViewModel,
-                            perfilViewModel = perfilViewModel,
-
-                            nombre = usuarioSesion?.nombre ?: "Administrador"
-                        )
-                    }
-
-                    // ---------- Home cliente ----------
-                    else -> {
-
-                        estadoHomeCliente.SaveableStateProvider(usuarioSesionId) {
-                        HomeCliente(
-                            pestanaSeleccionada = pestanaHome,
-                            onSeleccionarPestana = { pestanaHome = it },
-                            nombre = usuarioSesion?.nombre ?: "Cliente",
-
-                            // Identificador temporal hasta implementar sesiones.
-                            clienteId = usuarioSesionId,
-
-                            // Compartimos el catálogo y el carrito.
-                            productoViewModel = productoViewModel,
-                            carritoViewModel = carritoViewModel,
-                            historialViewModel = historialViewModel,
-                            perfilViewModel = perfilViewModel,
-
-                            onLogout = { cerrarSesionActual() },
-
-                            onAbrirHistorial = {
-                                mostrarHistorial = true
-                            },
-
-                            onAbrirCarrito = {
-                                mostrarCarrito = true
-                            }
-                        )
                         }
                     }
                 }
@@ -623,4 +611,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

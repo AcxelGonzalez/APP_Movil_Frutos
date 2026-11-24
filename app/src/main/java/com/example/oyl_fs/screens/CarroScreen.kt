@@ -21,6 +21,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoViewModel
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoUiState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,23 +53,69 @@ private val CriticoOYL = Color(0xFFC0392B)
 fun CarroScreen(
     clienteId: String,
     onVolver: () -> Unit,
-    onConfirmar: (List<ItemCarrito>) -> Unit,
-    vm: CarritoViewModel = viewModel()
+    onMisPedidos: () -> Unit,
+    perfil: PerfilUsuario? = null,
+    vm: CarritoViewModel = viewModel(),
+    confirmacionVm: ConfirmacionPedidoViewModel = viewModel()
 ) {
     LaunchedEffect(clienteId) { vm.iniciar(clienteId) }
+    val confirmacionActual by confirmacionVm.estado.collectAsState()
+    LaunchedEffect(clienteId, confirmacionActual.usuarioId, confirmacionActual.procesando) {
+        confirmacionVm.iniciar(clienteId)
+    }
+    if (confirmacionActual.procesando && confirmacionActual.usuarioId != clienteId) {
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Hay una confirmación anterior en curso. Espera a que termine antes de continuar.")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            TextButton(onClick = onVolver) { Text("Volver") }
+        }
+        return
+    }
+    val confirmacion = confirmacionActual.takeIf { it.usuarioId == clienteId } ?: ConfirmacionPedidoUiState()
 
     val estado by vm.uiState.collectAsState()
     val mensaje by vm.mensaje.collectAsState()
 
 
-    var mostrarConfirmacion by remember { mutableStateOf(false) }
+    var mostrarConfirmacion by rememberSaveable(clienteId) { mutableStateOf(false) }
+    fun abrirMisPedidos() { confirmacionVm.limpiar(); onMisPedidos() }
+    BackHandler(enabled = mostrarConfirmacion || confirmacion.pedido != null || confirmacion.procesando) {
+        if (!confirmacion.procesando) {
+            if (confirmacion.pedido != null) abrirMisPedidos() else mostrarConfirmacion = false
+        }
+    }
+    val pedido = confirmacion.pedido
+    if (pedido != null) {
+        PedidoConfirmadoScreen(pedido, confirmacion.error, ::abrirMisPedidos)
+        return
+    }
+    if (confirmacion.pendiente != null || confirmacion.recuperacionBloqueada) {
+        CompraEnRevisionContenido(confirmacion,
+            onConsultar = { confirmacionVm.recuperar(clienteId, false) },
+            onContinuar = { confirmacionVm.recuperar(clienteId, true) },
+            onMisPedidos = onMisPedidos, onVolver = onVolver)
+        return
+    }
+    if (confirmacion.procesando && !mostrarConfirmacion) {
+        Column(Modifier.fillMaxSize().padding(24.dp)) {
+            Text("Revisando el registro local de compras…")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        return
+    }
+    if (mostrarConfirmacion) {
+        ConfirmacionPedidoScreen(estado.items, perfil, confirmacion.procesando, confirmacion.error,
+            onVolver = { mostrarConfirmacion = false; confirmacionVm.limpiar() },
+            onConfirmar = { confirmacionVm.confirmar(clienteId, estado.items, it) })
+        return
+    }
 
     var itemAEliminar by remember { mutableStateOf<ItemCarrito?>(null) }
 
     CarroContenido(
         estado = estado,
-        mensaje = mensaje,
-        onMensajeMostrado = vm::mensajeMostrado,
+        mensaje = mensaje ?: confirmacion.error,
+        onMensajeMostrado = { if (mensaje != null) vm.mensajeMostrado() else confirmacionVm.borrarMensaje() },
         onVolver = onVolver,
         onAumentar = vm::aumentar,
         onDisminuir = { item ->
@@ -76,17 +127,6 @@ fun CarroScreen(
         }
     )
 
-    if (mostrarConfirmacion) {
-        DialogoConfirmarCompra(
-            estado = estado,
-            onCancelar = { mostrarConfirmacion = false },
-            onAceptar = {
-                mostrarConfirmacion = false
-                onConfirmar(estado.items)
-            }
-        )
-    }
-
     // mensaje para confirmar que se quita un producto
     itemAEliminar?.let { item ->
         DialogoQuitarProducto(
@@ -97,6 +137,34 @@ fun CarroScreen(
                 itemAEliminar = null
             }
         )
+    }
+}
+
+@Composable
+private fun CompraEnRevisionContenido(estado: ConfirmacionPedidoUiState, onConsultar: () -> Unit,
+    onContinuar: () -> Unit, onMisPedidos: () -> Unit, onVolver: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().background(FondoOYL), contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { Text("Compra en revisión", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = SecundarioOYL) }
+        item { Text("Conservamos el intento original. Consulta su resultado antes de crear otra compra. Continuar enviará únicamente este mismo intento.") }
+        estado.pendiente?.let { intento ->
+            items(intento.items) { Text("${it.nombre} · ${it.cantidad} · ${formatoPrecio(it.subtotal)}") }
+            item {
+                Text("Total: ${formatoPrecio(intento.items.sumOf { it.subtotal })}")
+                Text("Entrega: ${intento.entrega.modalidad.descripcion}")
+                Text(if (intento.entrega.puntoRetiroNombre.isNotBlank()) intento.entrega.puntoRetiroNombre else intento.entrega.direccion)
+            }
+        }
+        estado.error?.let { mensaje -> item { Text(mensaje, color = CriticoOYL) } }
+        if (estado.procesando) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        item { Button(onClick = onConsultar, enabled = !estado.procesando, modifier = Modifier.fillMaxWidth()) {
+            Text(if (estado.recuperacionBloqueada) "Releer registro local" else "Consultar resultado")
+        } }
+        if (estado.pendiente != null && !estado.recuperacionBloqueada) item {
+            OutlinedButton(onClick = onContinuar, enabled = !estado.procesando, modifier = Modifier.fillMaxWidth()) { Text("Continuar el mismo intento") }
+        }
+        item { TextButton(onClick = onMisPedidos, enabled = !estado.procesando) { Text("Mis pedidos") } }
+        item { TextButton(onClick = onVolver, enabled = !estado.procesando) { Text("Volver") } }
     }
 }
 
@@ -327,42 +395,6 @@ private fun ItemCarrito.comoProducto() = ProductoInfo(
     imagenUri = imagenUri
 )
 
-@Composable
-private fun DialogoConfirmarCompra(
-    estado: CarritoUiState,
-    onCancelar: () -> Unit,
-    onAceptar: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onCancelar,   // tocar fuera o "atrás" = cancelar
-        containerColor = Color.White,
-        icon = {
-            Icon(Icons.Default.ShoppingCart, null, tint = SecundarioOYL)
-        },
-        title = {
-            Text("¿Deseas finalizar la compra?", fontWeight = FontWeight.Bold, color = SecundarioOYL)
-        },
-        text = {
-            Text(
-                "Vas a comprar ${estado.cantidadProductos} productos por un total de " +
-                        "${formatoPrecio(estado.total)}.",
-                color = PrincipalOYL
-            )
-        },
-        confirmButton = {
-            Button(
-                onClick = onAceptar,
-                colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
-                shape = RoundedCornerShape(12.dp)
-            ) { Text("Finalizar compra") }
-        },
-        dismissButton = {
-            TextButton(onClick = onCancelar) {
-                Text("Cancelar", color = PrincipalOYL)
-            }
-        }
-    )
-}
 @Composable
 private fun DialogoQuitarProducto(
     item: ItemCarrito,

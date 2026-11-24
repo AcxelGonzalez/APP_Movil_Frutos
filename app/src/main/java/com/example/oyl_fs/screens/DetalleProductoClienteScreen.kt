@@ -42,12 +42,14 @@ fun DetalleProductoClienteScreen(
     producto: ProductoInfo,
     disponibleParaAgregar: Int,
     onVolver: () -> Unit,
-    onAgregar: (Int) -> Boolean,
-    onAbrirCarrito: () -> Unit
+    onAgregar: suspend (Int) -> Boolean,
+    onAbrirCarrito: () -> Unit,
+    vistaPrevia: Boolean = false
 ) {
-    val vistaPrevia = LocalInspectionMode.current
-    val entrada = remember(producto.id) { Animatable(if (vistaPrevia) 1f else 0f) }
-    val desplazamiento = with(LocalDensity.current) { 40.dp.toPx() }
+    val scope = rememberCoroutineScope()
+    var guardando by remember { mutableStateOf(false) }
+    val entrada = remember(producto.id) { Animatable(0f) }
+    val desplazamiento = with(LocalDensity.current) { 18.dp.toPx() }
     LaunchedEffect(producto.id) {
         if (!vistaPrevia) {
             withFrameNanos { }
@@ -79,6 +81,8 @@ fun DetalleProductoClienteScreen(
         }.fillMaxWidth().height(260.dp).clip(RoundedCornerShape(24.dp)))
         Text(producto.nombre, fontSize = 24.sp, fontWeight = FontWeight.Bold, color = oscuro)
         Text(producto.presentacion, color = cafe)
+        Text("Categoría: ${producto.categoria}", color = cafe)
+        Text("Stock publicado: ${producto.stock} unidades", color = cafe)
         Text("$" + "%,d".format(producto.precio).replace(',', '.'),
             color = oscuro, fontSize = 22.sp, fontWeight = FontWeight.Bold)
         Divider(color = cafe.copy(alpha = 0.15f))
@@ -105,12 +109,20 @@ fun DetalleProductoClienteScreen(
         )
         Button(
             onClick = {
-                if (onAgregar(cantidadActual)) {
-                    cantidadAgregada = cantidadActual
-                    agregado = true
+                if (!guardando) {
+                    guardando = true
+                    val solicitada = cantidadActual
+                    scope.launch {
+                        try {
+                            if (onAgregar(solicitada)) {
+                                cantidadAgregada = solicitada
+                                agregado = true
+                            }
+                        } finally { guardando = false }
+                    }
                 }
             },
-            enabled = limite > 0,
+            enabled = limite > 0 && !guardando,
             modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp),
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.buttonColors(containerColor = oscuro)

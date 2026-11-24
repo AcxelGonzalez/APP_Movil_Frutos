@@ -141,6 +141,14 @@ fun MapaScreen(onVolver: () -> Unit, vm: MapaViewModel = viewModel()) {
                 EncabezadoOYL("Tiendas y retiro", onVolver)
                 Spacer(Modifier.height(10.dp))
                 Text("Encuentra un punto y consulta cómo llegar.", color = PrincipalOYL, fontSize = 13.sp)
+                if (estado.cargando) {
+                    LinearProgressIndicator(Modifier.fillMaxWidth())
+                    Text("Cargando puntos guardados…", color = PrincipalOYL)
+                }
+                estado.error?.let { mensaje ->
+                    Text(mensaje, color = MaterialTheme.colorScheme.error)
+                    TextButton(onClick = vm::reintentar) { Text("Reintentar puntos") }
+                }
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     items(listOf("Todos", "Tiendas", "Retiro")) { opcion ->
                         FilterChip(selected = filtro == opcion, onClick = { vm.cerrarDetalle(); filtro = opcion },
@@ -181,8 +189,12 @@ fun MapaScreen(onVolver: () -> Unit, vm: MapaViewModel = viewModel()) {
             } else {
                 Column(Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = 16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("${visibles.size} puntos disponibles", color = SecundarioOYL, fontWeight = FontWeight.Bold)
-                    if (visibles.isEmpty()) Text("No hay puntos para este filtro.", color = PrincipalOYL)
+                    if (!estado.cargando && estado.error == null) {
+                        Text("${visibles.size} puntos disponibles", color = SecundarioOYL, fontWeight = FontWeight.Bold)
+                    }
+                    if (visibles.isEmpty() && !estado.cargando && estado.error == null) {
+                        Text("No hay puntos para este filtro.", color = PrincipalOYL)
+                    }
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         items(visibles, key = { it.id }) { sitio ->
                             Surface(color = Color.White, shape = RoundedCornerShape(18.dp),

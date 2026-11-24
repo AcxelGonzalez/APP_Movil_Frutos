@@ -2,8 +2,6 @@ package com.example.oyl_fs.screens
 
 
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
-import android.net.Uri
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -16,10 +14,10 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import com.example.oyl_fs.model.ProductoInfo
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import com.example.oyl_fs.util.CargadorImagenProducto
+import kotlinx.coroutines.CancellationException
 
-// Muestra una fotografía de drawable o una imagen del teléfono.
+// Muestra recursos, fotografías del teléfono e imágenes HTTP/HTTPS del catálogo.
 @Composable
 fun ImagenProducto(
     producto: ProductoInfo,
@@ -35,35 +33,11 @@ fun ImagenProducto(
         value = null
 
         if (!uri.isNullOrBlank()) {
-            value = withContext(Dispatchers.IO) {
-                // Reduce el tamaño de la foto para no cargarla completa.
-                runCatching {
-                    val direccion = Uri.parse(uri)
-                    val opciones = BitmapFactory.Options()
-                    opciones.inJustDecodeBounds = true
-
-                    contexto.contentResolver
-                        .openInputStream(direccion)?.use {
-                            BitmapFactory.decodeStream(it, null, opciones)
-                        }
-
-                    opciones.inSampleSize = 1
-
-                    while (
-                        opciones.outWidth / opciones.inSampleSize > 1000 ||
-                        opciones.outHeight / opciones.inSampleSize > 1000
-                    ) {
-                        opciones.inSampleSize *= 2
-                    }
-
-                    opciones.inJustDecodeBounds = false
-
-                    contexto.contentResolver
-                        .openInputStream(direccion)?.use {
-                            BitmapFactory.decodeStream(it, null, opciones)
-                        }
-                }.getOrNull()
-            }
+            value = try {
+                CargadorImagenProducto.cargar(contexto, uri)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) { null }
         }
     }
 

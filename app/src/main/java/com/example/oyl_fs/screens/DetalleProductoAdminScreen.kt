@@ -36,7 +36,8 @@ fun DetalleProductoAdminScreen(
     onEditar: () -> Unit,
     onEliminar: () -> Unit,
     producto: ProductoInfo,
-    onGenerarQr: () -> Unit
+    onGenerarQr: () -> Unit,
+    onMovimientoStock: (() -> Unit)? = null
 ) {
     val vistaPrevia = LocalInspectionMode.current
     val entrada = remember(producto.id) { Animatable(if (vistaPrevia) 1f else 0f) }
@@ -164,6 +165,12 @@ fun DetalleProductoAdminScreen(
             shape = RoundedCornerShape(20.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroProductoAdmin)
         ) { Text("Generar QR del producto") }
+
+        if (onMovimientoStock != null) {
+            Button(onClick = onMovimientoStock, modifier = Modifier.fillMaxWidth()) {
+                Text("Registrar entrada o salida")
+            }
+        }
 
         SeccionProductoAdmin(
             titulo = "Categoría",

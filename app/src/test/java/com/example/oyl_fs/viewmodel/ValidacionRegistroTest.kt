@@ -7,7 +7,7 @@ import org.junit.Test
 /**
  * Pruebas de validación del formulario.
  *
- * No requieren abrir SQLite ni iniciar
+ * Se ejecutan en la JVM: no requieren abrir SQLite ni iniciar
  * una pantalla Compose.
  */
 class ValidacionRegistroTest {

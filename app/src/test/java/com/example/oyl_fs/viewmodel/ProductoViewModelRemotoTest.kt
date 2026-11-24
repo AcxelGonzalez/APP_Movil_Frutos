@@ -5,6 +5,7 @@ import com.example.oyl_fs.repository.ProductoRemoteRepository
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
+import androidx.lifecycle.ViewModelStore
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.runBlocking
@@ -25,6 +26,10 @@ al backend y vuelva a pedir la lista actualizada.
 @OptIn(ExperimentalCoroutinesApi::class)
 class ProductoViewModelRemotoTest {
 
+    private val almacen = ViewModelStore()
+    private var siguiente = 0
+    private fun viewModel() = ProductoViewModel(remoteRepository = remoto).also { almacen.put((siguiente++).toString(), it) }
+
     private val remoto: ProductoRemoteRepository = mockk()
 
     private val almendras = producto(1, "Almendras", "OYL001")
@@ -37,6 +42,7 @@ class ProductoViewModelRemotoTest {
 
     @After
     fun liberarHiloPrincipal() {
+        almacen.clear()
         Dispatchers.resetMain()
     }
 
@@ -44,7 +50,7 @@ class ProductoViewModelRemotoTest {
     fun alAbrirseCargaLosProductosDelServidor() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras, nueces)
 
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
         assertEquals(2, vm.productos.value.size)
         assertFalse(vm.cargandoProductos.value)
@@ -54,18 +60,19 @@ class ProductoViewModelRemotoTest {
     @Test
     fun siElServidorNoRespondeMuestraUnMensaje() = runBlocking {
         coEvery { remoto.listar() } throws java.net.ConnectException()
+        coEvery { remoto.cargarCache() } returns emptyList()
 
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
         assertTrue(vm.productos.value.isEmpty())
         assertFalse(vm.cargandoProductos.value)
-        assertNotNull(vm.error.value)
+        assertNotNull(vm.errorCatalogo.value)
     }
 
     @Test
     fun agregarUnProductoLoEnviaAlServidorYRecargaLaLista() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras)
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
         coEvery { remoto.crear(any()) } returns nueces
         coEvery { remoto.listar() } returns listOf(almendras, nueces)
@@ -80,21 +87,21 @@ class ProductoViewModelRemotoTest {
     @Test
     fun unProductoConPrecioInvalidoNoLlegaAlServidor() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras)
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
         val agregado = vm.agregarProductoPersistente(
             nueces.copy(precio = 0)
         )
 
         assertFalse(agregado)
-        assertEquals("El precio debe ser mayor que cero", vm.error.value)
+        assertEquals("Ingresa un precio mayor que cero.", vm.error.value)
         coVerify(exactly = 0) { remoto.crear(any()) }
     }
 
     @Test
     fun editarUnProductoLoEnviaAlServidor() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras)
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
         val editado = almendras.copy(precio = 7990)
         coEvery { remoto.actualizar(any()) } returns editado
@@ -110,9 +117,9 @@ class ProductoViewModelRemotoTest {
     @Test
     fun eliminarUnProductoLoQuitaDeLaLista() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras)
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
-        coEvery { remoto.eliminar(1) } returns true
+        coEvery { remoto.eliminarRegistrado(1) } returns ProductoRemoteRepository.EliminacionRegistrada(true, true)
         coEvery { remoto.listar() } returns emptyList()
 
         val eliminado = vm.eliminarProductoPersistente(1)
@@ -122,16 +129,18 @@ class ProductoViewModelRemotoTest {
     }
 
     @Test
-    fun eliminarUnProductoQueYaNoExisteAvisaAlUsuario() = runBlocking {
+    fun eliminarUnProductoAusenteConfirmaElRetiroYQuitaLaFichaObsoleta() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras)
-        val vm = ProductoViewModel(remoteRepository = remoto)
+        val vm = viewModel()
 
-        coEvery { remoto.eliminar(99) } returns false
+        coEvery { remoto.eliminarRegistrado(1) } returns ProductoRemoteRepository.EliminacionRegistrada(false, true)
+        coEvery { remoto.listar() } returns emptyList()
 
-        val eliminado = vm.eliminarProductoPersistente(99)
+        val eliminado = vm.eliminarProductoPersistente(1)
 
-        assertFalse(eliminado)
-        assertEquals("El producto ya no existe", vm.error.value)
+        assertTrue(eliminado)
+        assertTrue(vm.productos.value.isEmpty())
+        assertNull(vm.error.value)
     }
 
     private fun producto(id: Int, nombre: String, codigo: String) = ProductoInfo(

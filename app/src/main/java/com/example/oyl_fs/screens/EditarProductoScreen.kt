@@ -39,6 +39,22 @@ import com.example.oyl_fs.model.ProductoInfo
 import com.example.oyl_fs.viewmodel.ProductoViewModel
 import kotlinx.coroutines.launch
 
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.QrCode
+import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.AttachMoney
+import androidx.compose.material.icons.filled.Inventory
+import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.Straighten
+import androidx.compose.ui.graphics.vector.ImageVector
+
+import com.example.oyl_fs.viewmodel.DatosFormularioProducto
+import com.example.oyl_fs.viewmodel.ErroresFormularioProducto
+import com.example.oyl_fs.viewmodel.ValidacionFormularioProducto
+
+
 private val FondoEditar = Color(0xFFFFF5E7)
 private val CafeEditar = Color(0xFF92623D)
 private val OscuroEditar = Color(0xFF4B2E15)
@@ -53,7 +69,8 @@ private val OscuroEditar = Color(0xFF4B2E15)
 fun EditarProductoAdmin(
     producto: ProductoInfo,
     viewModel: ProductoViewModel,
-    onVolver: () -> Unit
+    onVolver: () -> Unit,
+    onGuardado: ((String) -> Unit)? = null
 ) {
 
     val error by viewModel.error.collectAsState()
@@ -72,7 +89,10 @@ fun EditarProductoAdmin(
         producto = producto,
         errorGuardado = error,
         guardando = guardando,
-        onEditarFormulario = viewModel::limpiarError,
+
+        onEdicionFormulario = {
+            viewModel.limpiarError()
+        },
 
         onVolver = {
             viewModel.limpiarError()
@@ -95,7 +115,11 @@ fun EditarProductoAdmin(
                             )
 
                         if (actualizado) {
-                            onVolver()
+                            val mensaje = mensajeGuardadoProducto(
+                                editado = true,
+                                catalogoPendiente = viewModel.errorCatalogo.value != null
+                            )
+                            if (onGuardado != null) onGuardado(mensaje) else onVolver()
                         }
 
                     } finally {
@@ -114,8 +138,9 @@ fun EditarProductoScreen(
     onGuardar: (ProductoInfo) -> Unit,
     errorGuardado: String? = null,
     guardando: Boolean = false,
-    onEditarFormulario: () -> Unit = {}
+    onEdicionFormulario: () -> Unit = {}
 ) {
+
 
     // Al editar, comienza con los datos del producto.
     var nombre by rememberSaveable(producto.id) {
@@ -133,9 +158,8 @@ fun EditarProductoScreen(
     var precio by rememberSaveable(producto.id) {
         mutableStateOf(producto.precio.toString())
     }
-    var stock by rememberSaveable(producto.id) {
-        mutableStateOf(producto.stock.toString())
-    }
+    // El stock se consulta; las existencias se cambian mediante movimientos.
+    val stock = producto.stock.toString()
     var stockMinimo by rememberSaveable(producto.id) {
         mutableStateOf(producto.stockMinimo.toString())
     }
@@ -152,9 +176,10 @@ fun EditarProductoScreen(
     var menuCategorias by remember { mutableStateOf(false) }
     var errorFormulario by remember { mutableStateOf<String?>(null) }
 
-    LaunchedEffect(nombre, codigo, categoria, descripcion, precio, stock, stockMinimo, presentacion, imagenUri, disponible) {
-        errorFormulario = null
-        onEditarFormulario()
+    var erroresFormulario by remember(producto.id) {
+        mutableStateOf(
+            ErroresFormularioProducto()
+        )
     }
 
     val contexto = LocalContext.current
@@ -176,6 +201,12 @@ fun EditarProductoScreen(
                 )
                 imagenUri = uri.toString()
                 errorFormulario = null
+
+                erroresFormulario = erroresFormulario.copy(
+                    imagen = null
+                )
+                onEdicionFormulario()
+
             } catch (error: SecurityException) {
                 errorFormulario = "No se pudo conservar la fotografía."
             }
@@ -212,7 +243,7 @@ fun EditarProductoScreen(
         Card(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable {
+                .clickable(enabled = !guardando) {
                     seleccionarImagen.launch(
                         arrayOf("image/jpeg", "image/png")
                     )
@@ -249,12 +280,53 @@ fun EditarProductoScreen(
             }
         }
 
-        CampoEditar("Nombre del producto *", nombre) {
-            nombre = it
+        CapturarFotoProducto(
+            enabled = !guardando,
+            modifier = Modifier.fillMaxWidth(),
+            onFoto = { uri ->
+                imagenUri = uri
+                errorFormulario = null
+                erroresFormulario = erroresFormulario.copy(imagen = null)
+                onEdicionFormulario()
+            },
+            onError = { errorFormulario = it }
+        )
+
+        erroresFormulario.imagen?.let { mensaje ->
+            Text(
+                text = mensaje,
+                color = Color(0xFFC0392B),
+                fontSize = 12.sp
+            )
         }
 
-        CampoEditar("Código *", codigo) {
+        CampoEditar(
+            titulo = "Nombre del producto *",
+            valor = nombre,
+            icono = Icons.Default.Label,
+            error = erroresFormulario.nombre
+        ) {
+            nombre = it
+            erroresFormulario = erroresFormulario.copy(
+                nombre = null
+            )
+            onEdicionFormulario()
+        }
+
+        CampoEditar(
+            titulo = "Código *",
+            valor = codigo,
+            icono = Icons.Default.QrCode,
+            error = erroresFormulario.codigo
+                ?: errorGuardado?.takeIf {
+                    it.contains("código", ignoreCase = true)
+                }
+        ) {
             codigo = it
+            erroresFormulario = erroresFormulario.copy(
+                codigo = null
+            )
+            onEdicionFormulario()
         }
 
         Text(
@@ -272,14 +344,25 @@ fun EditarProductoScreen(
                     contentColor = OscuroEditar
                 )
             ) {
+                Icon(
+                    imageVector = Icons.Default.Category,
+                    contentDescription = null
+                )
+
+                Spacer(Modifier.width(8.dp))
+
                 Text(
-                    categoria.ifEmpty { "Seleccionar categoría" }
+                    categoria.ifEmpty {
+                        "Seleccionar categoría"
+                    }
                 )
             }
 
             DropdownMenu(
                 expanded = menuCategorias,
-                onDismissRequest = { menuCategorias = false }
+                onDismissRequest = {
+                    menuCategorias = false
+                }
             ) {
                 categorias.forEach { opcion ->
                     DropdownMenuItem(
@@ -287,53 +370,89 @@ fun EditarProductoScreen(
                         onClick = {
                             categoria = opcion
                             menuCategorias = false
+
+                            erroresFormulario =
+                                erroresFormulario.copy(
+                                    categoria = null
+                                )
+                            onEdicionFormulario()
                         }
                     )
                 }
             }
         }
 
+        erroresFormulario.categoria?.let { mensaje ->
+            Text(
+                text = mensaje,
+                color = Color(0xFFC0392B),
+                fontSize = 12.sp
+            )
+        }
+
         CampoEditar(
             titulo = "Descripción",
             valor = descripcion,
+            icono = Icons.Default.Description,
+            error = erroresFormulario.descripcion,
             multilinea = true
         ) {
             descripcion = it
+            erroresFormulario = erroresFormulario.copy(descripcion = null)
+            onEdicionFormulario()
         }
 
         CampoEditar(
             titulo = "Precio *",
             valor = precio,
+            icono = Icons.Default.AttachMoney,
+            error = erroresFormulario.precio,
             numerico = true
         ) {
             precio = it
+            erroresFormulario = erroresFormulario.copy(
+                precio = null
+            )
+            onEdicionFormulario()
         }
 
-        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Column(modifier = Modifier.fillMaxWidth()) {
-                CampoEditar(
-                    titulo = "Stock actual *",
-                    valor = stock,
-                    numerico = true
-                ) {
-                    stock = it
-                }
-            }
+        CampoEditar(
+            titulo = "Stock actual (solo lectura)",
+            valor = stock,
+            icono = Icons.Default.Inventory,
+            soloLectura = true
+        ) { }
+        Text(
+            text = "Para cambiar existencias, registra una entrada o salida desde Inventario.",
+            color = CafeEditar,
+            fontSize = 12.sp
+        )
 
-            Column(modifier = Modifier.fillMaxWidth()) {
-                CampoEditar(
-                    titulo = "Stock mínimo *",
-                    valor = stockMinimo,
-                    numerico = true
-                ) {
-                    stockMinimo = it
-                }
-            }
+        CampoEditar(
+            titulo = "Stock mínimo *",
+            valor = stockMinimo,
+            icono = Icons.Default.Warning,
+            error = erroresFormulario.stockMinimo,
+            numerico = true
+        ) {
+            stockMinimo = it
+            erroresFormulario = erroresFormulario.copy(
+                stockMinimo = null
+            )
+            onEdicionFormulario()
         }
 
-        CampoEditar("Peso / Presentación", presentacion) {
+        CampoEditar(
+            titulo = "Peso / Presentación *",
+            valor = presentacion,
+            icono = Icons.Default.Straighten,
+            error = erroresFormulario.presentacion
+        ) {
             presentacion = it
+            erroresFormulario = erroresFormulario.copy(presentacion = null)
+            onEdicionFormulario()
         }
+
 
         Row(
             modifier = Modifier.fillMaxWidth(),
@@ -354,7 +473,10 @@ fun EditarProductoScreen(
             )
         }
 
-        val mensaje = errorFormulario ?: errorGuardado
+        val mensaje = errorFormulario
+            ?: errorGuardado?.takeUnless {
+                it.contains("código", ignoreCase = true)
+            }
 
         AnimatedVisibility(visible = mensaje != null, enter = fadeIn(tween(350)) + expandVertically(tween(350)),
             exit = fadeOut(tween(200)) + shrinkVertically(tween(200))) {
@@ -375,39 +497,29 @@ fun EditarProductoScreen(
             }
 
             Button(
+
                 onClick = {
-                    val precioNumero = precio.toIntOrNull()
-                    val stockNumero = stock.toIntOrNull()
-                    val minimoNumero = stockMinimo.toIntOrNull()
+                    errorFormulario = null
 
-                    // Valida los datos antes de enviarlos al ViewModel.
-                    errorFormulario = when {
-                        nombre.isBlank() ->
-                            "Escribe el nombre del producto."
+                    erroresFormulario =
+                        ValidacionFormularioProducto.validar(
+                            datos = DatosFormularioProducto(
+                                nombre = nombre,
+                                codigo = codigo,
+                                categoria = categoria,
+                                precio = precio,
+                                stock = stock,
+                                stockMinimo = stockMinimo,
+                                presentacion = presentacion,
+                                descripcion = descripcion,
+                                imagenPresente =
+                                    !imagenUri.isNullOrBlank() ||
+                                            producto.imagen != 0
+                            ),
+                            requerirImagen = true
+                        )
 
-                        codigo.isBlank() ->
-                            "Escribe el código."
-
-                        categoria.isBlank() ->
-                            "Selecciona una categoría."
-
-                        precioNumero == null || precioNumero <= 0 ->
-                            "Ingresa un precio mayor que cero."
-
-                        stockNumero == null || stockNumero < 0 ->
-                            "Ingresa un stock válido."
-
-                        minimoNumero == null || minimoNumero < 0 ->
-                            "Ingresa un stock mínimo válido."
-
-                        imagenUri == null &&
-                                productoFormulario.imagen == 0 ->
-                            "Selecciona una fotografía."
-
-                        else -> null
-                    }
-
-                    if (errorFormulario == null) {
+                    if (!erroresFormulario.hayErrores) {
                         onGuardar(productoFormulario)
                     }
                 },
@@ -427,16 +539,22 @@ fun EditarProductoScreen(
     }
 }
 
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CampoEditar(
     titulo: String,
     valor: String,
+    icono: ImageVector,
+    error: String? = null,
     numerico: Boolean = false,
     multilinea: Boolean = false,
+    soloLectura: Boolean = false,
     onCambio: (String) -> Unit
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Text(
             text = titulo,
             color = OscuroEditar,
@@ -445,10 +563,25 @@ private fun CampoEditar(
 
         OutlinedTextField(
             value = valor,
-            onValueChange = { texto: String ->
-                if (!numerico || texto.all { it in '0'..'9' }) {
+            readOnly = soloLectura,
+            onValueChange = { texto ->
+                if (!soloLectura && (!numerico || texto.all { it in '0'..'9' })) {
                     onCambio(texto)
                 }
+            },
+            leadingIcon = {
+                Icon(
+                    imageVector = icono,
+                    contentDescription = null
+                )
+            },
+            isError = error != null,
+            supportingText = if (error != null) {
+                {
+                    Text(text = error)
+                }
+            } else {
+                null
             },
             singleLine = !multilinea,
             keyboardOptions = KeyboardOptions(
@@ -468,7 +601,9 @@ private fun CampoEditar(
             ),
             modifier = Modifier
                 .fillMaxWidth()
-                .heightIn(min = if (multilinea) 110.dp else 56.dp)
+                .heightIn(
+                    min = if (multilinea) 110.dp else 56.dp
+                )
         )
     }
 }

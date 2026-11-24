@@ -2,8 +2,13 @@ package com.example.oyl_fs.repository
 
 import com.example.oyl_fs.network.ActualizarPerfilRequest
 import com.example.oyl_fs.network.LoginRequest
+import com.example.oyl_fs.network.LoginResponseDto
+import com.example.oyl_fs.util.CifradoSesion
 import com.example.oyl_fs.network.UsuarioDto
 import com.example.oyl_fs.network.UsuariosApi
+import android.content.Context
+import android.content.SharedPreferences
+import io.mockk.every
 import io.mockk.coEvery
 import io.mockk.coVerify
 import io.mockk.mockk
@@ -22,23 +27,35 @@ class SesionRepositoryTest {
     private val api: UsuariosApi = mockk()
     private val admin = UsuarioDto(1, "Administrador", "admin", "admin@oyl.cl", rol = "ADMIN")
 
-    private fun prepararSesionVacia() {
-        SesionRepository.api = api
-        SesionRepository.cerrarSesion()
+    private suspend fun prepararSesionVacia() {
+        val contexto = mockk<Context>()
+        val preferencias = mockk<SharedPreferences>()
+        val editor = mockk<SharedPreferences.Editor>()
+        every { contexto.applicationContext } returns contexto
+        every { contexto.getSharedPreferences(any(), any()) } returns preferencias
+        every { preferencias.edit() } returns editor
+        every { editor.clear() } returns editor
+        every { editor.putString(any(), any()) } returns editor
+        every { editor.commit() } returns true
+        val cifrado = mockk<CifradoSesion>()
+        every { cifrado.cifrar(any()) } answers { firstArg<String>() }
+        every { cifrado.descifrar(any()) } answers { firstArg<String>() }
+        SesionRemotaRepository.configurar(contexto, cifrado)
+        SesionRemotaRepository.cerrar()
     }
 
     @Test
     fun loginCorrectoGuardaLaSesionYRecortaElAlias() = runBlocking {
         prepararSesionVacia()
         val enviado = slot<LoginRequest>()
-        coEvery { api.login(capture(enviado)) } returns admin
+        coEvery { api.login(capture(enviado)) } returns LoginResponseDto(admin, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
 
-        val resultado = SesionRepository.iniciarSesion("  admin  ", "admin")
+        val resultado = SesionRemotaRepository.iniciarSesion("  admin  ", "admin", api)
 
         assertTrue(resultado.isSuccess)
         assertEquals("admin", enviado.captured.alias)
-        assertEquals(1L, SesionRepository.usuarioId)
-        SesionRepository.cerrarSesion()
+        assertEquals(1L, SesionRemotaRepository.usuarioId)
+        SesionRemotaRepository.cerrar()
     }
 
     @Test
@@ -46,18 +63,18 @@ class SesionRepositoryTest {
         prepararSesionVacia()
         coEvery { api.login(any()) } throws UnknownHostException("sin conexion")
 
-        val resultado = SesionRepository.iniciarSesion("admin", "mala")
+        val resultado = SesionRemotaRepository.iniciarSesion("admin", "mala", api)
 
         assertTrue(resultado.isFailure)
-        assertNull(SesionRepository.usuarioId)
+        assertNull(SesionRemotaRepository.usuarioId)
     }
 
     @Test
     fun actualizarPerfilSinSesionFallaSinLlamarAlServidor() = runBlocking {
         prepararSesionVacia()
 
-        val resultado = SesionRepository.actualizarPerfil(
-            ActualizarPerfilRequest("Nuevo", "nuevo@oyl.cl")
+        val resultado = SesionRemotaRepository.actualizarPerfil(
+            ActualizarPerfilRequest("Nuevo", "nuevo@oyl.cl"), api
         )
 
         assertTrue(resultado.isFailure)
@@ -67,27 +84,27 @@ class SesionRepositoryTest {
     @Test
     fun actualizarPerfilConSesionReemplazaAlUsuarioGuardado() = runBlocking {
         prepararSesionVacia()
-        coEvery { api.login(any()) } returns admin
+        coEvery { api.login(any()) } returns LoginResponseDto(admin, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
         coEvery { api.actualizar(1L, any()) } returns admin.copy(nombre = "Admin editado")
-        SesionRepository.iniciarSesion("admin", "admin")
+        SesionRemotaRepository.iniciarSesion("admin", "admin", api)
 
-        val resultado = SesionRepository.actualizarPerfil(
-            ActualizarPerfilRequest("Admin editado", "admin@oyl.cl")
+        val resultado = SesionRemotaRepository.actualizarPerfil(
+            ActualizarPerfilRequest("Admin editado", "admin@oyl.cl"), api
         )
 
         assertTrue(resultado.isSuccess)
-        assertEquals("Admin editado", SesionRepository.usuario.value?.nombre)
-        SesionRepository.cerrarSesion()
+        assertEquals("Admin editado", SesionRemotaRepository.usuario.value?.nombre)
+        SesionRemotaRepository.cerrar()
     }
 
     @Test
     fun cerrarSesionBorraAlUsuarioGuardado() = runBlocking {
         prepararSesionVacia()
-        coEvery { api.login(any()) } returns admin
-        SesionRepository.iniciarSesion("admin", "admin")
+        coEvery { api.login(any()) } returns LoginResponseDto(admin, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
+        SesionRemotaRepository.iniciarSesion("admin", "admin", api)
 
-        SesionRepository.cerrarSesion()
+        SesionRemotaRepository.cerrar()
 
-        assertNull(SesionRepository.usuario.value)
+        assertNull(SesionRemotaRepository.usuario.value)
     }
 }

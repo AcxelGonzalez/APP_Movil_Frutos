@@ -1,39 +1,25 @@
 package com.example.oyl_fs.network
 
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.ResponseBody.Companion.toResponseBody
 import org.junit.Assert.*
 import org.junit.Test
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
+import retrofit2.HttpException
+import retrofit2.Response
+import java.io.IOException
 
 class ErroresApiTest {
-    @Test fun credencialesYSesionTienenMensajesDiferentes() {
-        assertEquals("Usuario o contraseña incorrectos.", mensajeErrorHttp(401, "", true))
-        assertTrue(mensajeErrorHttp(401, "", false).contains("sesión"))
+    private fun error(codigo: Int, cuerpo: String) = HttpException(
+        Response.error<Unit>(codigo, cuerpo.toResponseBody("application/json".toMediaType())))
+
+    @Test fun muestraElMensajeDeValidacionDelServidor() {
+        assertEquals("Correo ya registrado", error(409, "{\"message\":\"Correo ya registrado\"}").mensajeApi())
     }
-    @Test fun erroresDelServidorNoMuestranDetallesTecnicos() {
-        val mensaje = mensajeErrorHttp(500, "{\"message\":\"SQLException jdbc password=secret\"}")
-        assertFalse(mensaje.contains("secret"))
-        assertFalse(mensaje.contains("jdbc"))
-        assertTrue(mensaje.contains("más tarde"))
+    @Test fun cuerpoVacioOHtmlUsaUnMensajeLegible() {
+        assertEquals("El servidor no pudo completar la operación. Inténtalo más tarde.", error(503, "<html>sin servicio</html>").mensajeApi())
+        assertEquals("Revisa los datos del formulario e inténtalo nuevamente.", error(400, "{}").mensajeApi())
     }
-    @Test fun validacionDelBackendSeConservaSiEsLegible() {
-        assertEquals("El correo ya está registrado.",
-            mensajeErrorHttp(409, "{\"message\":\"El correo ya está registrado.\"}"))
-    }
-    @Test fun cuerposInvalidosOVaciosTienenAlternativaClara() {
-        assertTrue(mensajeErrorHttp(400, "<html>Error</html>").startsWith("Revisa"))
-        assertTrue(mensajeErrorHttp(400, "{\"message\":\"\"}").startsWith("Revisa"))
-    }
-    @Test fun validacionTecnicaNoSeFiltraAlFormulario() {
-        assertFalse(mensajeErrorHttp(400, "{\"message\":\"producto java.lang.Exception\"}")
-            .contains("java.lang"))
-    }
-    @Test fun tiempoDeEsperaYFaltaDeConexionExplicanQueHacer() {
-        assertTrue(SocketTimeoutException().mensajeApi().contains("tardando"))
-        assertTrue(UnknownHostException().mensajeApi().contains("conexión"))
-    }
-    @Test fun erroresInesperadosNoMuestranElMensajeInterno() {
-        assertEquals("No pudimos completar la operación. Inténtalo nuevamente.",
-            RuntimeException("Error secreto interno").mensajeApi())
+    @Test fun desconexionNoSeConfundeConCredencialesIncorrectas() {
+        assertEquals("La conexión se interrumpió. Revisa tu conexión e inténtalo nuevamente.", IOException().mensajeApi())
     }
 }

@@ -6,9 +6,10 @@ data class CrearPedidoRequest(
     val items: List<ItemPedidoRequest>
 )
 
-// Un producto del carrito: solo id y cantidad.
-// El precio NO se manda: el servidor lo toma de ms-productos, así nadie puede alterarlo.
+// El precio esperado expresa el importe aceptado por el cliente. El servidor exige
+// que coincida con su catálogo; nunca lo usa para reemplazar el precio oficial.
 data class ItemPedidoRequest(
     val productoId: Long,
-    val cantidad: Int
+    val cantidad: Int,
+    val precioEsperado: Int
 )

@@ -1,6 +1,7 @@
 package com.example.oyl_fs.network
 
 import retrofit2.Response
+import retrofit2.http.Header
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
@@ -11,7 +12,10 @@ import retrofit2.http.Path
 interface PedidosApi {
 
     @POST("api/pedidos")
-    suspend fun crear(@Body pedido: CrearPedidoRequest): PedidoDto
+    suspend fun crear(@Header("Idempotency-Key") clave: String, @Body pedido: CrearPedidoRequest): SolicitudCompraDto
+
+    @GET("api/pedidos/solicitudes/{clave}")
+    suspend fun consultarSolicitud(@Path("clave") clave: String): SolicitudCompraDto
 
     // Todos los pedidos (para el administrador)
     @GET("api/pedidos")
@@ -35,4 +39,3 @@ interface PedidosApi {
     @DELETE("api/pedidos/{id}")
     suspend fun cancelar(@Path("id") id: Long): Response<Unit>
 }
-

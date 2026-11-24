@@ -10,14 +10,19 @@ object RetrofitClient {
 
     // 10.0.2.2 = "la PC donde corre el emulador" (localhost de la PC)
     // Con celular real: la IP de la PC en el WiFi, ej. "http://192.168.1.15"
-     private const val HOST = "http://10.0.2.2"
+    private val HOST = com.example.oyl_fs.BuildConfig.OYL_BACKEND_HOST
+    // Para USB: compilar con -PoylBackendHost=http://127.0.0.1 y usar adb reverse en los tres puertos.
 
-    // Muestra cada petición y respuesta en Logcat
+    // No registrar contraseñas ni datos personales en Logcat.
     private val logging = HttpLoggingInterceptor().apply {
-        level = HttpLoggingInterceptor.Level.BODY
+        level = HttpLoggingInterceptor.Level.NONE
     }
 
     private val http = OkHttpClient.Builder()
+        .retryOnConnectionFailure(false)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .addInterceptor(AutorizacionInterceptor())
         .addInterceptor(logging)
         .build()
 
@@ -30,8 +35,10 @@ object RetrofitClient {
             .build()
             .create(api)
 
+    val fotosProductos: FotosProductoApi by lazy { crear(8081, FotosProductoApi::class.java) }
     val productos: ProductosApi by lazy { crear(8081, ProductosApi::class.java) }
+    val movimientosStock: MovimientosStockApi by lazy { crear(8081, MovimientosStockApi::class.java) }
+    val cancelaciones: CancelacionesApi by lazy { crear(8082, CancelacionesApi::class.java) }
     val pedidos: PedidosApi by lazy { crear(8082, PedidosApi::class.java) }
     val usuarios: UsuariosApi by lazy { crear(8083, UsuariosApi::class.java) }
 }
-

@@ -27,5 +27,7 @@ data class Pedido(
     val fecha: Long,
     val productos: List<DetallePedido>,
     val total: Int,
-    val estado: EstadoPedido
+    val estado: EstadoPedido,
+    val entrega: EntregaPedido? = null,
+    val cancelacionEnRevision: Boolean = false
 )

@@ -6,6 +6,9 @@ import com.google.mlkit.vision.barcode.common.Barcode
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 
+// Permite sustituir la cámara en pruebas sin modificar el flujo de navegación.
+typealias LanzadorQr = (Context, (String) -> Unit, (String) -> Unit) -> Unit
+
 /*
  * Función para abrir la cámara y escanear códigos QR.
  */

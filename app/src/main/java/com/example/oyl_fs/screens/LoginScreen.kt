@@ -140,7 +140,8 @@ internal fun LoginContenido(
                                 unfocusedLabelColor = Color(0xFF785334),
                                 cursorColor = cafe
                             ),
-                            isError = estado.error != null,
+                            isError = estado.errorUsuario != null || estado.error != null,
+                            supportingText = estado.errorUsuario?.let { mensaje -> { Text(mensaje) } },
                             keyboardOptions = KeyboardOptions(
                                 capitalization = KeyboardCapitalization.None,
                                 autoCorrect = false, imeAction = ImeAction.Next),
@@ -168,7 +169,8 @@ internal fun LoginContenido(
                                 unfocusedLabelColor = Color(0xFF785334),
                                 cursorColor = cafe
                             ),
-                            isError = estado.error != null,
+                            isError = estado.errorContrasena != null || estado.error != null,
+                            supportingText = estado.errorContrasena?.let { mensaje -> { Text(mensaje) } },
                             visualTransformation = if (verContrasena) VisualTransformation.None else PasswordVisualTransformation(),
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
                             keyboardActions = KeyboardActions(onDone = { ingresar() }),

@@ -22,6 +22,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.res.painterResource
 import com.example.oyl_fs.R
 
+import com.example.oyl_fs.util.LanzadorQr
+import com.example.oyl_fs.util.escanearQr
 import com.example.oyl_fs.viewmodel.ProductoViewModel
 import com.example.oyl_fs.viewmodel.HistorialViewModel
 import com.example.oyl_fs.model.EstadoPedido
@@ -71,6 +73,7 @@ fun HomeAdmin(
     nombre: String = "Administrador",
     pestanaSolicitada: Int? = null,
     onPestanaAtendida: () -> Unit = {},
+    lanzarEscaner: LanzadorQr = ::escanearQr,
     pestanaSeleccionada: Int? = null,
     onSeleccionarPestana: ((Int) -> Unit)? = null
 ) {
@@ -101,7 +104,8 @@ fun HomeAdmin(
         .take(3)
 
 
-    val perfil by perfilViewModel.perfil.collectAsState()
+    val perfiles by perfilViewModel.perfiles.collectAsState()
+    val perfil = perfiles.firstOrNull { it.esAdmin }
     val avisosViewModel: com.example.oyl_fs.viewmodel.NotificacionesAdminViewModel = obtenerViewModel()
     val leidas by avisosViewModel.leidas.collectAsState()
     val errorPedidos by historialViewModel.error.collectAsState()
@@ -114,7 +118,7 @@ fun HomeAdmin(
     // Consulta nuevos avisos solo mientras el administrador está usando la app.
     val cicloDeVida = LocalLifecycleOwner.current.lifecycle
     LaunchedEffect(cicloDeVida, perfil?.id) {
-        if (perfil?.rol == "ADMIN") {
+        if (perfil?.esAdmin == true) {
             cicloDeVida.repeatOnLifecycle(Lifecycle.State.RESUMED) {
                 while (isActive) {
                     viewModel.refrescar()
@@ -152,6 +156,15 @@ fun HomeAdmin(
         else tabLocal = indice
     }
 
+    var productoInventarioId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var inventarioDesdeEscaner by rememberSaveable { mutableStateOf(false) }
+
+    fun volverInventario() {
+        productoInventarioId = null
+        seleccionarPestana(if (inventarioDesdeEscaner) 6 else 0)
+        inventarioDesdeEscaner = false
+    }
+
     // El historial puede solicitar una pestaña del mismo menú.
     LaunchedEffect(pestanaSolicitada) {
         if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
@@ -164,7 +177,9 @@ fun HomeAdmin(
     // Controla la animación inicial
 
 
-    BackHandler(enabled = tab != 0) { seleccionarPestana(0) }
+    BackHandler(enabled = tab != 0) {
+        if (tab == 2) volverInventario() else seleccionarPestana(0)
+    }
 
     Scaffold(
         containerColor = FondoOYL,
@@ -180,7 +195,8 @@ fun HomeAdmin(
 
                 } else {
 
-                    // Cambia la pantalla seleccionada
+                    inventarioDesdeEscaner = false
+                    productoInventarioId = null
                     seleccionarPestana(indice)
                 }
             }
@@ -190,6 +206,21 @@ fun HomeAdmin(
 
         // Mostramos el contenido según la opción seleccionada
         when (tab) {
+            6 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                EscanerScreen(
+                    viewModel = viewModel, esAdmin = true,
+                    onVolver = { seleccionarPestana(0)},
+                    onAbrirProducto = { id ->
+                        if (viewModel.obtenerProducto(id) != null) {
+                            productoInventarioId = id
+                            inventarioDesdeEscaner = true
+                            seleccionarPestana(2)
+                        }
+                    },
+                    lanzarEscaner = lanzarEscaner
+                )
+            }
+
 
             // ---------- INICIO ----------
             0 -> {
@@ -232,11 +263,11 @@ fun HomeAdmin(
                         }
                     }
 
-                        Column(verticalArrangement = Arrangement.spacedBy(5.dp)) {
-                            Text("Hola, ${nombre.trim().substringBefore(" ")}", color = SecundarioOYL,
-                                fontSize = 27.sp, fontWeight = FontWeight.Bold, lineHeight = 33.sp)
-
-                        }
+                    OutlinedButton(onClick = { seleccionarPestana(6)}, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Escanear producto")
+                    }
 
                     // ---------- INDICADORES ----------
                         Row(
@@ -480,9 +511,9 @@ fun HomeAdmin(
                 ) {
                     InventarioScreen(
                         viewModel = viewModel,
-                        onVolver = {
-                            seleccionarPestana(0)
-                        }
+                        onVolver = { volverInventario() },
+                        productoInicialId = productoInventarioId,
+                        onProductoInicialAtendido = { productoInventarioId = null }
                     )
                 }
             }
@@ -490,7 +521,7 @@ fun HomeAdmin(
             // ---------- PERFIL ----------
             4 -> Box(Modifier.fillMaxSize().padding(padding)) {
                 PerfilUsuarioScreen(
-                    usuarioId = "admin-demo",
+                    usuarioId = perfilViewModel.perfiles.value.firstOrNull { it.esAdmin }?.id ?: "admin-demo",
                     viewModel = perfilViewModel,
                     onVolver = { seleccionarPestana(0) },
                     onLogout = onLogout

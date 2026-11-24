@@ -1,5 +1,6 @@
 package com.example.oyl_fs.viewmodel
 
+import com.example.oyl_fs.network.mensajeApi
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 
@@ -8,6 +9,7 @@ import com.example.oyl_fs.repository.ResultadoRegistro
 import com.example.oyl_fs.repository.UsuarioRoomRepository
 
 import java.util.Locale
+import com.example.oyl_fs.util.ValidacionContacto
 
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -79,9 +81,6 @@ object ValidacionRegistro {
             Regex("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$")
                 .matches(correo)
 
-        val digitosTelefono = datos.telefono
-            .filter { it.isDigit() }
-
         return ErroresRegistro(
             alias = when {
                 !aliasValido ->
@@ -93,26 +92,24 @@ object ValidacionRegistro {
 
             nombre = if (datos.nombre.isBlank()) {
                 "Ingresa tu nombre completo."
-            } else null,
+            } else com.example.oyl_fs.util.ValidacionLongitud.errorNombrePerfil(datos.nombre),
 
             correo = if (!correoValido) {
                 "Ingresa un correo electrónico válido."
             } else null,
 
-            rut = if (!rutValido(datos.rut)) {
+            rut = if (!ValidacionContacto.rutValido(datos.rut)) {
                 "Ingresa un RUT válido, por ejemplo 12.345.678-5."
             } else null,
 
             telefono = if (
                 datos.telefono.isNotBlank() &&
-                digitosTelefono.length !in 8..11
+                !ValidacionContacto.telefonoValido(datos.telefono)
             ) {
                 "Ingresa un teléfono válido."
             } else null,
 
-            clave = if (datos.clave.length !in 8..128) {
-                "La contraseña debe tener entre 8 y 128 caracteres."
-            } else null,
+            clave = com.example.oyl_fs.util.ValidacionContrasena.errorRegistro(datos.clave),
 
             confirmacion = if (
                 datos.confirmacion != datos.clave
@@ -122,51 +119,18 @@ object ValidacionRegistro {
         )
     }
 
-    /**
-     * Comprueba el dígito verificador del RUT chileno.
-     * Admite formatos con y sin puntos o guion.
-     */
-    private fun rutValido(rut: String): Boolean {
-
-        val limpio = rut.trim()
-            .replace(".", "")
-            .replace("-", "")
-            .uppercase(Locale.ROOT)
-
-        if (!Regex("^\\d{7,8}[\\dK]$").matches(limpio)) {
-            return false
-        }
-
-        val numero = limpio.dropLast(1)
-        val verificador = limpio.last()
-
-        var suma = 0
-        var factor = 2
-
-        for (digito in numero.reversed()) {
-            suma += digito.digitToInt() * factor
-            factor = if (factor == 7) 2 else factor + 1
-        }
-
-        val resto = 11 - (suma % 11)
-
-        val esperado = when (resto) {
-            11 -> '0'
-            10 -> 'K'
-            else -> resto.digitToChar()
-        }
-
-        return verificador == esperado
-    }
 }
 
 /**
- * Gestiona la validación y el registro real
- * de clientes mediante UsuarioRoomRepository.
+ * Valida el registro. MainActivity utiliza ms-usuarios y complementos locales;
+ * las pruebas de compatibilidad pueden utilizar UsuarioRoomRepository.
  */
 class RegistroViewModel(
-    private val repository: UsuarioRoomRepository
+    private val repository: UsuarioRoomRepository,
+    private val complementos: com.example.oyl_fs.repository.DatosLocalesRemotosRepository? = null
 ) : ViewModel() {
+
+    val usaBackend: Boolean get() = complementos != null
 
     private val _estado = MutableStateFlow(RegistroUiState())
     val estado = _estado.asStateFlow()
@@ -207,7 +171,7 @@ class RegistroViewModel(
      * Valida el formulario y solicita el registro.
      *
      * La navegación solo se ejecuta después
-     * de confirmar el almacenamiento en SQLite.
+     * de confirmar el registro en el repositorio configurado.
      */
     fun registrar(
         formulario: FormularioRegistro,
@@ -216,7 +180,11 @@ class RegistroViewModel(
 
         if (_estado.value.procesando) return
 
-        val errores = ValidacionRegistro.validar(formulario)
+        var errores = ValidacionRegistro.validar(formulario)
+        if (complementos != null) {
+            if (formulario.alias.trim().length > 20) errores = errores.copy(alias = "El alias debe tener entre 3 y 20 caracteres")
+            if (formulario.telefono.isBlank()) errores = errores.copy(telefono = "Ingresa tu teléfono")
+        }
 
         if (errores.hayErrores()) {
             _estado.value = RegistroUiState(
@@ -232,6 +200,25 @@ class RegistroViewModel(
         viewModelScope.launch {
             try {
 
+                if (complementos != null) {
+                    val usuario = com.example.oyl_fs.repository.SesionRemotaRepository.registrar(
+                        com.example.oyl_fs.network.RegistroRequest(
+                            nombre = formulario.nombre.trim(), alias = formulario.alias.trim().lowercase(Locale.ROOT),
+                            correo = formulario.correo.trim().lowercase(Locale.ROOT), telefono = formulario.telefono.trim(),
+                            contrasena = formulario.clave
+                        )
+                    ).getOrThrow()
+                    try {
+                        complementos.guardarPerfil(usuario, formulario.rut.trim())
+                    } catch (e: CancellationException) { throw e
+                    } catch (e: Exception) {
+                        _estado.value = RegistroUiState(errores = ErroresRegistro(general = "La cuenta ya fue creada. Inicia sesión y vuelve a ingresar tu RUT en el perfil."))
+                        return@launch
+                    }
+                    _estado.value = RegistroUiState()
+                    onRegistroExitoso()
+                    return@launch
+                }
                 val resultado = repository.registrarCliente(
                     DatosRegistroCliente(
                         alias = formulario.alias.trim(),
@@ -288,11 +275,11 @@ class RegistroViewModel(
             } catch (e: CancellationException) {
                 throw e
 
-            } catch (_: Exception) {
+            } catch (e: Exception) {
                 _estado.update {
                     it.copy(
                         errores = ErroresRegistro(
-                            general = "No se pudo guardar la cuenta. Intenta nuevamente."
+                            general = if (complementos != null) e.mensajeApi() else "No se pudo guardar la cuenta. Intenta nuevamente."
                         )
                     )
                 }

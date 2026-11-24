@@ -10,6 +10,7 @@ import javax.net.ssl.SSLException
 
 // No muestra excepciones, direcciones del servidor ni detalles de la base de datos.
 fun Throwable.mensajeApi(esLogin: Boolean = false): String = when (this) {
+    is SesionExpiradaException -> "Tu sesión venció. Vuelve a iniciar sesión."
     is SocketTimeoutException -> "El servidor está tardando en responder. Inténtalo nuevamente."
     is UnknownHostException, is ConnectException -> "No pudimos conectar con el servidor. Revisa tu conexión e inténtalo nuevamente."
     is SSLException -> "No pudimos establecer una conexión segura con el servidor. Inténtalo más tarde."
@@ -19,7 +20,7 @@ fun Throwable.mensajeApi(esLogin: Boolean = false): String = when (this) {
         mensajeErrorHttp(code(), cuerpo, esAcceso)
     }
     is IOException -> "La conexión se interrumpió. Revisa tu conexión e inténtalo nuevamente."
-    is IllegalArgumentException -> mensajeUsuarioSeguro(message)
+    is IllegalArgumentException, is IllegalStateException -> mensajeUsuarioSeguro(message)
         ?: "Revisa los datos ingresados e inténtalo nuevamente."
     else -> "No pudimos completar la operación. Inténtalo nuevamente."
 }
@@ -52,6 +53,6 @@ private fun mensajeUsuarioSeguro(mensaje: String?): String? {
     val texto = mensaje?.trim()?.takeIf { it.length in 3..240 } ?: return null
     val tecnico = Regex("exception|stacktrace|jdbc|hibernate|java\\.|org\\.|sql|https?://|<[^>]+>|\\n", RegexOption.IGNORE_CASE)
     // Conserva las validaciones dirigidas al usuario, sin reutilizar errores técnicos.
-    val validacion = Regex("usuario|contrase|correo|producto|stock|precio|nombre|código|codigo|cantidad|datos|campo|pedido|teléfono|telefono|dirección|direccion|sesión|sesion|imagen|fotograf", RegexOption.IGNORE_CASE)
+    val validacion = Regex("usuario|contrase|correo|producto|stock|precio|nombre|código|codigo|cantidad|datos|campo|pedido|carrito|teléfono|telefono|dirección|direccion|sesión|sesion|imagen|fotograf", RegexOption.IGNORE_CASE)
     return texto.takeIf { !tecnico.containsMatchIn(it) && validacion.containsMatchIn(it) }
 }
