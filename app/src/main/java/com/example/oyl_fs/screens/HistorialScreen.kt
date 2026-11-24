@@ -80,6 +80,11 @@ fun HistorialScreen(
     val filtro by viewModel.filtroEstado.collectAsState()
     val error by viewModel.error.collectAsState()
     val cargando by viewModel.cargando.collectAsState()
+    val cancelaciones by viewModel.cancelaciones.collectAsState()
+    val procesandoCancelacion by viewModel.procesandoCancelacion.collectAsState()
+    val mensajeCancelacion by viewModel.mensajeCancelacion.collectAsState()
+    val registroLegible by viewModel.registroCancelacionesLegible.collectAsState()
+    var pedidoACancelar by remember(usuarioId, esAdmin) { mutableStateOf<Pedido?>(null) }
 
 
     val scope = rememberCoroutineScope()
@@ -92,7 +97,7 @@ fun HistorialScreen(
 
 
     // Identificador del pedido seleccionado para ver detalles.
-    var pedidoSeleccionadoId by remember {
+    var pedidoSeleccionadoId by remember(usuarioId, esAdmin) {
         mutableStateOf<String?>(null)
     }
 
@@ -139,9 +144,10 @@ fun HistorialScreen(
                 .padding(paddingValues)
         ) {
 
-            if (cargando) LinearProgressIndicator(Modifier.fillMaxWidth())
+            if (cargando || procesandoCancelacion) LinearProgressIndicator(Modifier.fillMaxWidth())
             error?.let { Text(it, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(16.dp)) }
-            TextButton(onClick = { viewModel.refrescar() }, enabled = !cargando) { Text("Actualizar pedidos") }
+            mensajeCancelacion?.let { Text(it, modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) }
+            TextButton(onClick = { viewModel.configurarSesion(usuarioId, esAdmin) }, enabled = !cargando && !procesandoCancelacion) { Text("Actualizar pedidos") }
             // Encabezado según el perfil del usuario.
             Text(
                 text = if (esAdmin) {
@@ -199,7 +205,7 @@ fun HistorialScreen(
             Spacer(modifier = Modifier.height(12.dp))
 
             // Muestra una advertencia si no existen pedidos.
-            if (pedidos.isEmpty()) {
+            if (pedidos.isEmpty() && cancelaciones.isEmpty()) {
 
                 Box(
                     modifier = Modifier
@@ -224,6 +230,12 @@ fun HistorialScreen(
                     verticalArrangement =
                     Arrangement.spacedBy(12.dp)
                 ) {
+                    items(cancelaciones, key = { "cancelacion-${it.pedido.id}" }) { cancelacion ->
+                        TarjetaCancelacion(cancelacion, !procesandoCancelacion && !cambiandoEstado && registroLegible,
+                            onConsultar = { viewModel.gestionarCancelacion(pedidoId = cancelacion.pedidoId, continuar = false) },
+                            onContinuar = { viewModel.gestionarCancelacion(pedidoId = cancelacion.pedidoId, continuar = true) },
+                            onCerrar = { viewModel.cerrarResultadoCancelacion(cancelacion.pedidoId) })
+                    }
                     items(
                         items = pedidos,
                         key = { it.id }
@@ -232,6 +244,10 @@ fun HistorialScreen(
                         TarjetaPedido(
                             pedido = pedido,
                             esAdmin = esAdmin,
+                            operacionesHabilitadas = !procesandoCancelacion && !cambiandoEstado && registroLegible,
+                            cancelacionEnRevision = pedido.cancelacionEnRevision || cancelaciones.any { it.pedido.id == pedido.id && !it.finalizada },
+                            onCancelar = if (viewModel.admiteCancelaciones) ({ pedidoACancelar = pedido }) else null,
+                            onConsultarCancelacion = { viewModel.gestionarCancelacion(pedido = pedido, continuar = false) },
 
                             onVerDetalle = {
                                 pedidoSeleccionadoId = pedido.id
@@ -290,6 +306,19 @@ fun HistorialScreen(
                 }
             }
         }
+    }
+
+    pedidoACancelar?.let { pedido ->
+        AlertDialog(
+            onDismissRequest = { if (!procesandoCancelacion) pedidoACancelar = null },
+            title = { Text("¿Cancelar ${pedido.id}?") },
+            text = { Text("Se solicitará cancelar el pedido y devolver sus existencias. Si la respuesta queda en revisión, podrás consultarla o continuar la misma cancelación. El administrador no podrá avanzar el pedido mientras se resuelve.") },
+            confirmButton = { TextButton(enabled = !procesandoCancelacion && !cambiandoEstado, onClick = {
+                pedidoACancelar = null
+                viewModel.gestionarCancelacion(pedido = pedido, continuar = true)
+            }) { Text("Solicitar cancelación") } },
+            dismissButton = { TextButton(onClick = { pedidoACancelar = null }) { Text("Volver") } }
+        )
     }
 
     // Ventana con el detalle del pedido seleccionado.
@@ -375,7 +404,11 @@ private fun TarjetaPedido(
     esAdmin: Boolean,
     onVerDetalle: () -> Unit,
     onCambiarEstado: (EstadoPedido) -> Unit,
-    onPrepararPedido: () -> Unit
+    onPrepararPedido: () -> Unit,
+    operacionesHabilitadas: Boolean = true,
+    cancelacionEnRevision: Boolean = false,
+    onCancelar: (() -> Unit)? = null,
+    onConsultarCancelacion: () -> Unit = {}
 ) {
 
     // Controla el menú administrativo.
@@ -482,11 +515,20 @@ private fun TarjetaPedido(
                 Icon(Icons.Default.ArrowForward, null, Modifier.size(18.dp))
             }
 
+            if (cancelacionEnRevision) {
+                Text("Cancelación en revisión", color = MaterialTheme.colorScheme.error)
+                OutlinedButton(onClick = onConsultarCancelacion, enabled = operacionesHabilitadas,
+                    modifier = Modifier.fillMaxWidth()) { Text("Consultar cancelación") }
+            } else if (onCancelar != null && pedido.estado == EstadoPedido.PENDIENTE_VALIDACION) {
+                OutlinedButton(onClick = onCancelar, enabled = operacionesHabilitadas,
+                    modifier = Modifier.fillMaxWidth()) { Text("Cancelar pedido") }
+            }
             // Se mantienen las mismas transiciones y el flujo de preparación QR.
-            if (esAdmin && opcionesCambio.isNotEmpty()) {
+            if (esAdmin && opcionesCambio.isNotEmpty() && !cancelacionEnRevision) {
                 Box(Modifier.fillMaxWidth()) {
                     OutlinedButton(
                         onClick = { menuAbierto = true },
+                        enabled = operacionesHabilitadas,
                         modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
@@ -500,15 +542,17 @@ private fun TarjetaPedido(
                         opcionesCambio.forEach { estado ->
                             DropdownMenuItem(
                                 text = { Text(estado.descripcion) },
+                                enabled = operacionesHabilitadas,
                                 onClick = { menuAbierto = false; onCambiarEstado(estado) }
                             )
                         }
                     }
                 }
             }
-            if (esAdmin && pedido.estado == EstadoPedido.CONFIRMADO) {
+            if (esAdmin && pedido.estado == EstadoPedido.CONFIRMADO && !cancelacionEnRevision) {
                 Button(
                     onClick = onPrepararPedido,
+                    enabled = operacionesHabilitadas,
                     modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
                     colors = ButtonDefaults.buttonColors(containerColor = SecundarioHistorial),
                     shape = RoundedCornerShape(14.dp)
@@ -517,6 +561,29 @@ private fun TarjetaPedido(
                     Spacer(Modifier.width(8.dp))
                     Text("Preparar pedido (QR)")
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun TarjetaCancelacion(cancelacion: com.example.oyl_fs.repository.CancelacionGuardada,
+    habilitada: Boolean, onConsultar: () -> Unit, onContinuar: () -> Unit, onCerrar: () -> Unit) {
+    Card(Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = Color.White)) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(when (cancelacion.estado) {
+                "COMPLETADA" -> "Pedido cancelado"
+                "RECHAZADA" -> "Cancelación rechazada"
+                else -> "Cancelación en revisión"
+            }, fontWeight = FontWeight.Bold)
+            Text(cancelacion.pedido.id)
+            cancelacion.mensaje?.let { Text(it) }
+            if (cancelacion.finalizada) {
+                TextButton(onClick = onCerrar, enabled = habilitada) { Text("Cerrar resultado") }
+            } else {
+                Text("Consultar no modifica el pedido. Continuar usa la misma cancelación y no repite una devolución ya aplicada.")
+                OutlinedButton(onClick = onConsultar, enabled = habilitada, modifier = Modifier.fillMaxWidth()) { Text("Consultar resultado") }
+                Button(onClick = onContinuar, enabled = habilitada, modifier = Modifier.fillMaxWidth()) { Text("Continuar cancelación") }
             }
         }
     }

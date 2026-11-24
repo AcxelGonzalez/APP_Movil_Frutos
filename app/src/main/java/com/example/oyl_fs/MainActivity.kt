@@ -70,7 +70,8 @@ class MainActivity : ComponentActivity() {
                 @Suppress("UNCHECKED_CAST")
                 return HistorialViewModel(
                     remoto = true,
-                    complementos = DatosLocalesRemotosRepository(applicationContext)
+                    complementos = DatosLocalesRemotosRepository(applicationContext),
+                    cancelacionesRepository = com.example.oyl_fs.repository.CancelacionPedidoRepository(applicationContext)
                 ) as T
             }
         })[HistorialViewModel::class.java]

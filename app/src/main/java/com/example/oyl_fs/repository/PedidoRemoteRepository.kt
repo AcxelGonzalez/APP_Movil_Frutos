@@ -110,7 +110,8 @@ class PedidoRemoteRepository(private val api: com.example.oyl_fs.network.Pedidos
         },
         total = total.also { require(it in 0..Int.MAX_VALUE.toLong()) { "Total de pedido fuera de rango" } }.toInt(),
         estado = EstadoPedido.values().firstOrNull { it.name == estado }
-            ?: error("Estado de pedido desconocido: $estado")
+            ?: error("Estado de pedido desconocido: $estado"),
+        cancelacionEnRevision = cancelacionEnRevision
     )
 
     // LocalDateTime llega sin zona: la integración existente lo interpreta como UTC.

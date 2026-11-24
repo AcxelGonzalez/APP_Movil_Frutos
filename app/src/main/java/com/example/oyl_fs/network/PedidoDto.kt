@@ -7,7 +7,8 @@ data class PedidoDto(
     val fecha: String,
     val estado: String,          // PENDIENTE_VALIDACION, CONFIRMADO, PREPARADO, ENTREGADO
     val total: Long,
-    val detalles: List<DetallePedidoDto>
+    val detalles: List<DetallePedidoDto>,
+    val cancelacionEnRevision: Boolean = false
 )
 
 // Cada línea del pedido (un producto con su cantidad)
