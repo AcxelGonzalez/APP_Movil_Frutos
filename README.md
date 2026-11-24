@@ -78,12 +78,10 @@ el servidor, en el momento en que se registra la compra.
 
 ## 2. Integrantes
 
-| Integrante | Responsabilidad principal |
-|---|---|
-| **Acxel González** | Pantallas de inicio, login, inventario y CRUD de productos |
-| **Kerly Dugarte** | Registro de usuarios, perfil y catálogo |
-| **Marco Carrasco** | Mapa, historial, recuperación de operaciones y cobertura de pruebas |
-| **Fabián Cornejo** | Carrito, escáner QR y backend Spring Boot |
+- **Acxel González**
+- **Kerly Dugarte**
+- **Marco Carrasco**
+- **Fabián Cornejo**
 
 El trabajo se repartió por pantalla desde el inicio del proyecto y se integró mediante ramas
 separadas por persona.
@@ -124,32 +122,50 @@ separadas por persona.
 
 ## 4. Arquitectura
 
-```
-┌──────────────────────────────────────┐
-│        Aplicación Android            │
-│     Kotlin · Jetpack Compose         │
-│                                      │
-│   Pantallas → ViewModels →           │
-│   Repositorios → Retrofit            │
-│                                      │
-│   Room (caché local y perfiles)      │
-└───────────────────┬──────────────────┘
-                    │  HTTP · JSON · JWT
-        ┌───────────┼────────────┐
-        │           │            │
-┌───────┴──────┐ ┌──┴────────┐ ┌─┴───────────┐
-│ ms-productos │ │ ms-pedidos│ │ ms-usuarios │
-│    :8081     │ │   :8082   │ │    :8083    │
-└───────┬──────┘ └──┬────────┘ └─┬───────────┘
-        │           │            │
-        │   oyl_    │   oyl_     │   oyl_
-        │ productos │  pedidos   │  usuarios
-        └───────────┼────────────┘
-                    │
-         ┌──────────┴───────────┐
-         │    PostgreSQL 17     │
-         │        :5433         │
-         └──────────────────────┘
+```mermaid
+flowchart TD
+    subgraph APP["Aplicación Android · Kotlin + Jetpack Compose"]
+        direction TB
+        UI["Pantallas<br/><small>Compose · Material 3</small>"]
+        VM["ViewModels<br/><small>estado de presentación</small>"]
+        REPO["Repositorios<br/><small>local y remoto</small>"]
+        ROOM[("Room<br/>caché y perfiles")]
+        UI --> VM
+        VM --> REPO
+        REPO <--> ROOM
+    end
+
+    HTTP{{"Retrofit · OkHttp<br/>JSON · JWT Bearer"}}
+    REPO --> HTTP
+
+    subgraph BACK["Backend · Spring Boot sobre Docker"]
+        direction TB
+        USU["ms-usuarios<br/><small>:8083</small>"]
+        PRO["ms-productos<br/><small>:8081</small>"]
+        PED["ms-pedidos<br/><small>:8082</small>"]
+        DB[("PostgreSQL 17 · :5433<br/><small>oyl_usuarios · oyl_productos · oyl_pedidos</small>")]
+        USU --> DB
+        PRO --> DB
+        PED --> DB
+        PED -. "precio real y descuento de stock" .-> PRO
+    end
+
+    HTTP --> USU
+    HTTP --> PRO
+    HTTP --> PED
+
+    classDef capa fill:#FFFBF5,stroke:#D8C4AE,stroke-width:1px,color:#4B2E15
+    classDef red fill:#FFF5E7,stroke:#92623D,stroke-width:2px,color:#4B2E15
+    classDef servicio fill:#92623D,stroke:#4B2E15,stroke-width:1px,color:#FFFFFF
+    classDef datos fill:#4B2E15,stroke:#4B2E15,stroke-width:1px,color:#FFF5E7
+
+    class UI,VM,REPO capa
+    class HTTP red
+    class USU,PRO,PED servicio
+    class ROOM,DB datos
+
+    style APP fill:#FFF5E7,stroke:#92623D,stroke-width:2px,color:#4B2E15
+    style BACK fill:#FFF5E7,stroke:#92623D,stroke-width:2px,color:#4B2E15
 ```
 
 ### Por qué tres microservicios
@@ -865,12 +881,13 @@ APP_Movil_Frutos/
 
 ### Paleta de colores
 
-| Color | Código | Uso |
-|---|---|---|
-| Fondo | `#FFF5E7` | Fondo general de las pantallas |
-| Principal | `#92623D` | Botones y elementos destacados |
-| Secundario | `#4B2E15` | Textos y barras superiores |
-| Blanco | `#FFFFFF` | Tarjetas y contenedores |
+| | Color | Código | Uso |
+|---|---|---|---|
+| ![](https://placehold.co/22x22/FFF5E7/FFF5E7.png) | Crema | `#FFF5E7` | Fondo general de las pantallas |
+| ![](https://placehold.co/22x22/92623D/92623D.png) | Café claro | `#92623D` | Botones y elementos destacados |
+| ![](https://placehold.co/22x22/4B2E15/4B2E15.png) | Café oscuro | `#4B2E15` | Textos y barras superiores |
+| ![](https://placehold.co/22x22/FFFBF5/FFFBF5.png) | Marfil | `#FFFBF5` | Campos de formulario |
+| ![](https://placehold.co/22x22/FFFFFF/FFFFFF.png) | Blanco | `#FFFFFF` | Tarjetas y contenedores |
 
 ---
 
