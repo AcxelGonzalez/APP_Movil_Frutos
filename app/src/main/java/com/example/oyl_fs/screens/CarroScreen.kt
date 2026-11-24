@@ -58,8 +58,19 @@ fun CarroScreen(
     vm: CarritoViewModel = viewModel(),
     confirmacionVm: ConfirmacionPedidoViewModel = viewModel()
 ) {
-    LaunchedEffect(clienteId) { vm.iniciar(clienteId); confirmacionVm.iniciar(clienteId) }
+    LaunchedEffect(clienteId) { vm.iniciar(clienteId) }
     val confirmacionActual by confirmacionVm.estado.collectAsState()
+    LaunchedEffect(clienteId, confirmacionActual.usuarioId, confirmacionActual.procesando) {
+        confirmacionVm.iniciar(clienteId)
+    }
+    if (confirmacionActual.procesando && confirmacionActual.usuarioId != clienteId) {
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Hay una confirmación anterior en curso. Espera a que termine antes de continuar.")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            TextButton(onClick = onVolver) { Text("Volver") }
+        }
+        return
+    }
     val confirmacion = confirmacionActual.takeIf { it.usuarioId == clienteId } ?: ConfirmacionPedidoUiState()
 
     val estado by vm.uiState.collectAsState()

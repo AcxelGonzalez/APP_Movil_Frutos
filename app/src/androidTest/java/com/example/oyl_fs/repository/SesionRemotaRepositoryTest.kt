@@ -16,28 +16,37 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 class SesionRemotaRepositoryTest {
     private val contexto = ApplicationProvider.getApplicationContext<Context>()
     private val preferencias = contexto.getSharedPreferences("sesion_remota_oyl", Context.MODE_PRIVATE)
-    private var anterior: String? = null
+    private var anterior: Map<String, *> = emptyMap<String, Any>()
     private val repo = SesionRemotaRepository
     private class Api : UsuariosApi {
         val cliente = UsuarioDto(7, "Cliente prueba", "prueba", "prueba@example.test", "912345678", rol = "CLIENTE")
         var solicitud: LoginRequest? = null
         var rechazar = false
-        override suspend fun login(request: LoginRequest): UsuarioDto {
+        override suspend fun login(request: LoginRequest): LoginResponseDto {
             solicitud = request
             if (rechazar) throw HttpException(Response.error<Unit>(401, "{}".toResponseBody()))
-            return cliente
+            return LoginResponseDto(cliente, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
         }
         override suspend fun registrar(request: RegistroRequest) = cliente.copy(id = 8)
         override suspend fun actualizar(id: Long, request: ActualizarPerfilRequest) = cliente.copy(nombre = request.nombre)
     }
     @Before fun preparar() = runBlocking {
-        anterior = preferencias.getString("usuario", null)
+        anterior = preferencias.all.toMap()
         repo.configurar(contexto)
         repo.cerrar()
     }
     @After fun limpiar() = runBlocking {
-        val editor = preferencias.edit()
-        if (anterior == null) editor.remove("usuario") else editor.putString("usuario", anterior)
+        val editor = preferencias.edit().clear()
+        anterior.forEach { (clave, valor) ->
+            when (valor) {
+                is String -> editor.putString(clave, valor)
+                is Boolean -> editor.putBoolean(clave, valor)
+                is Int -> editor.putInt(clave, valor)
+                is Long -> editor.putLong(clave, valor)
+                is Float -> editor.putFloat(clave, valor)
+                is Set<*> -> editor.putStringSet(clave, valor.filterIsInstance<String>().toSet())
+            }
+        }
         check(editor.commit())
         repo.restaurar()
         Unit

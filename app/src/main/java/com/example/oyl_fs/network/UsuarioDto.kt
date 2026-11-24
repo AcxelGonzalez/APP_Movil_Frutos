@@ -35,3 +35,11 @@ data class UsuarioDto(
     val direccion: String? = null,
     val rol: String            // "ADMIN" o "CLIENTE"
 )
+
+// Respuesta exclusiva de login; perfil y registro siguen devolviendo UsuarioDto.
+data class LoginResponseDto(
+    val usuario: UsuarioDto,
+    val accessToken: String,
+    val tokenType: String,
+    val expiresAtEpochSeconds: Long
+)

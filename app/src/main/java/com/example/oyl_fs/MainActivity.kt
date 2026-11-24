@@ -54,6 +54,12 @@ import com.example.oyl_fs.ui.theme.OYL_FSTheme
 
 class MainActivity : ComponentActivity() {
 
+    override fun onResume() {
+        super.onResume()
+        ViewModelProvider(this)[SesionViewModel::class.java].verificarVigencia()
+    }
+
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 

@@ -10,6 +10,7 @@ import javax.net.ssl.SSLException
 
 // No muestra excepciones, direcciones del servidor ni detalles de la base de datos.
 fun Throwable.mensajeApi(esLogin: Boolean = false): String = when (this) {
+    is SesionExpiradaException -> "Tu sesión venció. Vuelve a iniciar sesión."
     is SocketTimeoutException -> "El servidor está tardando en responder. Inténtalo nuevamente."
     is UnknownHostException, is ConnectException -> "No pudimos conectar con el servidor. Revisa tu conexión e inténtalo nuevamente."
     is SSLException -> "No pudimos establecer una conexión segura con el servidor. Inténtalo más tarde."

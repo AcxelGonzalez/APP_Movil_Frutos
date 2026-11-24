@@ -9,7 +9,7 @@ interface UsuariosApi {
 
     // Devuelve el usuario si alias y contraseña son correctos; si no, responde 401
     @POST("api/usuarios/login")
-    suspend fun login(@Body request: LoginRequest): UsuarioDto
+    suspend fun login(@Body request: LoginRequest): LoginResponseDto
 
     // Crea una cuenta de cliente (201). Responde 409 si el alias o el correo ya existen
     @POST("api/usuarios/registro")

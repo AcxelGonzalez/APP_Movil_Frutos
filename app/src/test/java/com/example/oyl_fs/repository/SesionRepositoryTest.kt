@@ -2,6 +2,8 @@ package com.example.oyl_fs.repository
 
 import com.example.oyl_fs.network.ActualizarPerfilRequest
 import com.example.oyl_fs.network.LoginRequest
+import com.example.oyl_fs.network.LoginResponseDto
+import com.example.oyl_fs.util.CifradoSesion
 import com.example.oyl_fs.network.UsuarioDto
 import com.example.oyl_fs.network.UsuariosApi
 import android.content.Context
@@ -35,7 +37,10 @@ class SesionRepositoryTest {
         every { editor.clear() } returns editor
         every { editor.putString(any(), any()) } returns editor
         every { editor.commit() } returns true
-        SesionRemotaRepository.configurar(contexto)
+        val cifrado = mockk<CifradoSesion>()
+        every { cifrado.cifrar(any()) } answers { firstArg<String>() }
+        every { cifrado.descifrar(any()) } answers { firstArg<String>() }
+        SesionRemotaRepository.configurar(contexto, cifrado)
         SesionRemotaRepository.cerrar()
     }
 
@@ -43,7 +48,7 @@ class SesionRepositoryTest {
     fun loginCorrectoGuardaLaSesionYRecortaElAlias() = runBlocking {
         prepararSesionVacia()
         val enviado = slot<LoginRequest>()
-        coEvery { api.login(capture(enviado)) } returns admin
+        coEvery { api.login(capture(enviado)) } returns LoginResponseDto(admin, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
 
         val resultado = SesionRemotaRepository.iniciarSesion("  admin  ", "admin", api)
 
@@ -79,7 +84,7 @@ class SesionRepositoryTest {
     @Test
     fun actualizarPerfilConSesionReemplazaAlUsuarioGuardado() = runBlocking {
         prepararSesionVacia()
-        coEvery { api.login(any()) } returns admin
+        coEvery { api.login(any()) } returns LoginResponseDto(admin, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
         coEvery { api.actualizar(1L, any()) } returns admin.copy(nombre = "Admin editado")
         SesionRemotaRepository.iniciarSesion("admin", "admin", api)
 
@@ -95,7 +100,7 @@ class SesionRepositoryTest {
     @Test
     fun cerrarSesionBorraAlUsuarioGuardado() = runBlocking {
         prepararSesionVacia()
-        coEvery { api.login(any()) } returns admin
+        coEvery { api.login(any()) } returns LoginResponseDto(admin, "cabecera.carga.firma", "Bearer", System.currentTimeMillis() / 1000 + 3600)
         SesionRemotaRepository.iniciarSesion("admin", "admin", api)
 
         SesionRemotaRepository.cerrar()
