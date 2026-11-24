@@ -1,6 +1,8 @@
 package com.example.oyl_fs.repository
 
 import androidx.room.withTransaction
+import okhttp3.MediaType.Companion.toMediaType
+import okhttp3.RequestBody.Companion.toRequestBody
 import kotlinx.coroutines.CancellationException
 import com.example.oyl_fs.network.AjusteStockRequest
 import com.example.oyl_fs.data.local.OylDatabase
@@ -14,7 +16,13 @@ import com.example.oyl_fs.network.ProductoDto
 import com.example.oyl_fs.network.ProductosApi
 import com.example.oyl_fs.network.RetrofitClient
 
-class ProductoRemoteRepository(context: Context, private val api: com.example.oyl_fs.network.ProductosApi = RetrofitClient.productos, private val database: OylDatabase = OylDatabase.obtener(context)) {
+class ProductoRemoteRepository(
+    context: Context,
+    private val api: ProductosApi = RetrofitClient.productos,
+    private val database: OylDatabase = OylDatabase.obtener(context),
+    private val fotosApi: com.example.oyl_fs.network.FotosProductoApi = RetrofitClient.fotosProductos,
+    private val prepararFoto: suspend (String) -> ByteArray = { com.example.oyl_fs.util.CargadorImagenProducto.prepararSubida(context, it) }
+) {
 
     companion object { private val cargaMutex = Mutex() }
 
@@ -53,11 +61,46 @@ class ProductoRemoteRepository(context: Context, private val api: com.example.oy
         MovimientoRegistrado(producto, cacheActualizada)
     }
 
-    suspend fun crear(producto: ProductoInfo): ProductoInfo =
-        api.crear(producto.aDto(conId = false)).aProductoInfo()
+    suspend fun crear(producto: ProductoInfo): ProductoInfo = guardar(producto, creando = true)
 
-    suspend fun actualizar(producto: ProductoInfo): ProductoInfo =
-        api.actualizar(producto.id.toLong(), producto.aDto(conId = true)).aProductoInfo()
+    suspend fun actualizar(producto: ProductoInfo): ProductoInfo {
+        require(producto.id > 0) { "Identificador de producto inválido" }
+        return guardar(producto, creando = false)
+    }
+
+    private suspend fun guardar(producto: ProductoInfo, creando: Boolean): ProductoInfo {
+        val local = producto.imagenUri?.startsWith("content://") == true
+        // Preparar antes del HTTP: un archivo inválido nunca crea ni modifica el producto.
+        val foto = if (local) prepararFoto(requireNotNull(producto.imagenUri)) else null
+        require(foto == null || (foto.isNotEmpty() && foto.size <= 2 * 1024 * 1024)) { "La fotografía procesada supera los 2 MB" }
+        var dto = producto.aDto(conId = !creando)
+        val parteFoto = foto?.let {
+            dto = dto.copy(imagenUrl = null)
+            okhttp3.MultipartBody.Part.createFormData("foto", "producto.jpg", it.toRequestBody("image/jpeg".toMediaType()))
+        }
+        val ficha = if (parteFoto != null) com.google.gson.Gson().toJson(dto).toRequestBody("application/json; charset=utf-8".toMediaType()) else null
+        return try {
+            val guardado = if (parteFoto != null) {
+                if (creando) fotosApi.crear(requireNotNull(ficha), parteFoto)
+                else fotosApi.actualizar(producto.id.toLong(), requireNotNull(ficha), parteFoto)
+            } else {
+                if (creando) api.crear(dto) else api.actualizar(producto.id.toLong(), dto)
+            }
+            require(creando || guardado.id == producto.id.toLong()) { "El servidor respondió con otro producto" }
+            if (parteFoto != null) check(com.example.oyl_fs.network.RutasFotoProducto.correspondeAlProducto(guardado.imagenUrl, requireNotNull(guardado.id))) {
+                "La fotografía no se pudo confirmar"
+            }
+            guardado.aProductoInfo()
+        } catch (e: CancellationException) { throw e
+        } catch (e: com.example.oyl_fs.network.SesionExpiradaException) { throw e
+        } catch (e: HttpException) {
+            if (e.code() in setOf(400, 401, 403, 404, 409, 413, 415, 422)) throw e
+            throw guardadoIncierto()
+        } catch (_: Exception) { throw guardadoIncierto() }
+    }
+
+    private fun guardadoIncierto() = IllegalStateException(
+        "No se pudo confirmar el guardado del producto. Revisa el catálogo antes de volver a guardar: el servidor podría haber registrado los cambios.")
 
     // true si se eliminó; false si el producto ya no existía
     suspend fun eliminar(id: Int): Boolean {
@@ -67,7 +110,7 @@ class ProductoRemoteRepository(context: Context, private val api: com.example.oy
         return true
     }
 
-    // Backend -> app. La imagen viene como "drawable:nombre" o como una URI
+    // Backend -> app. Conserva la ruta relativa versionada, drawable o referencia anterior.
     private fun ProductoDto.aProductoInfo(): ProductoInfo {
         require(id != null && id in 1..Int.MAX_VALUE.toLong()) { "Identificador de producto fuera de rango" }
         val url = imagenUrl
@@ -96,7 +139,7 @@ class ProductoRemoteRepository(context: Context, private val api: com.example.oy
 
     // App -> backend
     private fun ProductoInfo.aDto(conId: Boolean): ProductoDto {
-        val url = imagenUri ?: if (imagen != 0) {
+        val url = imagenUri?.let(com.example.oyl_fs.network.RutasFotoProducto::referencia) ?: if (imagen != 0) {
             runCatching { "drawable:" + contexto.resources.getResourceEntryName(imagen) }
                 .getOrNull()
         } else null
