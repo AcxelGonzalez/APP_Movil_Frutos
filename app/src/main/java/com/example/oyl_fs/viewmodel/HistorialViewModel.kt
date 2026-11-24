@@ -60,7 +60,8 @@ class HistorialViewModel(
     private val _cargando = MutableStateFlow(false)
     val cargando = _cargando.asStateFlow()
     private var carga: Job? = null
-    private var generacion = 0
+    // Una recarga invalida otras lecturas, pero no las escrituras de la misma sesión.
+    private var versionCarga = 0
     private var versionSesion = 0
     private var observacionCancelaciones: Job? = null
     private val _cancelaciones = MutableStateFlow<List<com.example.oyl_fs.repository.CancelacionGuardada>>(emptyList())
@@ -145,7 +146,8 @@ class HistorialViewModel(
     fun refrescar() {
         if (!remoto) return
         carga?.cancel()
-        val actual = ++generacion
+        val actual = ++versionCarga
+        val sesion = versionSesion
         val id = _usuarioId.value.toLongOrNull()
         val admin = _esAdmin.value
         if (id == null || id <= 0) {
@@ -156,13 +158,17 @@ class HistorialViewModel(
         _cargando.value = true
         _error.value = null
         carga = viewModelScope.launch {
-            val resultado = if (admin) api.listarTodos() else api.listarPorUsuario(id)
-            if (actual != generacion) return@launch
-            resultado.fold(
-                onSuccess = { remotos.value = it.filter { p -> admin || p.usuarioId == id.toString() }.map { p -> complementos?.completarPedido(p) ?: p } },
-                onFailure = { _error.value = it.mensajeApi() }
-            )
-            _cargando.value = false
+            try {
+                val resultado = if (admin) api.listarTodos() else api.listarPorUsuario(id)
+                if (actual != versionCarga || sesion != versionSesion) return@launch
+                resultado.fold(
+                    onSuccess = { remotos.value = it.filter { p -> admin || p.usuarioId == id.toString() }.map { p -> complementos?.completarPedido(p) ?: p } },
+                    onFailure = { _error.value = it.mensajeApi() }
+                )
+            } finally {
+                // Una consulta cancelada no debe apagar el indicador de una carga posterior.
+                if (actual == versionCarga && sesion == versionSesion) _cargando.value = false
+            }
         }
     }
 
@@ -375,13 +381,16 @@ class HistorialViewModel(
         }
 
         if (remoto) {
-            val actual = generacion
+            val sesion = versionSesion
             val resultado = api.cambiarEstado(pedidoId, nuevoEstado)
-            if (actual != generacion) return false
+            if (sesion != versionSesion) return false
             return resultado.fold(
                 onSuccess = { actualizado ->
                     remotos.value = remotos.value.map { if (it.id == pedidoId) (complementos?.completarPedido(actualizado) ?: actualizado) else it }
                     _error.value = null
+                    // Invalida lecturas iniciadas antes de esta confirmación y reconcilia
+                    // la lista con una consulta nueva. Un fallo de lectura no revierte el éxito.
+                    refrescar()
                     true
                 },
                 onFailure = { _error.value = it.mensajeApi(); false }
