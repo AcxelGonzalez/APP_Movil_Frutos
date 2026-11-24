@@ -84,7 +84,7 @@ el servidor, en el momento en que se registra la compra.
 - **Fabián Cornejo**
 
 El trabajo se repartió por pantalla desde el inicio del proyecto y se integró mediante ramas
-separadas por persona principalmente organizado por Trello.
+separadas por persona.
 
 ---
 
@@ -124,48 +124,17 @@ separadas por persona principalmente organizado por Trello.
 
 ```mermaid
 flowchart TD
-    subgraph APP["Aplicación Android · Kotlin + Jetpack Compose"]
-        direction TB
-        UI["Pantallas<br/><small>Compose · Material 3</small>"]
-        VM["ViewModels<br/><small>estado de presentación</small>"]
-        REPO["Repositorios<br/><small>local y remoto</small>"]
-        ROOM[("Room<br/>caché y perfiles")]
-        UI --> VM
-        VM --> REPO
-        REPO <--> ROOM
-    end
-
-    HTTP{{"Retrofit · OkHttp<br/>JSON · JWT Bearer"}}
-    REPO --> HTTP
-
-    subgraph BACK["Backend · Spring Boot sobre Docker"]
-        direction TB
-        USU["ms-usuarios<br/><small>:8083</small>"]
-        PRO["ms-productos<br/><small>:8081</small>"]
-        PED["ms-pedidos<br/><small>:8082</small>"]
-        DB[("PostgreSQL 17 · :5433<br/><small>oyl_usuarios · oyl_productos · oyl_pedidos</small>")]
-        USU --> DB
-        PRO --> DB
-        PED --> DB
-        PED -. "precio real y descuento de stock" .-> PRO
-    end
-
-    HTTP --> USU
-    HTTP --> PRO
-    HTTP --> PED
-
-    classDef capa fill:#FFFBF5,stroke:#D8C4AE,stroke-width:1px,color:#4B2E15
-    classDef red fill:#FFF5E7,stroke:#92623D,stroke-width:2px,color:#4B2E15
-    classDef servicio fill:#92623D,stroke:#4B2E15,stroke-width:1px,color:#FFFFFF
-    classDef datos fill:#4B2E15,stroke:#4B2E15,stroke-width:1px,color:#FFF5E7
-
-    class UI,VM,REPO capa
-    class HTTP red
-    class USU,PRO,PED servicio
-    class ROOM,DB datos
-
-    style APP fill:#FFF5E7,stroke:#92623D,stroke-width:2px,color:#4B2E15
-    style BACK fill:#FFF5E7,stroke:#92623D,stroke-width:2px,color:#4B2E15
+    UI[Jetpack Compose] --> VM[ViewModels]
+    VM --> R[Repositorios Android]
+    R --> L[Room y preferencias privadas]
+    R --> HTTP[Retrofit y OkHttp]
+    HTTP --> U[ms-usuarios :8083]
+    HTTP --> P[ms-productos :8081]
+    HTTP --> O[ms-pedidos :8082]
+    O --> P
+    U --> DB[(PostgreSQL 17 :5433)]
+    P --> DB
+    O --> DB
 ```
 
 ### Por qué tres microservicios
