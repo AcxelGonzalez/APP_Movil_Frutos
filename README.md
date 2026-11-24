@@ -453,8 +453,26 @@ eligiendo la versión de tu procesador (Apple Silicon o Intel).
 ```bash
 git clone https://github.com/fabcornejom/OYL-Backend.git
 cd OYL-Backend
+java tools/PrepararSeguridad.java
 docker compose up -d --build
 ```
+
+> **El paso de las claves no es opcional.** El backend firma los tokens JWT con un par de
+> claves RSA que, por seguridad, no se versionan en Git: cada persona las genera en su
+> computador la primera vez. Si se omite, `docker compose` falla con
+> `bind source path does not exist: .oyl-secrets/jwt-public.pem`.
+>
+> Si no tienes Java instalado, la herramienta puede ejecutarse dentro de un contenedor:
+>
+> ```bash
+> docker run --rm --user "$(id -u):$(id -g)" -v "$PWD:/workspace" -w /workspace \
+>   eclipse-temurin:25-jdk java tools/PrepararSeguridad.java
+> ```
+>
+> Genera `.oyl-secrets/` con la clave privada que firma los tokens, la pública que los
+> verifica y la credencial interna entre `ms-pedidos` y `ms-productos`. **No las borres ni
+> las regeneres después**: cambiar las claves invalida las sesiones abiertas y puede dejar
+> a los servicios sin poder comunicarse entre ellos.
 
 La primera vez tarda **varios minutos**: Docker descarga las imágenes base y compila los tres
 microservicios con Maven.
@@ -480,12 +498,15 @@ docker compose ps
 **Comprobar que responden:**
 
 ```bash
-curl http://localhost:8081/api/productos
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8081/api/productos
 ```
 
-Sigue las indicaciones del [README del backend](https://github.com/fabcornejom/OYL-Backend)
-para la preparación de claves y cualquier paso adicional. Un contenedor encendido no demuestra
-por sí solo que la API esté lista.
+Debe devolver **401**. Eso es correcto: el servicio está en marcha y protegido. Los endpoints
+exigen token, así que abrirlos en el navegador sin iniciar sesión devuelve ese código. Un
+error de conexión sí indicaría que el servicio no está disponible.
+
+Un contenedor encendido no demuestra por sí solo que la API esté lista. Para detalles
+adicionales, consulta el [README del backend](https://github.com/fabcornejom/OYL-Backend).
 
 **Detener:**
 
@@ -564,15 +585,47 @@ sesión. Todas reciben rol `CLIENTE`.
 
 ### 8.6 Recorrido de demostración
 
+El recorrido completo se hace desde la aplicación:
+
 1. Entra como **cliente**, agrega productos al carrito y confirma la compra.
-2. Abre `http://localhost:8081/api/productos`: el stock bajó.
-3. Abre `http://localhost:8082/api/pedidos`: el pedido está en `PENDIENTE_VALIDACION`.
-4. Cierra sesión y entra como **admin**: el pedido aparece en la bandeja.
-5. Confírmalo, escanea los QR de los productos y márcalo como preparado.
+2. Revisa el comprobante y comprueba que el carrito quedó actualizado.
+3. Abre el catálogo: el stock del producto comprado bajó.
+4. Cierra sesión y entra como **admin**: el pedido aparece en la bandeja en
+   `PENDIENTE_VALIDACION`.
+5. Confírmalo, escanea los códigos QR de los productos y márcalo como preparado.
 6. Entrégalo y comprueba que el stock **no** se descontó una segunda vez.
 
-> Si consultas los endpoints desde el navegador, recuerda que ahora exigen token. Un `401` es
-> la respuesta esperada sin autenticación.
+#### Ver los datos del servidor
+
+Como los endpoints exigen token, el navegador ya no sirve para esto. Hay dos formas.
+
+**Consultar la base de datos directamente.** Es la más cómoda para comprobar cambios:
+
+```bash
+docker compose exec postgres psql -U postgres -d oyl_productos \
+  -c "select id, nombre, stock from productos order by id;"
+
+docker compose exec postgres psql -U postgres -d oyl_pedidos \
+  -c "select id, usuario_id, estado, total from pedidos order by id desc limit 10;"
+```
+
+Usuario y contraseña son `postgres`. Las tres bases son `oyl_productos`, `oyl_pedidos` y
+`oyl_usuarios`. Con un cliente gráfico como DBeaver, la conexión es `localhost:5433` con esas
+mismas credenciales.
+
+**Consultar la API con token.** Si quieres mostrar los microservicios respondiendo:
+
+```bash
+TOKEN=$(curl -s -X POST http://localhost:8083/api/usuarios/login \
+  -H "Content-Type: application/json" \
+  -d '{"alias":"admin","contrasena":"admin"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin)['accessToken'])")
+
+curl -s -H "Authorization: Bearer $TOKEN" http://localhost:8081/api/productos | python3 -m json.tool
+```
+
+El token dura una hora. El repositorio del backend incluye además
+`oyl_backend.postman_collection.json`, que deja todas las peticiones listas en Postman.
 
 ---
 
@@ -878,9 +931,7 @@ Antes de integrar: revisar el estado, hacer `fetch` y comparar. No se usa `push`
 
 El avance se gestionó en [este tablero](https://trello.com/b/CZow21QV/proyecto-app), con
 columnas por etapa y tarjetas por funcionalidad y responsable.
-
-![Evidencia](entrega/evidencia_trello.png)
-
+![Trello](entrega/evidencia_trello.png) 
 
 ---
 
