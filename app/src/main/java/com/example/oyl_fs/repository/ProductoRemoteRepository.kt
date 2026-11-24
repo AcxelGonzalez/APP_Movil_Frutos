@@ -27,13 +27,18 @@ class ProductoRemoteRepository(
     companion object { private val cargaMutex = Mutex() }
 
     private val contexto = context.applicationContext
+    // Protegido por cargaMutex. Evita recuperar una ficha retirada si falla SQLite.
+    private val eliminadosConfirmados = mutableSetOf<Int>()
 
     // Solo lectura: nunca reemplaza la copia local si falla la petición remota.
-    suspend fun cargarCache(): List<ProductoInfo> =
+    suspend fun cargarCache(): List<ProductoInfo> = cargaMutex.withLock {
         ProductoRoomRepository(contexto, database.productoDao()).cargarProductos()
+            .filterNot { it.id in eliminadosConfirmados }
+    }
 
     suspend fun listar(): List<ProductoInfo> = cargaMutex.withLock {
         val lista = api.listar().map { it.aProductoInfo() }
+            .filterNot { it.id in eliminadosConfirmados }
         database.productoDao().reemplazarCache(lista.map { producto ->
             producto.aEntidad(if (producto.imagen == 0) null else contexto.resources.getResourceEntryName(producto.imagen))
         })
@@ -102,12 +107,26 @@ class ProductoRemoteRepository(
     private fun guardadoIncierto() = IllegalStateException(
         "No se pudo confirmar el guardado del producto. Revisa el catálogo antes de volver a guardar: el servidor podría haber registrado los cambios.")
 
-    // true si se eliminó; false si el producto ya no existía
-    suspend fun eliminar(id: Int): Boolean {
+    data class EliminacionRegistrada(val existia: Boolean, val cacheActualizada: Boolean)
+
+    // Conserva el contrato de los consumidores que distinguen un 404.
+    suspend fun eliminar(id: Int): Boolean = eliminarRegistrado(id).existia
+
+    suspend fun eliminarRegistrado(id: Int): EliminacionRegistrada = cargaMutex.withLock {
+        require(id > 0) { "Identificador de producto inválido" }
         val respuesta = api.eliminar(id.toLong())
-        if (respuesta.code() == 404) return false
-        if (!respuesta.isSuccessful) throw HttpException(respuesta)
-        return true
+        if (!respuesta.isSuccessful && respuesta.code() != 404) throw HttpException(respuesta)
+        eliminadosConfirmados.add(id)
+        // Un 404 también confirma que la ficha local debe retirarse.
+        val cacheActualizada = try {
+            database.productoDao().quitarDeCache(id)
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            false
+        }
+        EliminacionRegistrada(respuesta.code() != 404, cacheActualizada)
     }
 
     // Backend -> app. Conserva la ruta relativa versionada, drawable o referencia anterior.

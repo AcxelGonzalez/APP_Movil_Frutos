@@ -454,8 +454,7 @@ class ProductoViewModel(
     /**
      * Elimina un producto persistente.
      *
-     * Devuelve true solamente si Room confirmó
-     * que el registro fue eliminado.
+     * En modo remoto, éxito o 404 confirman que debe retirarse del catálogo.
      */
     suspend fun eliminarProductoPersistente(
         id: Int
@@ -464,9 +463,16 @@ class ProductoViewModel(
         remoteRepository?.let { remoto ->
             limpiarError()
             return try {
-                val eliminado = remoto.eliminar(id)
-                if (eliminado) cargarRemoto() else _error.value = "El producto ya no existe"
-                eliminado
+                val resultado = cargaMutex.withLock {
+                    val confirmacion = remoto.eliminarRegistrado(id)
+                    _productos.value = _productos.value.filterNot { it.id == id }
+                    confirmacion
+                }
+                cargarRemoto()
+                if (!resultado.cacheActualizada && _errorCatalogo.value != null) {
+                    _errorCatalogo.value = "El producto fue retirado del servidor, pero no se pudo actualizar su copia local. Actualiza el catálogo con conexión antes de usarlo sin conexión."
+                }
+                true
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
