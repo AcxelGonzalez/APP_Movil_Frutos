@@ -145,10 +145,8 @@ class UsuarioRoomRepository(
             )
         }
 
-        if (datos.clave.length !in 8..128) {
-            return ResultadoRegistro.Error(
-                "La contraseña debe tener entre 8 y 128 caracteres."
-            )
+        com.example.oyl_fs.util.ValidacionContrasena.errorRegistro(datos.clave)?.let {
+            return ResultadoRegistro.Error(it)
         }
 
         // Validaciones previas para entregar

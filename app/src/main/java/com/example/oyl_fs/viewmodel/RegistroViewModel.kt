@@ -109,9 +109,7 @@ object ValidacionRegistro {
                 "Ingresa un teléfono válido."
             } else null,
 
-            clave = if (datos.clave.length !in 8..128) {
-                "La contraseña debe tener entre 8 y 128 caracteres."
-            } else null,
+            clave = com.example.oyl_fs.util.ValidacionContrasena.errorRegistro(datos.clave),
 
             confirmacion = if (
                 datos.confirmacion != datos.clave

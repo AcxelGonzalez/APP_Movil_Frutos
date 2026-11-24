@@ -139,6 +139,9 @@ object SesionRemotaRepository {
     suspend fun iniciarSesion(alias: String, contrasena: String, api: UsuariosApi = RetrofitClient.usuarios): Result<UsuarioDto> {
         val inicio = synchronized(candado) { revision }
         return try {
+            com.example.oyl_fs.util.ValidacionContrasena.errorMaximo(contrasena)?.let {
+                throw IllegalArgumentException(it)
+            }
             val respuesta = api.login(LoginRequest(alias.trim(), contrasena))
             require(respuesta.tokenType == "Bearer") { "Respuesta de sesión inválida" }
             val nueva = Persistida(respuesta.usuario, respuesta.accessToken, respuesta.expiresAtEpochSeconds, UUID.randomUUID().toString())
@@ -154,6 +157,9 @@ object SesionRemotaRepository {
     }
 
     suspend fun registrar(solicitud: RegistroRequest, api: UsuariosApi = RetrofitClient.usuarios): Result<UsuarioDto> = try {
+        com.example.oyl_fs.util.ValidacionContrasena.errorRegistro(solicitud.contrasena)?.let {
+            throw IllegalArgumentException(it)
+        }
         val creado = api.registrar(solicitud)
         validar(creado); require(creado.rol == "CLIENTE") { "Respuesta de registro inválida" }
         Result.success(creado)

@@ -101,6 +101,9 @@ class LoginViewModel(
         }
 
         if (remoto) {
+            com.example.oyl_fs.util.ValidacionContrasena.errorMaximo(contrasena)?.let {
+                return ResultadoLogin.Error(it)
+            }
             return com.example.oyl_fs.repository.SesionRemotaRepository.iniciarSesion(alias, contrasena).fold(
                 onSuccess = { ResultadoLogin.Exito(SesionIdentificada(it.id.toString(), it.nombre, it.rol == "ADMIN", false)) },
                 onFailure = { ResultadoLogin.Error(it.mensajeApi()) }
@@ -173,7 +176,7 @@ class LoginViewModel(
         val errorContrasena = if (contrasena.isEmpty()) {
             "Ingresa tu contraseña."
         } else {
-            null
+            if (remoto) com.example.oyl_fs.util.ValidacionContrasena.errorMaximo(contrasena) else null
         }
 
         if (errorUsuario != null || errorContrasena != null) {
