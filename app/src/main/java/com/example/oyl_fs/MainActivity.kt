@@ -82,7 +82,8 @@ class MainActivity : ComponentActivity() {
                 require(modelClass.isAssignableFrom(ProductoViewModel::class.java))
                 @Suppress("UNCHECKED_CAST")
                 return ProductoViewModel(
-                    remoteRepository = ProductoRemoteRepository(applicationContext)
+                    remoteRepository = ProductoRemoteRepository(applicationContext),
+                    movimientosRepository = com.example.oyl_fs.repository.MovimientoInventarioRepository(applicationContext)
                 ) as T
             }
         })[ProductoViewModel::class.java]
@@ -275,6 +276,7 @@ class MainActivity : ComponentActivity() {
                             mostrarBienvenida = false
                             perfilViewModel.activarRemoto(requireNotNull(SesionRemotaRepository.usuario.value))
                             productoViewModel.refrescar()
+                            productoViewModel.configurarSesionInventario()
                             carritoViewModel.iniciar(if (sesion.esAdmin) "" else sesion.usuarioId)
                             historialViewModel.configurarSesion(sesion.usuarioId, sesion.esAdmin)
                             datosSesionListos = true
@@ -282,6 +284,7 @@ class MainActivity : ComponentActivity() {
                             carritoViewModel.iniciar("")
                             historialViewModel.configurarSesion("", false)
                             perfilViewModel.limpiarSesionRegistrada()
+                            productoViewModel.configurarSesionInventario()
                             mostrarHistorial = false
                             mostrarCarrito = false
                             pedidoPrepararId = null

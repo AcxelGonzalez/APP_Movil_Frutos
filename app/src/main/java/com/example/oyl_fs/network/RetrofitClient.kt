@@ -37,6 +37,7 @@ object RetrofitClient {
 
     val fotosProductos: FotosProductoApi by lazy { crear(8081, FotosProductoApi::class.java) }
     val productos: ProductosApi by lazy { crear(8081, ProductosApi::class.java) }
+    val movimientosStock: MovimientosStockApi by lazy { crear(8081, MovimientosStockApi::class.java) }
     val cancelaciones: CancelacionesApi by lazy { crear(8082, CancelacionesApi::class.java) }
     val pedidos: PedidosApi by lazy { crear(8082, PedidosApi::class.java) }
     val usuarios: UsuariosApi by lazy { crear(8083, UsuariosApi::class.java) }

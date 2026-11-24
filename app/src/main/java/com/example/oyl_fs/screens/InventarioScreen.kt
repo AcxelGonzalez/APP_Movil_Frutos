@@ -86,10 +86,18 @@ fun InventarioScreen(
             }
             onProductoInicialAtendido()
             if (!existe) onVolver()
-        } else if (pantalla != "inventario" && productos.none { it.id == productoId }) {
+        } else if (pantalla != "inventario" && !(pantalla == "movimiento" && movimiento.pendiente != null) && productos.none { it.id == productoId }) {
             productoId = null
             pantalla = "inventario"
             if (abiertoDesdeQr) onVolver()
+        }
+    }
+
+    // Recuperar el registro de esta cuenta incluso si el producto salió del catálogo.
+    LaunchedEffect(movimiento.pendiente?.clave) {
+        movimiento.pendiente?.let {
+            productoId = it.producto.id
+            pantalla = "movimiento"
         }
     }
 
@@ -163,14 +171,18 @@ fun InventarioScreen(
         }
 
         "movimiento" -> {
-            if (productoSeleccionado != null) {
+            val productoMovimiento = movimiento.pendiente?.producto ?: productoSeleccionado
+            if (productoMovimiento != null) {
                 MovimientoInventarioScreen(
-                    producto = productoSeleccionado,
+                    producto = productoMovimiento,
                     estado = movimiento,
                     onVolver = { volver() },
                     onRegistrar = { tipo, cantidad ->
-                        viewModel.registrarMovimientoStock(productoSeleccionado.id, tipo, cantidad)
+                        viewModel.registrarMovimientoStock(productoMovimiento.id, tipo, cantidad)
                     },
+                    onConsultar = { viewModel.recuperarMovimientoStock(continuar = false) },
+                    onContinuar = { viewModel.recuperarMovimientoStock(continuar = true) },
+                    onCerrarResultado = { viewModel.cerrarMovimientoStock() },
                     onRevisarInventario = {
                         viewModel.refrescar()
                         volver()

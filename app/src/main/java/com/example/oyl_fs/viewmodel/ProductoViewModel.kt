@@ -4,7 +4,6 @@ import com.example.oyl_fs.model.TipoMovimientoStock
 import com.example.oyl_fs.model.ValidacionMovimientoStock
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.isActive
-import retrofit2.HttpException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.lifecycle.ViewModel
@@ -21,6 +20,9 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.collect
 import com.example.oyl_fs.network.mensajeApi
 import com.example.oyl_fs.repository.ProductoRemoteRepository
+import com.example.oyl_fs.repository.MovimientoInventarioRepository
+import com.example.oyl_fs.repository.MovimientoInventarioGuardado
+import com.example.oyl_fs.repository.SesionRemotaRepository
 
 data class MovimientoStockUiState(
     val productoId: Int? = null,
@@ -28,67 +30,166 @@ data class MovimientoStockUiState(
     val error: String? = null,
     val resultadoIncierto: Boolean = false,
     val confirmado: ProductoInfo? = null,
-    val advertencia: String? = null
+    val advertencia: String? = null,
+    val pendiente: MovimientoInventarioGuardado? = null,
+    val registroLegible: Boolean = true
 )
 
 class ProductoViewModel(
     private val roomRepository: ProductoRoomRepository? = null,
     // Si se entrega, el backend (ms-productos) es la fuente de datos.
-    private val remoteRepository: ProductoRemoteRepository? = null
+    private val remoteRepository: ProductoRemoteRepository? = null,
+    private val movimientosRepository: MovimientoInventarioRepository? = null
 ) : ViewModel() {
 
     private val _movimientoStock = MutableStateFlow(MovimientoStockUiState())
     val movimientoStock = _movimientoStock.asStateFlow()
 
+    private var sesionInventario: String? = null
+    private var versionInventario = 0L
+
+    fun configurarSesionInventario() {
+        val sesion = SesionRemotaRepository.sesionActual()?.takeIf { it.identidad.esAdmin }
+        if (sesionInventario == sesion?.idSesion) return
+        sesionInventario = sesion?.idSesion
+        versionInventario++
+        _movimientoStock.value = MovimientoStockUiState()
+        if (sesion != null && movimientosRepository != null) leerMovimiento(null)
+    }
+
+    private fun movimientoVigente(version: Long, idSesion: String?) =
+        version == versionInventario && idSesion != null &&
+            SesionRemotaRepository.sesionActual()?.idSesion == idSesion
+
+    private fun mostrarMovimiento(registro: MovimientoInventarioGuardado) {
+        _movimientoStock.value = MovimientoStockUiState(
+            productoId = registro.producto.id, pendiente = registro,
+            resultadoIncierto = !registro.finalizado,
+            confirmado = if (registro.estado == "APLICADA") registro.producto.copy(stock = requireNotNull(registro.stockResultante)) else null,
+            error = registro.mensaje.takeIf { registro.estado != "APLICADA" }
+        )
+    }
+
+    private fun leerMovimiento(productoId: Int?) {
+        val repo = movimientosRepository ?: return
+        val sesion = SesionRemotaRepository.sesionActual()?.takeIf { it.identidad.esAdmin } ?: return
+        val version = versionInventario
+        _movimientoStock.value = MovimientoStockUiState(productoId, procesando = true)
+        viewModelScope.launch {
+            try {
+                val registro = repo.obtener(sesion.identidad.usuarioId)
+                if (!movimientoVigente(version, sesion.idSesion)) return@launch
+                if (registro == null) _movimientoStock.value = MovimientoStockUiState(productoId)
+                else mostrarMovimiento(registro)
+            } catch (e: CancellationException) {
+                if (movimientoVigente(version, sesion.idSesion)) _movimientoStock.value = MovimientoStockUiState(
+                    productoId, registroLegible = false, error = "Se interrumpió la lectura del registro local. Reintenta su lectura antes de registrar un movimiento.")
+                throw e
+            } catch (_: Exception) {
+                if (movimientoVigente(version, sesion.idSesion)) _movimientoStock.value = MovimientoStockUiState(
+                    productoId, registroLegible = false,
+                    error = "No se pudo leer el registro local de inventario. Reintenta la lectura antes de registrar otro movimiento.")
+            }
+        }
+    }
+
     fun iniciarMovimientoStock(productoId: Int) {
         if (_movimientoStock.value.procesando) return
-        _movimientoStock.value = MovimientoStockUiState(productoId = productoId)
+        configurarSesionInventario()
+        if (_movimientoStock.value.procesando || _movimientoStock.value.pendiente != null) return
+        leerMovimiento(productoId)
     }
 
     fun registrarMovimientoStock(productoId: Int, tipo: TipoMovimientoStock, cantidadTexto: String) {
         val anterior = _movimientoStock.value
-        if (anterior.productoId != productoId || anterior.procesando || anterior.confirmado != null || anterior.resultadoIncierto) return
+        if ((anterior.productoId != null && anterior.productoId != productoId) || anterior.procesando ||
+            anterior.pendiente != null || !anterior.registroLegible) return
         val errorCantidad = ValidacionMovimientoStock.errorCantidad(cantidadTexto)
         if (errorCantidad != null) {
             _movimientoStock.value = MovimientoStockUiState(productoId, error = errorCantidad)
             return
         }
-        val remoto = remoteRepository
-        if (productoId <= 0 || remoto == null) {
+        val repo = movimientosRepository
+        val sesion = SesionRemotaRepository.sesionActual()?.takeIf { it.identidad.esAdmin }
+        val producto = _productos.value.firstOrNull { it.id == productoId }
+        if (productoId <= 0 || repo == null || sesion == null || producto == null) {
             _movimientoStock.value = MovimientoStockUiState(productoId, error = "Los movimientos de inventario requieren conexión con el servidor.")
             return
         }
-        // Se activa antes de lanzar la corrutina para bloquear pulsaciones repetidas.
-        _movimientoStock.value = MovimientoStockUiState(productoId, procesando = true)
         val cambio = tipo.cambio(cantidadTexto.trim().toInt())
+        ejecutarMovimiento(productoId) { repo.iniciar(sesion.identidad.usuarioId, producto, cambio) }
+    }
+
+    fun recuperarMovimientoStock(continuar: Boolean) {
+        val estado = _movimientoStock.value
+        if (estado.procesando) return
+        val registro = estado.pendiente
+        if (registro == null) { leerMovimiento(estado.productoId); return }
+        val repo = movimientosRepository ?: return
+        ejecutarMovimiento(registro.producto.id) { repo.recuperar(registro.actorId, registro.clave, continuar) }
+    }
+
+    private fun ejecutarMovimiento(productoId: Int, accion: suspend () -> MovimientoInventarioGuardado) {
+        val sesion = SesionRemotaRepository.sesionActual()?.takeIf { it.identidad.esAdmin } ?: return
+        val version = versionInventario
+        _movimientoStock.value = _movimientoStock.value.copy(productoId = productoId, procesando = true)
         viewModelScope.launch {
             try {
-                val resultado = remoto.ajustarStock(productoId, cambio)
-                _productos.value = _productos.value.map { if (it.id == productoId) resultado.producto else it }
-                _movimientoStock.value = MovimientoStockUiState(
-                    productoId = productoId,
-                    confirmado = resultado.producto,
-                    advertencia = if (resultado.cacheActualizada) null else
-                        "El movimiento fue registrado, pero no se pudo actualizar la copia local. Vuelve a actualizar el inventario antes de usar el catálogo guardado."
-                )
-            } catch (e: CancellationException) {
-                if (currentCoroutineContext().isActive) movimientoIncierto(productoId)
-                throw e
-            } catch (e: Exception) {
-                if (e is HttpException && e.code() in listOf(400, 401, 403, 404, 409, 422)) {
-                    _movimientoStock.value = MovimientoStockUiState(productoId, error = e.mensajeApi())
-                } else {
-                    movimientoIncierto(productoId)
+                val resultado = accion()
+                if (!movimientoVigente(version, sesion.idSesion)) return@launch
+                mostrarMovimiento(resultado)
+                if (resultado.finalizado) {
+                    // El comprobante histórico no reemplaza el stock vigente del catálogo.
+                    cargarRemoto()
+                    if (movimientoVigente(version, sesion.idSesion) && _movimientoStock.value.pendiente?.clave == resultado.clave && _errorCatalogo.value != null)
+                        _movimientoStock.value = _movimientoStock.value.copy(advertencia = "El resultado quedó guardado. No se pudo actualizar el stock actual del catálogo.")
                 }
+            } catch (e: CancellationException) {
+                if (currentCoroutineContext().isActive && movimientoVigente(version, sesion.idSesion))
+                    recuperarRegistroTrasError(productoId, sesion.identidad.usuarioId, version, sesion.idSesion)
+                throw e
+            } catch (_: Exception) {
+                if (movimientoVigente(version, sesion.idSesion))
+                    recuperarRegistroTrasError(productoId, sesion.identidad.usuarioId, version, sesion.idSesion)
             }
         }
     }
 
-    private fun movimientoIncierto(productoId: Int) {
-        _movimientoStock.value = MovimientoStockUiState(
-            productoId = productoId, resultadoIncierto = true,
-            error = "No se pudo confirmar el resultado. El movimiento podría haberse registrado. Actualiza y revisa las existencias antes de registrar otro movimiento."
-        )
+    private suspend fun recuperarRegistroTrasError(productoId: Int, actorId: String, version: Long, idSesion: String) {
+        try {
+            val registro = movimientosRepository?.obtener(actorId)
+            if (!movimientoVigente(version, idSesion)) return
+            if (registro != null) {
+                mostrarMovimiento(registro)
+                if (!registro.finalizado) _movimientoStock.value = _movimientoStock.value.copy(
+                    error = "No se pudo confirmar el resultado. El movimiento está guardado: consulta su resultado o continúa el mismo movimiento. No registres otro ajuste para reemplazarlo.")
+            } else _movimientoStock.value = MovimientoStockUiState(productoId,
+                error = "No se pudo guardar el movimiento localmente. No se envió un movimiento nuevo. Revisa el almacenamiento antes de intentarlo nuevamente.")
+        } catch (e: CancellationException) { throw e
+        } catch (_: Exception) {
+            if (movimientoVigente(version, idSesion)) _movimientoStock.value = MovimientoStockUiState(productoId,
+                registroLegible = false, error = "No se pudo recuperar el registro local. Reintenta su lectura antes de operar sobre el inventario.")
+        }
+    }
+
+    fun cerrarMovimientoStock() {
+        val registro = _movimientoStock.value.pendiente ?: return
+        if (!registro.finalizado || _movimientoStock.value.procesando) return
+        val sesion = SesionRemotaRepository.sesionActual() ?: return
+        val version = versionInventario
+        _movimientoStock.value = _movimientoStock.value.copy(procesando = true)
+        viewModelScope.launch {
+            try {
+                movimientosRepository?.cerrar(registro.actorId, registro.clave)
+                if (movimientoVigente(version, sesion.idSesion)) _movimientoStock.value = MovimientoStockUiState(registro.producto.id)
+            } catch (e: CancellationException) {
+                if (movimientoVigente(version, sesion.idSesion)) _movimientoStock.value = _movimientoStock.value.copy(procesando = false)
+                throw e
+            } catch (_: Exception) {
+                if (movimientoVigente(version, sesion.idSesion)) _movimientoStock.value = _movimientoStock.value.copy(
+                    procesando = false, advertencia = "No se pudo cerrar el resultado local. El movimiento no se repetirá al consultarlo.")
+            }
+        }
     }
 
     private val cargaMutex = Mutex()
