@@ -84,7 +84,7 @@ el servidor, en el momento en que se registra la compra.
 - **Fabián Cornejo**
 
 El trabajo se repartió por pantalla desde el inicio del proyecto y se integró mediante ramas
-separadas por persona.
+separadas por persona principalmente organizado por Trello.
 
 ---
 
