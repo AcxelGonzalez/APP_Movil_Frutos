@@ -1,72 +1,125 @@
-# OYL Frutos Secos — Aplicación Android
+# OYL Frutos Secos — Aplicación Móvil
 
-Aplicación académica de **DSY1105 — Desarrollo de Aplicaciones Móviles**, Duoc UC. Permite comprar productos y administrar catálogo, inventario y preparación de pedidos de OYL Frutos Secos.
+> Asignatura **DSY1105 — Desarrollo de Aplicaciones Móviles** · Duoc UC
+> Docente: Cristian Gómez Vega
 
-| Recurso | Ubicación |
+Aplicación Android nativa para la tienda **OYL Frutos Secos**, construida en Kotlin con
+Jetpack Compose y respaldada por un backend propio de tres microservicios en Spring Boot.
+
+| Recurso | Enlace |
 |---|---|
-| Android | [APP_Movil_Frutos](https://github.com/AcxelGonzalez/APP_Movil_Frutos) |
-| Backend y su instalación | [OYL-Backend, desarrollo-marco](https://github.com/fabcornejom/OYL-Backend/tree/desarrollo-marco) |
-| Gestión | [Tablero Trello registrado por el equipo](https://trello.com/b/CZow21QV/proyecto-app) |
-| APK de entrega | [entrega/app-release.apk](entrega/app-release.apk) |
-| Firma académica | [keystore/oyl.jks](keystore/oyl.jks) |
+| **Aplicación** | https://github.com/AcxelGonzalez/APP_Movil_Frutos |
+| **Backend** | https://github.com/fabcornejom/OYL-Backend |
+| **Tablero Trello** | https://trello.com/b/CZow21QV/proyecto-app |
+| **APK firmado** | [`entrega/app-release.apk`](entrega/app-release.apk) |
+| **Almacén de claves** | [`keystore/oyl.jks`](keystore/oyl.jks) |
 
-**Equipo:** Acxel González, Kerly Dugarte, Marco Carrasco y Fabián Cornejo. **Docente:** Cristian Gomez Vega.
+---
 
-La guía corresponde a `desarrollo-marco`. Describe el comportamiento implementado y sus límites; no certifica por sí sola el cumplimiento completo de la rúbrica.
+## Índice
 
-## Contenido
+1. [El caso](#1-el-caso)
+2. [Integrantes](#2-integrantes)
+3. [Tecnologías](#3-tecnologías)
+4. [Arquitectura](#4-arquitectura)
+5. [Modelo de datos](#5-modelo-de-datos)
+6. [Funcionalidades](#6-funcionalidades)
+7. [Microservicios y endpoints](#7-microservicios-y-endpoints)
+8. [Instalación paso a paso](#8-instalación-paso-a-paso)
+9. [Problemas frecuentes](#9-problemas-frecuentes)
+10. [Pruebas y cobertura](#10-pruebas-y-cobertura)
+11. [Firma digital](#11-firma-digital)
+12. [Generación del APK](#12-generación-del-apk)
+13. [Estructura del repositorio](#13-estructura-del-repositorio)
+14. [Gestión del proyecto](#14-gestión-del-proyecto)
+15. [Alcance y límites](#15-alcance-y-límites)
 
-1. [Funcionalidades y reglas](#funcionalidades-y-reglas)
-2. [Arquitectura y datos](#arquitectura-y-datos)
-3. [Requisitos](#requisitos)
-4. [Instalación y conexión](#instalación-y-conexión)
-5. [Pruebas y cobertura](#pruebas-y-cobertura)
-6. [Pruebas funcionales manuales](#pruebas-funcionales-manuales)
-7. [Firma y entrega](#firma-y-entrega)
-8. [Problemas frecuentes](#problemas-frecuentes)
-9. [Estructura y colaboración](#estructura-y-colaboración)
-10. [Estado verificado y límites](#estado-verificado-y-límites)
+---
 
-## Funcionalidades y reglas
+## 1. El caso
 
-El cliente puede registrarse, iniciar sesión, consultar/filtrar productos con fotografías, administrar su carrito, seleccionar domicilio o punto de retiro, finalizar una compra, consultar pedidos propios y solicitar su cancelación cuando todavía están pendientes de validación. Puede editar su perfil y elegir un avatar local.
+**OYL Frutos Secos** es un emprendimiento comercial chileno dedicado a la venta minorista de
+frutos secos, semillas, deshidratados y productos naturales. Opera con una tienda física y,
+en paralelo, atiende pedidos por canales informales como WhatsApp Business y Mercado Libre.
 
-El administrador puede crear y editar productos con fotografía, retirarlos del catálogo, consultar stock bajo, registrar entradas/salidas, generar QR y procesar pedidos hasta su entrega. Cada escaneo válido acredita una unidad del producto durante la preparación.
+### El problema
 
-### Compra y descuento de stock
+Los dos frentes de venta funcionan de forma independiente y sin un inventario común. Cuando
+un cliente consulta por chat si hay stock de un producto, la administración debe ir a revisar
+visualmente los estantes, confirmar el precio, apartar el producto y anotar los datos de la
+entrega en papel.
 
-```text
-Android guarda intento y UUID antes del HTTP
-  → ms-pedidos solicita la compra de stock a ms-productos
-  → se comprueban precio esperado, disponibilidad y cantidades
-  → se registra el descuento y después el pedido
-  → Android muestra comprobante y descuenta del carrito lo comprado
-```
+Esto produce tres consecuencias:
 
-El stock se descuenta al registrar la compra, **antes de la confirmación administrativa**. Cambiar el estado no vuelve a descontarlo. El teléfono envía el precio aceptado por el cliente; el servidor lo compara con el precio actual y calcula el total con sus datos.
+- **Descuadres de stock** entre lo que figura disponible y lo que realmente hay en bodega.
+- **Sobreventa** de productos agotados, porque dos canales pueden comprometer la misma unidad.
+- **Tiempo administrativo perdido** en revisar existencias y responder mensajes uno a uno.
 
-Una respuesta perdida no demuestra que la compra haya fallado. La app conserva el intento y permite **consultar** su resultado o **continuar el mismo intento**, con idéntica clave y contenido. Abrir una pantalla o restaurar la app no reenvía automáticamente la compra. Una intención nueva no debe reemplazar una operación incierta.
+### La solución
 
-Los ajustes de inventario y las cancelaciones también conservan registros locales recuperables. Consultar un ajuste histórico muestra el comprobante original; su stock resultante no reemplaza el stock vigente del catálogo.
+Una aplicación móvil con dos perfiles conectados a un único backend, de modo que cualquier
+movimiento quede reflejado de inmediato para todos.
 
-### Estados y cancelación
+El **cliente** consulta un catálogo con disponibilidad real, arma su pedido y lo envía sin
+depender de un chat. El **administrador** gestiona el inventario desde el local, recibe los
+pedidos entrantes y los procesa hasta la entrega. El stock se descuenta **una sola vez**, en
+el servidor, en el momento en que se registra la compra.
 
-```text
-PENDIENTE_VALIDACION → CONFIRMADO → PREPARADO → ENTREGADO
-```
+### Restricciones del caso
 
-El backend rechaza saltos y retrocesos. Android habilita preparar después de verificar los QR y cantidades. El servidor valida la transición, pero no recibe un comprobante criptográfico del escaneo físico.
+- El entregable es un **MVP académico de simulación**, no un producto para publicar en tiendas.
+- Se trabaja exclusivamente con **datos sintéticos**. No se usan registros reales, datos
+  comerciales internos ni credenciales productivas, conforme a las leyes chilenas
+  **N.º 21.719** y **N.º 19.628** sobre protección de datos personales.
+- No hay pasarela de pago ni despacho real.
 
-Solo se cancela un pedido pendiente de validación. El backend devuelve stock una sola vez, retira pedido y detalles de las listas activas y conserva el registro de cancelación. La devolución contempla productos retirados lógicamente del catálogo.
+---
 
-### Alcance acordado
+## 2. Integrantes
 
-- Notificaciones locales/estáticas; sin integración push con Firebase.
-- API externa adicional excluida del desarrollo por decisión del equipo. Mapas y bibliotecas QR no se presentan como evidencia de ese indicador de Retrofit.
-- Sin pasarela de pago ni despacho real.
-- Datos ficticios y cuentas de demostración para el entorno académico.
+- **Acxel González**
+- **Kerly Dugarte**
+- **Marco Carrasco**
+- **Fabián Cornejo**
 
-## Arquitectura y datos
+El trabajo se repartió por pantalla desde el inicio del proyecto y se integró mediante ramas
+separadas por persona.
+
+---
+
+## 3. Tecnologías
+
+### Aplicación móvil
+
+| Componente | Versión |
+|---|---|
+| Lenguaje | Kotlin 1.8.10 |
+| Interfaz | Jetpack Compose · BOM 2023.03.00 · Material 3 |
+| Arquitectura | MVVM — Pantalla → ViewModel → Repositorio → API |
+| Cliente HTTP | Retrofit 2.9.0 + Gson · OkHttp logging-interceptor 4.12.0 |
+| Persistencia local | Room 2.5.2 |
+| Mapas | osmdroid 6.1.20 |
+| Códigos QR | ZXing 3.5.3 (generación) · Google Code Scanner 16.1.0 (lectura) |
+| Compilación | Gradle 8.2 · AGP 8.2.2 · **JDK 17** |
+| SDK | compileSdk 34 · targetSdk 34 · minSdk 24 (Android 7) |
+| Pruebas | JUnit 4.13.2 · MockK 1.13.4 · coroutines-test 1.6.4 |
+| Cobertura | JaCoCo 0.8.13 |
+
+### Backend
+
+| Componente | Versión |
+|---|---|
+| Framework | Spring Boot 4.1.2 |
+| Lenguaje | Java 25 |
+| Base de datos | PostgreSQL 17 |
+| Contenedores | Docker · Docker Compose |
+| Seguridad | BCrypt para contraseñas · JWT para autorización |
+
+> El JDK 25 del backend vive dentro de los contenedores. Gradle debe seguir usando **JDK 17**.
+
+---
+
+## 4. Arquitectura
 
 ```mermaid
 flowchart TD
@@ -78,239 +131,780 @@ flowchart TD
     HTTP --> P[ms-productos :8081]
     HTTP --> O[ms-pedidos :8082]
     O --> P
+    U --> DB[(PostgreSQL 17 :5433)]
+    P --> DB
+    O --> DB
 ```
 
-`MainActivity` utiliza repositorios remotos. Los modos locales y demo conservan compatibilidad y pruebas; no reemplazan automáticamente al backend cuando falla la conexión.
+### Por qué tres microservicios
 
-| Información | Ubicación y alcance |
+La división sigue los tres dominios del negocio que aparecen en el caso: el **catálogo**, las
+**transacciones** y las **personas**. Cada uno cambia por motivos distintos y a ritmos
+distintos, que es el criterio habitual para separar servicios.
+
+Cada microservicio tiene **su propia base de datos** dentro del mismo motor PostgreSQL.
+Ninguno puede leer las tablas de otro: si necesita un dato, lo pide por HTTP. Esto evita que
+un cambio en el esquema de uno rompa a los demás.
+
+### Compra y descuento de stock
+
+`ms-pedidos` es el único que llama a otro microservicio. Al registrar una compra:
+
+```
+La app guarda el intento con una clave única antes de enviar nada
+  → ms-pedidos solicita la compra de stock a ms-productos
+  → se comprueban precio esperado, disponibilidad y cantidades
+  → se registra el descuento y después el pedido
+  → la app muestra el comprobante y vacía lo comprado del carrito
+```
+
+El **precio nunca se acepta desde el teléfono**: la app envía el precio que el cliente vio, y
+el servidor lo compara con el actual antes de calcular el total con sus propios datos.
+
+El stock se descuenta al registrar la compra, **antes de la confirmación administrativa**.
+Avanzar el estado del pedido no vuelve a descontarlo.
+
+### Operaciones recuperables
+
+Una respuesta perdida no demuestra que la compra haya fallado. La aplicación conserva el
+intento con su clave única y permite **consultar su resultado** o **continuar el mismo
+intento**, con idéntica clave y contenido. Abrir una pantalla o reiniciar la app no reenvía
+nada automáticamente.
+
+Es la razón de los endpoints `/solicitudes/{clave}` y `/movimientos-stock/{clave}`: ante la
+duda, se pregunta por la operación anterior en vez de crear una nueva.
+
+Los ajustes de inventario y las cancelaciones conservan registros locales recuperables de la
+misma forma.
+
+### Persistencia local
+
+| Información | Dónde vive |
 |---|---|
-| Usuarios y datos remotos del perfil | PostgreSQL, `ms-usuarios` |
-| Productos, stock, fotografías compartidas y comprobantes de inventario | PostgreSQL, `ms-productos` |
-| Pedidos, detalles y resultados de compra/cancelación | PostgreSQL, `ms-pedidos` |
-| Caché de catálogo y carrito por usuario | Room `oyl_frutos_secos.db`, versión 7 |
-| Perfiles locales remotos, referencias de avatar y operaciones pendientes | Room `oyl_perfiles_remotos.db`, versión 5 |
-| RUT y apellido complementarios | Perfil local; solo en este teléfono |
-| Contacto y domicilio/punto de retiro acordados al comprar | Complemento local del pedido; solo en este teléfono |
-| Avatar | Archivo privado local; no se sube al backend |
-| Sesión remota | Preferencias cifradas mediante Android Keystore |
+| Usuarios y perfil remoto | PostgreSQL, `ms-usuarios` |
+| Productos, stock, fotos y comprobantes | PostgreSQL, `ms-productos` |
+| Pedidos, detalles, cancelaciones | PostgreSQL, `ms-pedidos` |
+| Caché de catálogo y carrito | Room `oyl_frutos_secos.db`, versión 7 |
+| Perfiles locales y operaciones pendientes | Room `oyl_perfiles_remotos.db`, versión 5 |
+| Avatar | Archivo privado del teléfono; no se sube al servidor |
+| Sesión | Preferencias cifradas con Android Keystore |
 
-Room conserva registros mediante migraciones; borrar datos no es el procedimiento de actualización. La base privada de perfiles, sus complementos, sesión y archivos de avatar se excluyen de backup/transferencia en los XML correspondientes. Esto no significa que todo SQLite esté cifrado.
-
-La caché permite consultar catálogo con advertencia de antigüedad. Comprar, modificar inventario y cambiar estados requieren los servicios disponibles. Las listas se actualizan por consultas, sin sincronización por push entre dispositivos.
+El servidor es siempre la fuente de verdad. La caché permite consultar el catálogo con un
+aviso de antigüedad, pero comprar, modificar inventario y cambiar estados requieren los
+servicios disponibles.
 
 ### Seguridad
 
-- Login y registro son públicos; las demás APIs utilizadas requieren JWT `Bearer` y autorización por rol/propietario.
-- Android no conserva la contraseña del login remoto. Un `401` invalida la sesión que originó la petición; un `403` no la cierra automáticamente.
-- El token para fotografías propias solo se envía a las rutas y origen permitidos del servidor de productos.
-- La credencial interna entre microservicios no se configura en Android.
-- El entorno académico usa HTTP y permite tráfico sin TLS. Un despliegue externo exige revisar transporte, cuentas demo, claves y distribución de la firma.
+- **Login y registro son públicos.** El resto de las APIs exige un token JWT `Bearer` y
+  autorización por rol o por propietario del recurso.
+- Las contraseñas se cifran con **BCrypt** antes de guardarse. Al iniciar sesión no se
+  comparan contraseñas: se vuelve a aplicar el algoritmo y se comparan los resultados.
+- La contraseña **nunca** aparece en las respuestas del servidor, y la app no la conserva.
+- El registro público siempre crea usuarios con rol `CLIENTE`. Aunque una petición incluya
+  `"rol": "ADMIN"`, el servidor la ignora.
+- Ante credenciales incorrectas el mensaje es el mismo falle el alias o la contraseña, para
+  no revelar qué usuarios existen.
+- El entorno académico usa HTTP sin TLS. Un despliegue real exigiría revisar el transporte,
+  las cuentas de demostración y la distribución de la firma.
 
-## Requisitos
+---
 
-Versiones declaradas en el proyecto:
+## 5. Modelo de datos
 
-| Componente | Versión/configuración |
+### Producto
+
+| Campo | Descripción |
 |---|---|
-| JDK para Android y Gradle | **17** |
-| Gradle Wrapper / Android Gradle Plugin | 8.2 / 8.2.2 |
-| Kotlin / compilador Compose | 1.8.10 / 1.4.3 |
-| Android SDK | compile/target 34; mínimo 24 (Android 7) |
-| Compose | BOM 2023.03.00, Material 3 |
-| Room / Retrofit | 2.5.2 / 2.9.0 |
-| OkHttp logging-interceptor | 4.12.0 |
-| Mapas | osmdroid 6.1.20 |
-| QR | ZXing 3.5.3; Google Code Scanner 16.1.0 |
-| JVM | JUnit 4.13.2; MockK 1.13.4; coroutines-test 1.6.4 |
-| Cobertura | JaCoCo 0.8.13 |
+| `id` | Identificador único |
+| `nombre`, `codigo` | Identificación comercial |
+| `categoria` | Frutos secos · Semillas · Deshidratados |
+| `precio` | Precio unitario |
+| `stock`, `stockMinimo` | Existencias y umbral de aviso |
+| `disponible` | Permite retirar un producto sin borrarlo |
+| `imagen` | Recurso local o fotografía subida por el administrador |
 
-Instalar Android Studio, SDK 34 y herramientas de plataforma/compilación. Configurar **Gradle JDK 17**; el JDK 25 del backend no debe sustituirlo. Para ejecutar, usar emulador o teléfono API 24 o superior. El lector necesita Google Play services y puede descargar su módulo al utilizarlo inicialmente. El mapa necesita conexión para obtener teselas.
+### Pedido
 
-El backend se prepara siguiendo [su README](https://github.com/fabcornejom/OYL-Backend/blob/desarrollo-marco/README.md). Instalar PostgreSQL nativo no crea las bases del contenedor Docker.
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador de la transacción |
+| `fecha` | Fecha y hora del requerimiento |
+| `detalles` | Artículos con cantidad y precio unitario |
+| `total` | Monto consolidado, calculado por el servidor |
+| `estado` | Estado actual de la solicitud |
 
-## Instalación y conexión
+### Usuario
 
-Los ejemplos usan PowerShell. En Linux/macOS, utilizar `./gradlew` y adaptar variables de entorno.
+| Campo | Descripción |
+|---|---|
+| `id` | Identificador único |
+| `nombre`, `alias`, `correo` | Datos de identificación |
+| `telefono`, `direccion` | Datos de contacto |
+| `contrasena` | Cifrada con BCrypt, nunca se devuelve |
+| `rol` | `ADMIN` o `CLIENTE` |
 
-### 1. Clonar y abrir
+---
 
-```powershell
-git clone --branch desarrollo-marco https://github.com/AcxelGonzalez/APP_Movil_Frutos.git
-cd APP_Movil_Frutos
-git status
+## 6. Funcionalidades
+
+### Perfil Cliente
+
+- Registro de cuenta propia e inicio de sesión
+- Catálogo con filtros por categoría, fotografías, precio y disponibilidad real
+- Detalle de cada producto
+- Carrito con control de cantidades y validación de stock
+- Confirmación de compra con domicilio o punto de retiro en el mapa
+- Comprobante de compra recuperable ante una respuesta perdida
+- Historial de pedidos propios con su estado actual
+- Solicitud de cancelación mientras el pedido siga pendiente de validación
+- Edición de perfil y avatar local
+
+### Perfil Administrador
+
+- Inventario completo: alta, edición y retiro de productos, con fotografía
+- Registro de entradas y salidas de stock con comprobante
+- Aviso de productos con stock bajo
+- Generación de códigos QR por producto
+- Bandeja con los pedidos entrantes de todos los clientes
+- Preparación por escáner: cada lectura válida acredita una unidad
+- Avance del pedido por sus estados hasta la entrega
+
+### Ciclo de vida de un pedido
+
+```
+PENDIENTE_VALIDACIÓN  →  CONFIRMADO  →  PREPARADO  →  ENTREGADO
 ```
 
-Abrir la raíz en Android Studio, seleccionar JDK 17 y sincronizar Gradle. Android Studio genera `local.properties` con la ruta del SDK de este PC; no copiar el archivo de otro equipo. La primera sincronización necesita red; `--offline` solo funciona con las dependencias ya descargadas.
+El pedido nace en `PENDIENTE_VALIDACION` cuando el cliente lo envía. El administrador lo hace
+avanzar **un paso a la vez**: el backend rechaza los saltos y los retrocesos.
 
-### 2. Preparar los servicios
+Para pasar a `PREPARADO`, la aplicación exige haber escaneado los códigos QR hasta completar
+las cantidades del pedido. Un QR ajeno o una lectura de más se rechazan.
 
-En el repositorio del backend, preparar claves, PostgreSQL, servicios y migraciones manuales según su guía. Los puertos API son 8081, 8082 y 8083. Verificar el arranque y una consulta autenticada: un contenedor encendido no demuestra que la API esté lista.
+Un pedido solo puede cancelarse mientras está en `PENDIENTE_VALIDACION`. El backend devuelve
+el stock **una sola vez**, retira el pedido de las listas activas y conserva el registro de la
+cancelación. La devolución contempla incluso productos retirados del catálogo.
 
-### 3. Configurar host al compilar
+---
 
-La propiedad Gradle **`oylBackendHost`** genera `BuildConfig.OYL_BACKEND_HOST`. No editar `RetrofitClient.kt`. El valor incluye protocolo y host, **sin puerto, ruta ni barra final**; Retrofit añade cada puerto.
+## 7. Microservicios y endpoints
+
+Salvo el registro y el inicio de sesión, todos los endpoints requieren cabecera
+`Authorization: Bearer <token>`.
+
+### ms-productos — puerto 8081
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `GET` | `/api/productos` | Lista el catálogo |
+| `GET` | `/api/productos/{id}` | Obtiene un producto |
+| `GET` | `/api/productos/stock-bajo` | Productos bajo el umbral |
+| `POST` | `/api/productos` | Crea un producto |
+| `PUT` | `/api/productos/{id}` | Edita un producto |
+| `PATCH` | `/api/productos/{id}/stock` | Ajusta el stock |
+| `DELETE` | `/api/productos/{id}` | Retira un producto |
+| `POST` | `/api/productos/con-foto` | Crea un producto con fotografía |
+| `PUT` | `/api/productos/{id}/con-foto` | Edita un producto con fotografía |
+| `GET` | `/api/productos/{id}/foto/{version}` | Descarga la fotografía |
+| `POST` | `/api/productos/movimientos-stock/{clave}` | Registra entrada o salida |
+| `GET` | `/api/productos/movimientos-stock/{clave}` | Consulta un movimiento anterior |
+| `POST` | `/api/productos/compras-stock` | Descuenta stock por una compra |
+| `POST` | `/api/productos/devoluciones-stock` | Devuelve stock por una cancelación |
+
+### ms-pedidos — puerto 8082
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `POST` | `/api/pedidos` | Registra un pedido y descuenta el stock |
+| `GET` | `/api/pedidos/solicitudes/{clave}` | Consulta el resultado de un intento |
+| `GET` | `/api/pedidos` | Lista todos los pedidos (administrador) |
+| `GET` | `/api/pedidos/{id}` | Obtiene un pedido |
+| `GET` | `/api/pedidos/usuario/{usuarioId}` | Pedidos de un cliente |
+| `PATCH` | `/api/pedidos/{id}/estado` | Avanza al siguiente estado |
+| `POST` | `/api/pedidos/{id}/cancelacion` | Cancela y devuelve el stock |
+| `GET` | `/api/pedidos/{id}/cancelacion` | Consulta una cancelación anterior |
+| `DELETE` | `/api/pedidos/{id}` | Elimina un pedido |
+
+### ms-usuarios — puerto 8083
+
+| Método | Endpoint | Descripción |
+|---|---|---|
+| `POST` | `/api/usuarios/registro` | Crea una cuenta de cliente *(público)* |
+| `POST` | `/api/usuarios/login` | Valida credenciales y entrega el token *(público)* |
+| `GET` | `/api/usuarios` | Lista los usuarios |
+| `GET` | `/api/usuarios/{id}` | Obtiene un usuario |
+| `PUT` | `/api/usuarios/{id}` | Edita los datos de contacto |
+| `DELETE` | `/api/usuarios/{id}` | Elimina un usuario |
+
+> Un `401` al abrir un endpoint en el navegador **no significa que el servicio esté caído**:
+> significa que requiere autenticación.
+
+---
+
+## 8. Instalación paso a paso
+
+### 8.1 Requisitos previos
+
+| Herramienta | Para qué |
+|---|---|
+| **Docker** y **Docker Compose** | Levantar el backend |
+| **Android Studio** (Ladybug o superior) con **SDK 34** | Compilar y ejecutar la app |
+| **JDK 17** configurado como Gradle JDK | Compilar |
+| **Git** | Clonar los repositorios |
+
+No hace falta instalar Java 25, Maven ni PostgreSQL: todo eso vive dentro de los contenedores.
+
+---
+
+### 8.2 Instalar Docker
+
+#### Windows
+
+Docker en Windows funciona sobre **WSL 2**, un subsistema que ejecuta Linux dentro de Windows.
+
+**Requisitos:** Windows 10 versión 22H2 o Windows 11 versión 23H2 en adelante, 8 GB de RAM y
+virtualización habilitada en la BIOS.
+
+1. **Instalar WSL 2.** Abre PowerShell **como administrador**:
+
+   ```powershell
+   wsl --install
+   wsl --update
+   ```
+
+   Reinicia el computador si te lo pide.
+   → [Guía oficial de instalación de WSL](https://learn.microsoft.com/windows/wsl/install)
+
+2. **Descargar Docker Desktop:**
+   → [Install Docker Desktop on Windows](https://docs.docker.com/desktop/setup/install/windows-install/)
+
+3. **Ejecutar el instalador.** En la pantalla de configuración, marca **Use WSL 2 instead of
+   Hyper-V**.
+
+4. **Abrir Docker Desktop.** El ícono de la ballena debe quedar fijo, sin animación.
+
+5. **Verificar:**
+
+   ```powershell
+   docker --version
+   docker compose version
+   ```
+
+#### Linux (Ubuntu, Pop!_OS, Mint y derivados)
+
+1. **Agregar el repositorio oficial:**
+
+   ```bash
+   sudo apt update
+   sudo apt install ca-certificates curl
+   sudo install -m 0755 -d /etc/apt/keyrings
+   sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+   sudo chmod a+r /etc/apt/keyrings/docker.asc
+
+   sudo tee /etc/apt/sources.list.d/docker.sources <<EOF
+   Types: deb
+   URIs: https://download.docker.com/linux/ubuntu
+   Suites: $(. /etc/os-release && echo "${UBUNTU_CODENAME:-$VERSION_CODENAME}")
+   Components: stable
+   Architectures: $(dpkg --print-architecture)
+   Signed-By: /etc/apt/keyrings/docker.asc
+   EOF
+
+   sudo apt update
+   ```
+
+2. **Instalar Docker y el plugin de Compose:**
+
+   ```bash
+   sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+   ```
+
+3. **Usar Docker sin `sudo`** (recomendable):
+
+   ```bash
+   sudo usermod -aG docker $USER
+   ```
+
+   Cierra la sesión y vuelve a entrar.
+
+4. **Verificar:**
+
+   ```bash
+   docker --version
+   docker compose version
+   docker run hello-world
+   ```
+
+   → [Guía oficial para Ubuntu](https://docs.docker.com/engine/install/ubuntu/)
+   → [Pasos posteriores a la instalación](https://docs.docker.com/engine/install/linux-postinstall/)
+
+> Si tenías el paquete `docker.io` de los repositorios de Ubuntu, desinstálalo antes: entra en
+> conflicto con la versión oficial.
+
+#### macOS
+
+→ [Install Docker Desktop on Mac](https://docs.docker.com/desktop/setup/install/mac-install/),
+eligiendo la versión de tu procesador (Apple Silicon o Intel).
+
+---
+
+### 8.3 Levantar el backend
+
+```bash
+git clone https://github.com/fabcornejom/OYL-Backend.git
+cd OYL-Backend
+docker compose up -d --build
+```
+
+La primera vez tarda **varios minutos**: Docker descarga las imágenes base y compila los tres
+microservicios con Maven.
+
+El comando levanta **cuatro contenedores**:
+
+| Contenedor | Puerto | Función |
+|---|---|---|
+| `postgres` | 5433 | Base de datos |
+| `ms-productos` | 8081 | Catálogo e inventario |
+| `ms-pedidos` | 8082 | Pedidos y estados |
+| `ms-usuarios` | 8083 | Cuentas y autenticación |
+
+> Se usa el puerto **5433** en lugar del 5432 habitual para no chocar con una instalación
+> local de PostgreSQL.
+
+**Comprobar que los cuatro están arriba:**
+
+```bash
+docker compose ps
+```
+
+**Comprobar que responden:**
+
+```bash
+curl http://localhost:8081/api/productos
+```
+
+Sigue las indicaciones del [README del backend](https://github.com/fabcornejom/OYL-Backend)
+para la preparación de claves y cualquier paso adicional. Un contenedor encendido no demuestra
+por sí solo que la API esté lista.
+
+**Detener:**
+
+```bash
+docker compose down        # conserva los datos
+docker compose down -v     # borra la base y vuelve al estado inicial
+```
+
+---
+
+### 8.4 Ejecutar la aplicación
+
+```bash
+git clone https://github.com/AcxelGonzalez/APP_Movil_Frutos.git
+```
+
+1. Abre la carpeta en **Android Studio**.
+2. Configura **Gradle JDK 17** y espera la sincronización.
+3. Selecciona un emulador con **API 24 o superior**.
+4. Pulsa **Run**.
+
+Android Studio genera `local.properties` con la ruta del SDK de ese computador. No copies ese
+archivo desde otro equipo.
+
+#### Dirección del backend
+
+La dirección **no se edita en el código**. Se pasa como propiedad de Gradle
+`oylBackendHost`, que genera `BuildConfig.OYL_BACKEND_HOST`. El valor incluye protocolo y
+host, **sin puerto, ruta ni barra final**: Retrofit añade cada puerto.
 
 | Entorno | Host |
 |---|---|
-| Emulador estándar y backend en el PC | `http://10.0.2.2`, predeterminado |
-| Teléfono USB con `adb reverse` | `http://127.0.0.1` |
-| Teléfono y PC en la misma WiFi | IP LAN del PC, por ejemplo `http://192.168.1.8` |
+| Emulador con el backend en el mismo PC | `http://10.0.2.2` *(valor por omisión)* |
+| Teléfono por USB con `adb reverse` | `http://127.0.0.1` |
+| Teléfono y PC en la misma WiFi | IP del PC, por ejemplo `http://192.168.1.8` |
 
-```powershell
-.\gradlew.bat assembleDebug -PoylBackendHost=http://127.0.0.1
+`10.0.2.2` es la dirección con la que el emulador se refiere al computador donde corre. No es
+`localhost`, porque para el emulador `localhost` es él mismo.
+
+Para el emulador no hay que hacer nada: ese es el valor por omisión.
+
+Para un **teléfono por USB**:
+
+```bash
+./gradlew assembleDebug -PoylBackendHost=http://127.0.0.1
 adb devices
-adb -s SERIAL_DEL_TELEFONO reverse tcp:8081 tcp:8081
-adb -s SERIAL_DEL_TELEFONO reverse tcp:8082 tcp:8082
-adb -s SERIAL_DEL_TELEFONO reverse tcp:8083 tcp:8083
-adb -s SERIAL_DEL_TELEFONO install -r app/build/outputs/apk/debug/app-debug.apk
+adb -s SERIAL reverse tcp:8081 tcp:8081
+adb -s SERIAL reverse tcp:8082 tcp:8082
+adb -s SERIAL reverse tcp:8083 tcp:8083
+adb -s SERIAL install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
-Reemplazar `SERIAL_DEL_TELEFONO` por el de `adb devices` y aceptar depuración USB. Si `adb` no está en PATH, usar el ejecutable de `platform-tools` del SDK. Restablecer los túneles si se pierde la conexión.
+En Windows, `.\gradlew.bat`. Reemplaza `SERIAL` por el que muestre `adb devices`.
 
-Para usar Run de Android Studio con otro host, añadir `oylBackendHost=http://127.0.0.1` al `gradle.properties` personal de `GRADLE_USER_HOME` y sincronizar. `-P` permite cambiar el valor sin editar archivos versionados. El host queda dentro del APK y exige recompilar para cambiarlo.
+Para usar el botón **Run** con otro host, añade `oylBackendHost=http://127.0.0.1` al
+`gradle.properties` personal de tu `GRADLE_USER_HOME` y sincroniza. El host queda dentro del
+APK, así que cambiarlo exige recompilar.
 
-En WiFi, comprobar que la red permita llegar a los tres puertos del PC. `localhost` en el teléfono se refiere al teléfono; solo llega al PC mediante túneles configurados.
+---
 
-### 4. Iniciar sesión
+### 8.5 Cuentas de prueba
 
-El backend verifica y crea las cuentas académicas `admin` y `cliente` si faltan. Usar las credenciales de demostración acordadas por el equipo; no se reproducen claves en esta guía. Las cuentas nuevas se crean desde **Crear una cuenta** y reciben rol `CLIENTE`.
+| Usuario | Contraseña | Rol |
+|---|---|---|
+| `admin` | `admin` | Administrador |
+| `cliente` | `cliente` | Cliente |
 
-No borrar datos de la app para resolver conexión: se perderían carrito, avatar, complementos y registros pendientes locales.
+Ambas se crean automáticamente al levantar `ms-usuarios`, y se vuelven a crear si borras la
+base de datos. Son cuentas de demostración del entorno académico y no deben existir en un
+despliegue real.
 
-## Pruebas y cobertura
+También puedes crear cuentas nuevas desde **Crear una cuenta** en la pantalla de inicio de
+sesión. Todas reciben rol `CLIENTE`.
 
-### Unitarias JVM
+---
 
-Ubicación: `app/src/test/`. Sin teléfono ni backend real; las dependencias de red y DAOs se simulan.
+### 8.6 Recorrido de demostración
 
-```powershell
-.\gradlew.bat testDebugUnitTest
-.\gradlew.bat jacocoDebugUnitTestCoverageVerification
-.\gradlew.bat lintDebug
+1. Entra como **cliente**, agrega productos al carrito y confirma la compra.
+2. Abre `http://localhost:8081/api/productos`: el stock bajó.
+3. Abre `http://localhost:8082/api/pedidos`: el pedido está en `PENDIENTE_VALIDACION`.
+4. Cierra sesión y entra como **admin**: el pedido aparece en la bandeja.
+5. Confírmalo, escanea los QR de los productos y márcalo como preparado.
+6. Entrégalo y comprueba que el stock **no** se descontó una segunda vez.
+
+> Si consultas los endpoints desde el navegador, recuerda que ahora exigen token. Un `401` es
+> la respuesta esperada sin autenticación.
+
+---
+
+## 9. Problemas frecuentes
+
+<details>
+<summary><strong>«port is already allocated» al levantar los contenedores</strong></summary>
+
+El puerto 5433 está ocupado por otro contenedor, normalmente una copia anterior del proyecto.
+
+```bash
+docker ps --format "table {{.Names}}\t{{.Ports}}"
 ```
 
-La verificación genera el informe y falla por debajo del **80 % de líneas**. Incluye `viewmodel`, `repository`, `model`, `util`, `network` y `data/local`, también la lógica local conservada. Excluye pantallas/UI e implementaciones generadas `*_Impl*`.
+Apaga el contenedor que ocupa el puerto desde su propia carpeta con `docker compose down` y
+vuelve a intentarlo.
+</details>
+
+<details>
+<summary><strong>«no configuration file provided: not found»</strong></summary>
+
+Estás ejecutando `docker compose` desde una carpeta que no contiene `docker-compose.yml`.
+Sitúate en la raíz del repositorio del backend.
+</details>
+
+<details>
+<summary><strong>Gradle falla con «Unknown Kotlin JVM target: 21»</strong></summary>
+
+La terminal está usando el JDK del sistema. Ejecuta las tareas **desde Android Studio**, que
+usa su propio JDK 17, o indica la ruta:
+
+```bash
+./gradlew test -Dorg.gradle.java.home=$HOME/android-studio/jbr
+```
+</details>
+
+<details>
+<summary><strong>La app no conecta con el servidor</strong></summary>
+
+1. `docker compose ps`: los cuatro contenedores deben estar `Up`.
+2. Abre `http://localhost:8081/api/productos` en el navegador del computador.
+3. Revisa con qué `oylBackendHost` se compiló el APK instalado.
+4. Por USB, confirma que los tres túneles de `adb reverse` siguen activos.
+5. Por WiFi, confirma que la red permita llegar a los tres puertos del PC.
+
+`localhost` dentro del teléfono se refiere al teléfono, no al computador.
+</details>
+
+<details>
+<summary><strong>El catálogo aparece con aviso de antigüedad</strong></summary>
+
+Falló la consulta remota y se está mostrando la caché local. Actualiza antes de comprar con
+esos precios.
+</details>
+
+<details>
+<summary><strong>Una foto antigua devuelve 404</strong></summary>
+
+Cambió la versión de la imagen o el producto fue retirado. Refresca el catálogo.
+</details>
+
+<details>
+<summary><strong>El lector QR no abre</strong></summary>
+
+Requiere Google Play services y descarga su módulo la primera vez. El teléfono debe estar
+desbloqueado.
+</details>
+
+<details>
+<summary><strong>Una operación quedó con resultado incierto</strong></summary>
+
+No crees una segunda compra ni borres los datos de la app. Usa la opción de **consultar** o
+**continuar el mismo intento**: conserva la clave original y pregunta al servidor qué pasó.
+</details>
+
+---
+
+## 10. Pruebas y cobertura
+
+### Pruebas unitarias (JVM)
+
+Ubicación: `app/src/test/`
+
+No requieren emulador ni servidor. Cubren la lógica de negocio: validaciones, cuentas y
+sesiones, autorización HTTP, carrito, inventario, compras recuperables, cancelaciones,
+perfiles y avatar. Las conexiones reales y los DAO se reemplazan por dobles de prueba con
+**MockK**, de modo que las pruebas pasan aunque los contenedores estén apagados.
+
+Desde Android Studio: clic derecho sobre el paquete `com.example.oyl_fs (test)` →
+**Run 'Tests in com.example.oyl_fs'**.
+
+Desde la terminal:
+
+```bash
+./gradlew testDebugUnitTest
+./gradlew jacocoDebugUnitTestCoverageVerification
+./gradlew lintDebug
+```
+
+### Cobertura
+
+La medición se hace con **JaCoCo** sobre la lógica de negocio: los paquetes `viewmodel`,
+`repository`, `model`, `util`, `network` y `data/local`. Quedan fuera las pantallas de Compose
+y las clases `*_Impl*` que Room genera automáticamente.
+
+Esa exclusión es deliberada y está escrita en `app/build.gradle.kts`. Las pantallas no pueden
+ejecutarse fuera de un dispositivo, así que incluirlas en el denominador mediría algo que
+ninguna prueba unitaria puede cubrir. La configuración es verificable por cualquiera que abra
+el archivo.
+
+La tarea de verificación **falla si la cobertura de líneas baja del 80 %**.
 
 | Informe | Archivo |
 |---|---|
-| Resultados JVM | `app/build/reports/tests/testDebugUnitTest/index.html` |
+| Resultados | `app/build/reports/tests/testDebugUnitTest/index.html` |
 | Cobertura HTML | `app/build/reports/jacoco/jacocoDebugUnitTestReport/html/index.html` |
 | Cobertura XML | `app/build/reports/jacoco/jacocoDebugUnitTestReport/jacocoDebugUnitTestReport.xml` |
 | Lint | `app/build/reports/lint-results-debug.html` |
 
-Ejecución verificada el **24-11-2026**, código `d0c5a3e`: **242 pruebas aprobadas**, sin fallos, errores ni omisiones; **3.202/3.921 líneas, 81,66 %**, con umbral aprobado. Lint: **0 errores y 41 advertencias**. Regenerar los resultados después de cambiar código.
+**Última ejecución registrada (24-11-2026):** 242 pruebas aprobadas, sin fallos ni omisiones.
+**3.202 de 3.921 líneas, 81,66 %**, por encima del umbral. Lint: 0 errores y 41 advertencias.
 
-Se verifican validaciones, cuentas, sesiones, autorización HTTP, carrito, inventario, compras recuperables, cancelaciones, perfiles y avatar. Los DAOs/ejecutor de transacciones simulados prueban reglas y coordinación, no rollback o migraciones reales de SQLite.
+> Estas cifras corresponden a una ejecución concreta. Después de cambiar código hay que
+> regenerarlas.
 
-### Instrumentadas
+### Pruebas instrumentadas
 
-Ubicación: `app/src/androidTest/`. Room, migraciones y pantallas Compose sobre Android. Mantener el dispositivo desbloqueado y sin uso durante las pruebas.
+Ubicación: `app/src/androidTest/`
 
-```powershell
-.\gradlew.bat connectedDebugAndroidTest '-Pandroid.testInstrumentationRunnerArguments.notClass=com.example.oyl_fs.screens.ValidacionFuncionalRealTest,com.example.oyl_fs.screens.IntegracionBackendRealTest'
+Validan la base de datos Room, sus migraciones entre versiones y pantallas de Compose.
+Requieren un emulador o teléfono con la pantalla desbloqueada.
+
+```bash
+./gradlew connectedDebugAndroidTest
 ```
 
-La batería habitual utiliza servicios simulados. Se excluyen expresamente las pruebas reales. `IntegracionBackendRealTest.kt` puede existir como archivo local anterior no versionado; no es la validación real vigente. En la revisión previa pasaron **82 pruebas instrumentadas** de la batería entonces existente: no se suman a las 242 JVM ni calculan el 81,66 %.
+No se suman a la cobertura: JaCoCo mide la ejecución en la máquina virtual de Java, y estas
+corren dentro del dispositivo.
 
-### Validación real con activación explícita
+---
 
-`ValidacionFuncionalRealTest` crea datos ficticios durables. Sin `validacionFuncionalReal=true`, sus dos casos se omiten. Utilizar una base académica respaldada y acordar la ejecución y los datos que permanecerán.
+## 11. Firma digital
 
-Requiere host compilado `http://127.0.0.1`, túneles USB, servicios actualizados, cuenta administrativa demo y `qaId` único: `qa` seguido de 12 caracteres hexadecimales minúsculos.
+La aplicación se firma con un almacén de claves propio, en `keystore/oyl.jks`.
 
-```powershell
-$qaId = 'qa' + [guid]::NewGuid().ToString('N').Substring(0,12)
-.\gradlew.bat assembleDebug assembleDebugAndroidTest -PoylBackendHost=http://127.0.0.1
-adb -s SERIAL_DEL_TELEFONO install -r app/build/outputs/apk/debug/app-debug.apk
-adb -s SERIAL_DEL_TELEFONO install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
-adb -s SERIAL_DEL_TELEFONO shell am instrument -w -r -e class com.example.oyl_fs.screens.ValidacionFuncionalRealTest -e validacionFuncionalReal true -e qaId $qaId -e camaraReal true com.example.oyl_fs.test/androidx.test.runner.AndroidJUnitRunner
+### Para qué sirve
+
+Una aplicación sin firmar no puede instalarse fuera del modo desarrollador. La firma cumple
+dos funciones:
+
+- **Identifica el origen.** Android verifica la firma al instalar. Si alguien modifica el APK
+  después de firmarlo, la verificación falla y el sistema lo rechaza.
+- **Habilita las actualizaciones.** Solo se puede instalar una versión nueva sobre otra si
+  ambas están firmadas con la misma clave.
+
+### Pasos seguidos
+
+1. Menú **Build → Generate Signed App Bundle / APK**, opción **APK**.
+2. Botón **Create new...** para generar el almacén de claves.
+3. Se completaron los datos del certificado: ruta, contraseña, alias `oyl` y validez de 25 años.
+4. Se seleccionó la variante **release**.
+
+### Evidencia
+
+| | |
+|---|---|
+| ![Firma 1](entrega/evidencias-firma/Evidencia%201.png) | ![Firma 2](entrega/evidencias-firma/Evidencia%202.png) |
+| ![Firma 3](entrega/evidencias-firma/Evidencia%203.png) | ![Firma 4](entrega/evidencias-firma/Evidencia%204.png) |
+| ![Firma 5](entrega/evidencias-firma/Evidencia%205.png) | ![Firma 6](entrega/evidencias-firma/Evidencia%206.png) |
+| ![Firma 7](entrega/evidencias-firma/Evidencia%207.png) | ![Firma 8](entrega/evidencias-firma/Evidencia%208.png) |
+| ![Firma 9](entrega/evidencias-firma/Evidencia%209.png) | |
+
+### Configuración en Gradle
+
+```kotlin
+signingConfigs {
+    create("release") {
+        storeFile = file("../keystore/oyl.jks")
+        storePassword = "oyl2026"
+        keyAlias = "oyl"
+        keyPassword = "oyl2026"
+    }
+}
+
+buildTypes {
+    release {
+        signingConfig = signingConfigs.getByName("release")
+        isMinifyEnabled = false
+        proguardFiles(
+            getDefaultProguardFile("proguard-android-optimize.txt"),
+            "proguard-rules.pro"
+        )
+    }
+}
 ```
 
-`camaraReal=true` necesita una persona mostrando el QR al teléfono cuando se emite `QR_CAMARA_LISTA`. El QR contiene `{"tipo":"producto","id":ID_DEL_PRODUCTO_E}`. La fase inicial emite los IDs de productos y los guarda en preferencias `validacion-real-<qaId>`. Con `camaraReal=false` se proporciona el texto al ViewModel: **no valida cámara física**.
+> **Nota sobre buenas prácticas.** Incluir el almacén de claves y sus contraseñas en el
+> repositorio no es recomendable: quien tenga ese archivo puede firmar actualizaciones en
+> nombre de la aplicación. Aquí se entregan porque la evaluación los solicita como evidencia.
+> En un proyecto real el `.jks` se guarda fuera del repositorio y las contraseñas se leen
+> desde variables de entorno. Esta firma no debe reutilizarse en una aplicación productiva.
 
-Conservar `qaId` para reanudar; otro identificador crea otra validación. Los marcadores de fases terminadas evitan repetirlas: reusar el mismo identificador no es una prueba completa nueva. Ante interrupción, revisar el estado antes de continuar. No hay limpieza automática de cuenta, productos y comprobantes.
+---
 
-## Pruebas funcionales manuales
+## 12. Generación del APK
 
-Utilizar cuentas y productos ficticios identificables y anotar stock inicial.
+### Desde Android Studio
 
-| Paso | Acción | Resultado esperado |
-|---|---|---|
-| 1 | Registrar cliente e iniciar sesión | Rol cliente; campos inválidos muestran errores |
-| 2 | Editar perfil y reabrir app | Datos remotos conservados; RUT/apellido locales por cuenta |
-| 3 | Elegir, reemplazar y quitar avatar | Solo cambia la imagen de esa cuenta en este teléfono |
-| 4 | Como admin, crear producto con foto y editar ficha | Foto recuperable; editar metadatos conserva stock |
-| 5 | Registrar entrada/salida | Ajuste aplicado una vez; consultar recibo no lo repite |
-| 6 | Comprar una unidad como cliente | Total correcto, comprobante, carrito actualizado y stock reducido |
-| 7 | Recrear la actividad tras comprar | Comprobante conservado para el flujo |
-| 8 | Cancelar pedido pendiente y consultar otra vez | Una devolución y retiro de listas activas |
-| 9 | Crear otra compra y entrar como admin | Pedido visible en bandeja |
-| 10 | Confirmar y escanear cada unidad | QR ajeno/exceso rechazados; preparar solo al completar cantidades |
-| 11 | Marcar entregado | Estado final sin segundo descuento |
-| 12 | Cambiar cuenta | Carrito, perfil y pendientes de la identidad correspondiente |
+1. En **Build Variants**, cambiar el módulo `app` a la variante **release**.
+2. Menú **Build → Build Bundle(s) / APK(s) → Build APK(s)**.
 
-Ante un resultado incierto, consultar o continuar **la misma operación**. No borrar preferencias ni crear una segunda compra para reemplazar una respuesta desconocida. El corte real de red durante un envío requiere una prueba aparte y contraste del servidor antes del reintento.
+### Desde la terminal
 
-## Firma y entrega
+```bash
+./gradlew assembleRelease -PoylBackendHost=http://10.0.2.2
+```
 
-```powershell
-.\gradlew.bat assembleRelease -PoylBackendHost=http://10.0.2.2
+El archivo se genera en `app/build/outputs/apk/release/app-release.apk`.
+
+### Verificar la firma
+
+Que el nombre sea `app-release.apk` y no `app-release-unsigned.apk` es un buen indicio, pero
+no una prueba. Para confirmarlo:
+
+```bash
 apksigner verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
 ```
 
-`apksigner` está en los Build Tools del SDK; usar su ruta completa si no está en PATH. La configuración `release` utiliza `keystore/oyl.jks`; sus parámetros están en `app/build.gradle.kts`. No crear otra llave ni copiar sus credenciales a documentación o capturas.
+`apksigner` está en los Build Tools del SDK; usa su ruta completa si no está en el PATH.
 
-La salida de compilación es `app/build/outputs/apk/release/app-release.apk`. El nombre **no prueba** que esté firmado correctamente. Verificar certificado, host y revisión de código antes de reemplazar `entrega/app-release.apk`. Cambiar pruebas o documentación no requiere regenerar el APK.
+El APK entregado se encuentra en **[`entrega/app-release.apk`](entrega/app-release.apk)**.
 
-Android exige el mismo firmante para actualizar una instalación. Un debug suele tener otra llave que la release: ante `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, no desinstalar automáticamente porque se perderían datos. Revisar certificado y acordar respaldo/procedimiento.
+### Evidencia
 
-Los APK y keystores se ignoran en general, pero los archivos académicos ya versionados siguen en Git. No reutilizar esta firma de entrega para una aplicación productiva.
-
-Evidencias existentes: [generación del APK](entrega/evidencias-apk/) y [firma](entrega/evidencias-firma/). Documentan una generación anterior; no sustituyen comprobar el binario de la entrega final.
-
-## Problemas frecuentes
-
-| Síntoma | Acción |
+| | |
 |---|---|
-| Java/target incompatible en Gradle | Seleccionar JDK 17; revisar `java -version` y `.\gradlew.bat --version` |
-| SDK no encontrado | Instalar/configurar SDK 34 y generar `local.properties` para el PC actual |
-| Falla `--offline` | Descargar primero dependencias con conexión |
-| No conecta desde el teléfono | Revisar host compilado, los tres túneles USB o WiFi y backend |
-| API en navegador devuelve `401` | Requiere autenticación; no significa servicio caído |
-| Catálogo guardado con advertencia | Falló consulta remota; actualizar antes de comprar con esos precios |
-| `403` | Permisos insuficientes; no se soluciona alterando rol local |
-| Foto antigua devuelve `404` | Refrescar catálogo: cambió versión o se retiró producto |
-| Lector QR no abre | Revisar Google Play services/módulo y teléfono desbloqueado |
-| Pruebas no abren actividades | Revisar reposo/bloqueo y restricciones del fabricante |
-| Operación incierta | Recuperar su registro de la misma cuenta antes de crear otra |
-| Conflicto de firma | Comparar certificados y conservar datos; no desinstalar sin revisión |
+| ![APK 1](entrega/evidencias-apk/Evidencia%201.png) | ![APK 2](entrega/evidencias-apk/Evidencia%202.png) |
 
-## Estructura y colaboración
+> Si al instalar aparece `INSTALL_FAILED_UPDATE_INCOMPATIBLE`, es que ya hay una versión
+> firmada con otra clave, normalmente una de depuración. No desinstales sin pensarlo: se
+> perderían los datos locales de esa instalación.
 
-```text
-app/src/main/java/com/example/oyl_fs/
-  data/local/   Entidades, DAOs, mappers y migraciones Room
-  model/        Modelos y reglas
-  network/      Contratos Retrofit, DTOs y autorización
-  repository/   Acceso local/remoto y recuperación
-  screens/      Pantallas Compose
-  ui/           Tema y componentes
-  util/         Fotos, avatar, QR, cifrado y validaciones
-  viewmodel/    Estado de presentación
-app/src/test/          Pruebas JVM
-app/src/androidTest/   Pruebas Android
-entrega/               APK y evidencias
-keystore/              Firma académica
+---
+
+## 13. Estructura del repositorio
+
+```
+APP_Movil_Frutos/
+├── app/
+│   └── src/
+│       ├── main/
+│       │   ├── java/com/example/oyl_fs/
+│       │   │   ├── data/local/      Room: entidades, DAOs, mappers y migraciones
+│       │   │   ├── model/           Modelos de dominio y reglas
+│       │   │   ├── network/         Retrofit: contratos, DTOs y autorización
+│       │   │   ├── repository/      Acceso a datos y recuperación de operaciones
+│       │   │   ├── screens/         Pantallas en Jetpack Compose
+│       │   │   ├── ui/              Tema, colores y componentes
+│       │   │   ├── util/            Fotos, avatar, QR, cifrado y validaciones
+│       │   │   ├── viewmodel/       Lógica de presentación
+│       │   │   └── MainActivity.kt  Navegación entre pantallas
+│       │   └── res/                 Imágenes, íconos y estilos
+│       ├── test/                    Pruebas unitarias (JVM)
+│       └── androidTest/             Pruebas instrumentadas (dispositivo)
+├── docs/                            Bitácoras de avance y auditorías internas
+├── entrega/
+│   ├── app-release.apk              APK firmado
+│   ├── evidencias-apk/              Capturas de la generación del APK
+│   └── evidencias-firma/            Capturas de la generación de la firma
+├── keystore/
+│   └── oyl.jks                      Almacén de claves de firma
+└── build.gradle.kts
 ```
 
-Android y backend son repositorios independientes. `desarrollo` integra al equipo y `desarrollo-marco` contiene este avance. Revisar estado, hacer fetch y comparar antes de integrar. Los commits/push de este trabajo se limitan a `desarrollo-marco`, sin push forzado.
+### Paleta de colores
 
-El enlace Trello proviene del README anterior. El equipo debe comprobar su acceso y aportar una captura actual para la entrega; no se inventan tarjetas ni evidencias faltantes.
+| | Color | Código | Uso |
+|---|---|---|---|
+| ![](https://placehold.co/22x22/FFF5E7/FFF5E7.png) | Crema | `#FFF5E7` | Fondo general de las pantallas |
+| ![](https://placehold.co/22x22/92623D/92623D.png) | Café claro | `#92623D` | Botones y elementos destacados |
+| ![](https://placehold.co/22x22/4B2E15/4B2E15.png) | Café oscuro | `#4B2E15` | Textos y barras superiores |
+| ![](https://placehold.co/22x22/FFFBF5/FFFBF5.png) | Marfil | `#FFFBF5` | Campos de formulario |
+| ![](https://placehold.co/22x22/FFFFFF/FFFFFF.png) | Blanco | `#FFFFFF` | Tarjetas y contenedores |
 
-## Estado verificado y límites
+---
 
-La validación del **24-11-2026** utilizó Samsung SM-A256E, tres microservicios y PostgreSQL reales. Verificó fotos, ajustes, registro/perfil, compras, cancelación con devolución de un producto eliminado lógicamente y preparación/entrega con cámara QR física. Los registros originales coincidieron con el respaldo.
+## 14. Gestión del proyecto
 
-Quedaron datos QA: una cuenta, dos productos (uno retirado lógicamente), un pedido entregado y comprobantes. No son carga inicial y no deben eliminarse sin revisar su propósito.
+### Ramas
 
-Pendientes de comprobación: instalación completa en un entorno limpio, concurrencia entre dos teléfonos y corte real de conexión durante envío. Permanecen 41 advertencias de lint. La exclusión de API externa y las notificaciones estáticas son decisiones del equipo; si difieren de la rúbrica, requieren confirmación del docente.
+| Rama | Propósito |
+|---|---|
+| `main` | Versión estable |
+| `desarrollo` | Integración del trabajo del equipo |
+| `desarrollo-<nombre>` | Rama de trabajo individual de cada integrante |
+
+Cada integrante trabaja en su propia rama y la integra a `desarrollo` cuando sus cambios están
+probados. Así se evitan conflictos entre pantallas que se desarrollan en paralelo.
+
+Antes de integrar: revisar el estado, hacer `fetch` y comparar. No se usa `push` forzado.
+
+### Tablero Trello
+
+El avance se gestionó en [este tablero](https://trello.com/b/CZow21QV/proyecto-app), con
+columnas por etapa y tarjetas por funcionalidad y responsable.
+
+![Evidencia](entrega/evidencia_trello.png)
+
+
+---
+
+## 15. Alcance y límites
+
+Lo que **sí** está implementado y verificado está descrito en las secciones anteriores. Lo que
+queda fuera, por decisión del equipo o por el alcance académico:
+
+- **Notificaciones locales**, sin integración push con Firebase.
+- **API externa adicional excluida** por decisión del equipo. El mapa y las bibliotecas de QR
+  no se presentan como evidencia de ese indicador.
+- **Sin pasarela de pago ni despacho real.**
+- **HTTP sin TLS**, propio del entorno académico.
+- Las listas se actualizan por consulta, **sin sincronización automática entre dispositivos**.
+- Permanecen **41 advertencias de lint**, ninguna de ellas un error.
+- Pendientes de comprobar: instalación completa en un entorno limpio, uso concurrente desde
+  dos teléfonos y corte real de conexión durante un envío.
+
+El RUT, el apellido complementario y los datos de contacto o punto de retiro acordados al
+comprar se guardan **solo en el teléfono**, no en el servidor. El avatar también.
+
+---
+
+<p align="center">
+  Duoc UC · Escuela de Informática y Telecomunicaciones<br>
+  DSY1105 — Desarrollo de Aplicaciones Móviles · Docente: Cristian Gómez Vega
+</p>
