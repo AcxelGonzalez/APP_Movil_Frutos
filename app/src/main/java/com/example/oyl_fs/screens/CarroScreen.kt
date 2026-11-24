@@ -89,6 +89,20 @@ fun CarroScreen(
         PedidoConfirmadoScreen(pedido, confirmacion.error, ::abrirMisPedidos)
         return
     }
+    if (confirmacion.pendiente != null || confirmacion.recuperacionBloqueada) {
+        CompraEnRevisionContenido(confirmacion,
+            onConsultar = { confirmacionVm.recuperar(clienteId, false) },
+            onContinuar = { confirmacionVm.recuperar(clienteId, true) },
+            onMisPedidos = onMisPedidos, onVolver = onVolver)
+        return
+    }
+    if (confirmacion.procesando && !mostrarConfirmacion) {
+        Column(Modifier.fillMaxSize().padding(24.dp)) {
+            Text("Revisando el registro local de compras…")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        return
+    }
     if (mostrarConfirmacion) {
         ConfirmacionPedidoScreen(estado.items, perfil, confirmacion.procesando, confirmacion.error,
             onVolver = { mostrarConfirmacion = false; confirmacionVm.limpiar() },
@@ -100,8 +114,8 @@ fun CarroScreen(
 
     CarroContenido(
         estado = estado,
-        mensaje = mensaje,
-        onMensajeMostrado = vm::mensajeMostrado,
+        mensaje = mensaje ?: confirmacion.error,
+        onMensajeMostrado = { if (mensaje != null) vm.mensajeMostrado() else confirmacionVm.borrarMensaje() },
         onVolver = onVolver,
         onAumentar = vm::aumentar,
         onDisminuir = { item ->
@@ -123,6 +137,34 @@ fun CarroScreen(
                 itemAEliminar = null
             }
         )
+    }
+}
+
+@Composable
+private fun CompraEnRevisionContenido(estado: ConfirmacionPedidoUiState, onConsultar: () -> Unit,
+    onContinuar: () -> Unit, onMisPedidos: () -> Unit, onVolver: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().background(FondoOYL), contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { Text("Compra en revisión", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = SecundarioOYL) }
+        item { Text("Conservamos el intento original. Consulta su resultado antes de crear otra compra. Continuar enviará únicamente este mismo intento.") }
+        estado.pendiente?.let { intento ->
+            items(intento.items) { Text("${it.nombre} · ${it.cantidad} · ${formatoPrecio(it.subtotal)}") }
+            item {
+                Text("Total: ${formatoPrecio(intento.items.sumOf { it.subtotal })}")
+                Text("Entrega: ${intento.entrega.modalidad.descripcion}")
+                Text(if (intento.entrega.puntoRetiroNombre.isNotBlank()) intento.entrega.puntoRetiroNombre else intento.entrega.direccion)
+            }
+        }
+        estado.error?.let { mensaje -> item { Text(mensaje, color = CriticoOYL) } }
+        if (estado.procesando) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        item { Button(onClick = onConsultar, enabled = !estado.procesando, modifier = Modifier.fillMaxWidth()) {
+            Text(if (estado.recuperacionBloqueada) "Releer registro local" else "Consultar resultado")
+        } }
+        if (estado.pendiente != null && !estado.recuperacionBloqueada) item {
+            OutlinedButton(onClick = onContinuar, enabled = !estado.procesando, modifier = Modifier.fillMaxWidth()) { Text("Continuar el mismo intento") }
+        }
+        item { TextButton(onClick = onMisPedidos, enabled = !estado.procesando) { Text("Mis pedidos") } }
+        item { TextButton(onClick = onVolver, enabled = !estado.procesando) { Text("Volver") } }
     }
 }
 

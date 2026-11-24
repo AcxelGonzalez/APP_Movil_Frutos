@@ -61,9 +61,10 @@ class IntegracionRemotaRoomTest {
         var ultima: CrearPedidoRequest? = null
         val pedido = PedidoDto(55, 7, "2026-11-21T10:00:00", "PENDIENTE_VALIDACION", 2000,
             listOf(DetallePedidoDto(901, "Almendras", 1000, 2, 2000)))
-        override suspend fun crear(pedido: CrearPedidoRequest): PedidoDto {
-            envios++; ultima = pedido; error?.let { throw it }; return this.pedido
+        override suspend fun crear(clave: String, pedido: CrearPedidoRequest): SolicitudCompraDto {
+            envios++; ultima = pedido; error?.let { throw it }; return SolicitudCompraDto("COMPLETADA", null, this.pedido)
         }
+        override suspend fun consultarSolicitud(clave: String) = SolicitudCompraDto("COMPLETADA", null, pedido)
         override suspend fun listar() = listOf(pedido)
         override suspend fun listarPorUsuario(usuarioId: Long) = listOf(pedido)
         override suspend fun obtener(id: Long) = pedido
@@ -79,7 +80,8 @@ class IntegracionRemotaRoomTest {
         productos = ProductoRemoteRepository(contexto, productosApi, base)
         pedidosApi = Pedidos()
         carrito = CarritoRoomRepository(contexto, base)
-        compras = CompraRemotaRepository(contexto, base, productos, PedidoRemoteRepository(pedidosApi), extras)
+        compras = CompraRemotaRepository(contexto, base, productos, PedidoRemoteRepository(pedidosApi), extras,
+            IntentoCompraRepository(basePerfiles), pedidosApi, { 7L })
     }
     @After fun limpiar() {
         base.close()
@@ -99,7 +101,7 @@ class IntegracionRemotaRoomTest {
         val resultado = compras.confirmar("7", items, entrega)
         assertEquals("PED-055", resultado.pedido.id)
         assertEquals(1, pedidosApi.envios)
-        assertEquals(CrearPedidoRequest(7, listOf(ItemPedidoRequest(901, 2))), pedidosApi.ultima)
+        assertEquals(CrearPedidoRequest(7, listOf(ItemPedidoRequest(901, 2, 1000))), pedidosApi.ultima)
         assertTrue(carrito.observar("7").first().isEmpty())
         assertEquals(1, carrito.observar("8").first().single().cantidad)
         assertEquals(10, base.productoDao().obtenerPorId(901)?.stock)
@@ -125,7 +127,7 @@ class IntegracionRemotaRoomTest {
         val items = seleccionar()
         pedidosApi.error = HttpException(Response.error<Unit>(409, "{}".toResponseBody()))
         try { compras.confirmar("7", items, entrega); fail("Debe rechazar el pedido") }
-        catch (_: IllegalStateException) { }
+        catch (_: HttpException) { }
         assertEquals(2, carrito.observar("7").first().single().cantidad)
         val remoto = with(PedidoRemoteRepository(pedidosApi)) { pedidosApi.pedido.aPedido() }
         assertNull(extras.completarPedido(remoto).entrega)

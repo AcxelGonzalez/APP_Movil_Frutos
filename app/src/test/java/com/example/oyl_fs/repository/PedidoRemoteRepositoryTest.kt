@@ -19,11 +19,12 @@ class PedidoRemoteRepositoryTest {
         var pedido = PedidoDto(12, 7, "2026-11-21T12:30:00.123456", "PENDIENTE_VALIDACION", 2000,
             listOf(DetallePedidoDto(3, "Almendras", 1000, 2, 2000)))
         var cambioId: Long? = null
-        override suspend fun crear(pedido: CrearPedidoRequest): PedidoDto {
+        override suspend fun crear(clave: String, pedido: CrearPedidoRequest): SolicitudCompraDto {
             envios++; solicitud = pedido
             error?.let { throw it }
-            return this.pedido
+            return SolicitudCompraDto("COMPLETADA", null, this.pedido)
         }
+        override suspend fun consultarSolicitud(clave: String) = SolicitudCompraDto("COMPLETADA", null, pedido)
         override suspend fun listar() = listOf(pedido)
         override suspend fun listarPorUsuario(usuarioId: Long) = listOf(pedido)
         override suspend fun obtener(id: Long) = pedido
@@ -38,10 +39,10 @@ class PedidoRemoteRepositoryTest {
     @Test fun crearEnviaIdentidadYCantidadesYElServidorDevuelveElNumero() = runBlocking {
         val api = Api()
         val repo = PedidoRemoteRepository(api)
-        val resultado = repo.crearPedido(7, listOf(item)) as ResultadoPedido.Exito
-        assertEquals(CrearPedidoRequest(7, listOf(ItemPedidoRequest(3, 2))), api.solicitud)
+        val resultado = repo.crearPedido(7, listOf(item), "ef074633-20ac-4b27-b54c-3b73a095ed66") as ResultadoPedido.Exito
+        assertEquals(CrearPedidoRequest(7, listOf(ItemPedidoRequest(3, 2, 1000))), api.solicitud)
         val json = Gson().toJson(api.solicitud)
-        assertFalse(json.contains("precio"))
+        assertTrue(json.contains("precioEsperado"))
         assertFalse(json.contains("total"))
         val convertido = with(repo) { resultado.pedido.aPedido() }
         assertEquals("PED-012", convertido.id)
@@ -53,17 +54,17 @@ class PedidoRemoteRepositoryTest {
 
     @Test fun rechazaCarritoVacioIdentidadesLocalesYCantidadesInvalidasSinEnviar() = runBlocking {
         val api = Api(); val repo = PedidoRemoteRepository(api)
-        assertTrue(repo.crearPedido(7, emptyList()) is ResultadoPedido.Error)
-        assertTrue(repo.crearPedido(0, listOf(item)) is ResultadoPedido.Error)
-        assertTrue(repo.crearPedido(7, listOf(item.copy(productoId = "local"))) is ResultadoPedido.Error)
-        assertTrue(repo.crearPedido(7, listOf(item.copy(productoId = "-1"))) is ResultadoPedido.Error)
-        assertTrue(repo.crearPedido(7, listOf(item.copy(cantidad = 0))) is ResultadoPedido.Error)
+        assertTrue(repo.crearPedido(7, emptyList(), "ef074633-20ac-4b27-b54c-3b73a095ed66") is ResultadoPedido.Error)
+        assertTrue(repo.crearPedido(0, listOf(item), "ef074633-20ac-4b27-b54c-3b73a095ed66") is ResultadoPedido.Error)
+        assertTrue(repo.crearPedido(7, listOf(item.copy(productoId = "local")), "ef074633-20ac-4b27-b54c-3b73a095ed66") is ResultadoPedido.Error)
+        assertTrue(repo.crearPedido(7, listOf(item.copy(productoId = "-1")), "ef074633-20ac-4b27-b54c-3b73a095ed66") is ResultadoPedido.Error)
+        assertTrue(repo.crearPedido(7, listOf(item.copy(cantidad = 0)), "ef074633-20ac-4b27-b54c-3b73a095ed66") is ResultadoPedido.Error)
         assertEquals(0, api.envios)
     }
 
     @Test fun respuestaPerdidaNoReintentaElPostYAdvierteRevisarPedidos() = runBlocking {
         val api = Api().apply { error = IOException("sin respuesta") }
-        val resultado = PedidoRemoteRepository(api).crearPedido(7, listOf(item)) as ResultadoPedido.Error
+        val resultado = PedidoRemoteRepository(api).crearPedido(7, listOf(item), "ef074633-20ac-4b27-b54c-3b73a095ed66") as ResultadoPedido.Error
         assertTrue(resultado.mensaje.contains("Revisa Mis pedidos"))
         assertEquals(1, api.envios)
     }
@@ -86,7 +87,7 @@ class PedidoRemoteRepositoryTest {
     @Test fun cancelacionDeCorrutinaNoSeConvierteEnErrorDeNegocio() = runBlocking {
         val api = Api().apply { error = CancellationException("cancelada") }
         try {
-            PedidoRemoteRepository(api).crearPedido(7, listOf(item))
+            PedidoRemoteRepository(api).crearPedido(7, listOf(item), "ef074633-20ac-4b27-b54c-3b73a095ed66")
             fail("Debe propagar la cancelación")
         } catch (_: CancellationException) { }
     }

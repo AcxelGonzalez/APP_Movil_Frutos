@@ -14,7 +14,7 @@ import com.example.oyl_fs.screens.ProductosDatos
 /**
  * Base de datos local OYL Frutos Secos.
  *
- * Versión 6:
+ * Versión 7 (añade marcadores de compras recuperadas):
  * - productos
  * - pedidos
  * - detalle_pedidos
@@ -29,9 +29,10 @@ import com.example.oyl_fs.screens.ProductosDatos
         DetallePedidoEntity::class,
         UsuarioEntity::class,
         CarritoEntity::class,
-        PuntoRetiroEntity::class
+        PuntoRetiroEntity::class,
+        CompraAplicadaEntity::class
     ],
-    version = 6,
+    version = 7,
     exportSchema = false
 )
 
@@ -40,6 +41,8 @@ abstract class OylDatabase : RoomDatabase() {
     abstract fun productoDao(): ProductoDao
 
     abstract fun puntoRetiroDao(): PuntoRetiroDao
+
+    abstract fun compraAplicadaDao(): CompraAplicadaDao
 
     abstract fun carritoDao(): CarritoDao
 
@@ -85,7 +88,8 @@ abstract class OylDatabase : RoomDatabase() {
                         MIGRATION_2_3,
                         MIGRATION_3_4,
                         MIGRATION_4_5,
-                        MIGRATION_5_6
+                        MIGRATION_5_6,
+                        MIGRATION_6_7
                     )
 
 

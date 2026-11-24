@@ -26,19 +26,22 @@ sealed class ResultadoPedido {
 class PedidoRemoteRepository(private val api: com.example.oyl_fs.network.PedidosApi = RetrofitClient.pedidos) {
 
 
-    // ---------- Crear un pedido desde el carrito ----------
-    suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>): ResultadoPedido {
+    // Transporte de bajo nivel: la clave debe haberse guardado antes en IntentoCompraRepository.
+    // La app utiliza CompraRemotaRepository para conservar el intento y recuperarlo.
+    suspend fun crearPedido(usuarioId: Long, items: List<ItemCarrito>, clavePersistida: String): ResultadoPedido {
         // El backend usa ids numéricos; el carrito guarda el id como texto
         if (usuarioId <= 0 || items.isEmpty() || items.any { it.cantidad <= 0 }) return ResultadoPedido.Error("Carrito inválido")
         val itemsRequest = items.map {
             val id = it.productoId.toLongOrNull()
                 ?: return ResultadoPedido.Error("El producto \"${it.nombre}\" no tiene un id válido")
             if (id <= 0) return ResultadoPedido.Error("Identificador de producto inválido")
-            ItemPedidoRequest(productoId = id, cantidad = it.cantidad)
+            ItemPedidoRequest(productoId = id, cantidad = it.cantidad, precioEsperado = it.precio)
         }
 
         return try {
-            val pedido = api.crear(CrearPedidoRequest(usuarioId, itemsRequest))
+            val respuesta = api.crear(clavePersistida, CrearPedidoRequest(usuarioId, itemsRequest))
+            if (respuesta.estado != "COMPLETADA") return ResultadoPedido.Error(respuesta.mensaje ?: "La compra sigue en revisión. Consulta el intento guardado.")
+            val pedido = requireNotNull(respuesta.pedido) { "Comprobante no disponible; conserva la clave original" }
             require(pedido.usuarioId == usuarioId && pedido.id > 0) { "El servidor respondió con un pedido inesperado. Revisa Mis pedidos antes de volver a comprar." }
             ResultadoPedido.Exito(pedido)
         } catch (e: CancellationException) {

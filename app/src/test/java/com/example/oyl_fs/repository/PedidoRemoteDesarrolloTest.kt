@@ -27,9 +27,9 @@ class PedidoRemoteDesarrolloTest {
     fun elCarritoSeConvierteEnLaSolicitudQueEsperaElBackend() = runBlocking {
         val repo = PedidoRemoteRepository(api)
         val enviado = slot<CrearPedidoRequest>()
-        coEvery { api.crear(capture(enviado)) } returns com.example.oyl_fs.network.PedidoDto(21, 7, "2026-11-23T12:00:00", "PENDIENTE_VALIDACION", 13980, emptyList())
+        coEvery { api.crear(any(), capture(enviado)) } returns com.example.oyl_fs.network.SolicitudCompraDto("COMPLETADA", null, com.example.oyl_fs.network.PedidoDto(21, 7, "2026-11-23T12:00:00", "PENDIENTE_VALIDACION", 13980, emptyList()))
 
-        val resultado = repo.crearPedido(7L, listOf(item("3", 2)))
+        val resultado = repo.crearPedido(7L, listOf(item("3", 2)), "ef074633-20ac-4b27-b54c-3b73a095ed66")
 
         assertTrue(resultado is ResultadoPedido.Exito)
         assertEquals(7L, enviado.captured.usuarioId)
@@ -41,19 +41,19 @@ class PedidoRemoteDesarrolloTest {
     fun unIdDeProductoNoNumericoSeRechazaSinLlamarAlBackend() = runBlocking {
         val repo = PedidoRemoteRepository(api)
 
-        val resultado = repo.crearPedido(7L, listOf(item("OYL001")))
+        val resultado = repo.crearPedido(7L, listOf(item("OYL001")), "ef074633-20ac-4b27-b54c-3b73a095ed66")
 
         assertTrue(resultado is ResultadoPedido.Error)
         assertTrue((resultado as ResultadoPedido.Error).mensaje.contains("Almendras"))
-        coVerify(exactly = 0) { api.crear(any()) }
+        coVerify(exactly = 0) { api.crear(any(), any()) }
     }
 
     @Test
     fun sinConexionDevuelveUnMensajeLegibleParaElUsuario() = runBlocking {
         val repo = PedidoRemoteRepository(api)
-        coEvery { api.crear(any()) } throws UnknownHostException("sin red")
+        coEvery { api.crear(any(), any()) } throws UnknownHostException("sin red")
 
-        val resultado = repo.crearPedido(7L, listOf(item("3")))
+        val resultado = repo.crearPedido(7L, listOf(item("3")), "ef074633-20ac-4b27-b54c-3b73a095ed66")
 
         assertTrue(resultado is ResultadoPedido.Error)
         assertTrue((resultado as ResultadoPedido.Error).mensaje.contains("Revisa Mis pedidos"))
