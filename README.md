@@ -879,6 +879,9 @@ Antes de integrar: revisar el estado, hacer `fetch` y comparar. No se usa `push`
 El avance se gestionó en [este tablero](https://trello.com/b/CZow21QV/proyecto-app), con
 columnas por etapa y tarjetas por funcionalidad y responsable.
 
+![Evidencia](entrega/evidencia_trello.png)
+
+
 ---
 
 ## 15. Alcance y límites
