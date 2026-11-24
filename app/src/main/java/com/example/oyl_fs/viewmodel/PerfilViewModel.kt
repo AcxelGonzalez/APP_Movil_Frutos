@@ -5,6 +5,12 @@ import com.example.oyl_fs.repository.SesionRemotaRepository
 import com.example.oyl_fs.network.ActualizarPerfilRequest
 import com.example.oyl_fs.network.UsuarioDto
 import com.example.oyl_fs.network.mensajeApi
+import android.net.Uri
+import androidx.lifecycle.viewModelScope
+import com.example.oyl_fs.util.ArchivosAvatar
+import com.example.oyl_fs.util.AvatarInvalidoException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.launch
 import android.app.Application
 import android.content.Context
 import android.content.SharedPreferences
@@ -24,15 +30,18 @@ class PerfilViewModel @JvmOverloads constructor(
     application: Application,
     private val usuarios: UsuarioRoomRepository = UsuarioRoomRepository(application),
     private val preferencias: SharedPreferences = application.getSharedPreferences("perfiles_oyl", Context.MODE_PRIVATE),
-    private val complementos: DatosLocalesRemotosRepository = DatosLocalesRemotosRepository(application)
+    private val complementos: DatosLocalesRemotosRepository = DatosLocalesRemotosRepository(application),
+    private val archivosAvatar: ArchivosAvatar = ArchivosAvatar(application)
 ) : AndroidViewModel(application) {
     // Las cuentas demo conservan sus preferencias; los clientes usan Room.
     private var remoto = false
     private var generacionPerfil = 0L
+    private var revisionAvatar = 0L
 
     suspend fun activarRemoto(usuario: UsuarioDto) {
         remoto = true
         val generacion = ++generacionPerfil
+        limpiarAvisosAvatar()
         _perfiles.value = emptyList()
         val perfil = complementos.perfil(usuario)
         if (generacion != generacionPerfil) return
@@ -51,6 +60,105 @@ class PerfilViewModel @JvmOverloads constructor(
 
     private val _errores = MutableStateFlow(ErroresPerfil())
     val errores = _errores.asStateFlow()
+
+    private val _errorAvatar = MutableStateFlow<String?>(null)
+    val errorAvatar = _errorAvatar.asStateFlow()
+    private val _mensajeAvatar = MutableStateFlow<String?>(null)
+    val mensajeAvatar = _mensajeAvatar.asStateFlow()
+
+    private fun limpiarAvisosAvatar() { _errorAvatar.value = null; _mensajeAvatar.value = null }
+    private fun perfilActivo(id: String, generacion: Long) =
+        generacionPerfil == generacion && _perfiles.value.any { it.id == id }
+    private fun claveAvatar(id: String) = if (remoto) "remoto:$id" else "local:$id"
+    private fun mostrarAvatar(id: String, archivo: String?) {
+        _perfiles.value = _perfiles.value.map { if (it.id == id) it.copy(avatarArchivo = archivo) else it }
+    }
+
+    fun cargarAvatar(usuarioId: String) {
+        if (_guardando.value || _perfiles.value.none { it.id == usuarioId }) return
+        val generacion = generacionPerfil
+        val revision = ++revisionAvatar
+        val clave = claveAvatar(usuarioId)
+        viewModelScope.launch {
+            try {
+                val archivo = complementos.obtenerAvatar(clave)
+                if (perfilActivo(usuarioId, generacion) && revision == revisionAvatar) mostrarAvatar(usuarioId, archivo)
+            } catch (e: CancellationException) { throw e
+            } catch (_: Exception) {
+                if (perfilActivo(usuarioId, generacion) && revision == revisionAvatar) {
+                    _errorAvatar.value = "No se pudo recuperar el avatar guardado. Intenta nuevamente."
+                }
+            }
+        }
+    }
+
+    // Captura la cuenta antes de abrir la galería; un resultado tardío no pasa a otra sesión.
+    fun prepararSeleccionAvatar(usuarioId: String): Long? {
+        if (_guardando.value || _perfiles.value.none { it.id == usuarioId }) return null
+        limpiarAvisosAvatar()
+        return generacionPerfil
+    }
+
+    fun errorSeleccionAvatar(usuarioId: String, generacion: Long) {
+        if (perfilActivo(usuarioId, generacion)) _errorAvatar.value = "No se pudo abrir la galería. Intenta nuevamente."
+    }
+
+    fun cambiarAvatar(usuarioId: String, generacion: Long, origen: Uri) {
+        if (_guardando.value || !perfilActivo(usuarioId, generacion)) return
+        _guardando.value = true
+        limpiarAvisosAvatar()
+        ++revisionAvatar
+        val clave = claveAvatar(usuarioId)
+        // Conocer el nombre antes del IO permite limpiarlo incluso si se cancela el retorno.
+        val nuevo = archivosAvatar.nuevoNombre()
+        viewModelScope.launch {
+            var referenciado = false
+            try {
+                archivosAvatar.importar(origen, nuevo)
+                if (!perfilActivo(usuarioId, generacion)) return@launch
+                withContext(NonCancellable) {
+                    val anterior = complementos.reemplazarAvatar(clave, nuevo)
+                    referenciado = true
+                    archivosAvatar.eliminar(anterior)
+                }
+                if (perfilActivo(usuarioId, generacion)) {
+                    mostrarAvatar(usuarioId, nuevo)
+                    _mensajeAvatar.value = "Avatar actualizado en este dispositivo."
+                }
+            } catch (e: CancellationException) { throw e
+            } catch (e: Exception) {
+                if (perfilActivo(usuarioId, generacion)) _errorAvatar.value =
+                    if (e is AvatarInvalidoException) e.message else "No se pudo guardar el avatar. Tu imagen anterior se conserva."
+            } finally {
+                withContext(NonCancellable) { if (!referenciado) archivosAvatar.eliminar(nuevo) }
+                _guardando.value = false
+            }
+        }
+    }
+
+    fun quitarAvatar(usuarioId: String) {
+        if (_guardando.value || _perfiles.value.none { it.id == usuarioId }) return
+        val generacion = generacionPerfil
+        val clave = claveAvatar(usuarioId)
+        ++revisionAvatar
+        _guardando.value = true
+        limpiarAvisosAvatar()
+        viewModelScope.launch {
+            try {
+                withContext(NonCancellable) {
+                    val anterior = complementos.reemplazarAvatar(clave, null)
+                    archivosAvatar.eliminar(anterior)
+                }
+                if (perfilActivo(usuarioId, generacion)) {
+                    mostrarAvatar(usuarioId, null)
+                    _mensajeAvatar.value = "Avatar quitado."
+                }
+            } catch (e: CancellationException) { throw e
+            } catch (_: Exception) {
+                if (perfilActivo(usuarioId, generacion)) _errorAvatar.value = "No se pudo quitar el avatar. Intenta nuevamente."
+            } finally { _guardando.value = false }
+        }
+    }
 
     fun limpiarError() { _error.value = null; _errores.value = ErroresPerfil() }
 
@@ -96,7 +204,7 @@ class PerfilViewModel @JvmOverloads constructor(
                 }
                 val guardadoLocal = complementos.guardarPerfil(actualizado, guardado.rut, guardado.apellido)
                 if (generacion != generacionPerfil) return false
-                _perfiles.value = listOf(guardadoLocal)
+                _perfiles.value = listOf(guardadoLocal.copy(avatarArchivo = _perfiles.value.firstOrNull { it.id == perfil.id }?.avatarArchivo))
                 limpiarError()
                 return true
             }
@@ -144,6 +252,9 @@ class PerfilViewModel @JvmOverloads constructor(
      */
     suspend fun activarClienteRegistrado(usuario: UsuarioEntity) {
         if (usuario.id.isBlank()) return
+        remoto = false
+        generacionPerfil++
+        limpiarAvisosAvatar()
         var actual = usuario
         // Se migra una sola vez. El marcador vive en la misma cuenta de Room,
         // para no volver a sobrescribirla aunque fallen las preferencias antiguas.
@@ -178,6 +289,7 @@ class PerfilViewModel @JvmOverloads constructor(
      */
     fun limpiarSesionRegistrada() {
         generacionPerfil++
+        limpiarAvisosAvatar()
 
         if (remoto) {
             _perfiles.value = emptyList()

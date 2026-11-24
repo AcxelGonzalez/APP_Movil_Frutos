@@ -3,6 +3,7 @@ package com.example.oyl_fs.repository
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.room.withTransaction
+import com.example.oyl_fs.data.local.AvatarPerfilEntity
 import com.example.oyl_fs.data.local.PerfilRemotoDatabase
 import com.example.oyl_fs.data.local.PerfilRemotoEntity
 import com.example.oyl_fs.model.EntregaPedido
@@ -45,6 +46,17 @@ class DatosLocalesRemotosRepository(
         val actualizado = obtenerOMigrar(usuario.id).conDatosRemotos(usuario).copy(rut = rut, apellido = apellido)
         perfiles.perfilDao().guardar(actualizado)
         actualizado.aPerfil()
+    }
+
+    suspend fun obtenerAvatar(clave: String): String? = perfiles.avatarDao().obtener(clave)
+
+    /** Devuelve la referencia anterior solo después de confirmar la nueva en SQLite. */
+    suspend fun reemplazarAvatar(clave: String, archivo: String?): String? = perfiles.withTransaction {
+        require(clave.startsWith("remoto:") || clave.startsWith("local:")) { "Identidad de avatar inválida" }
+        val anterior = perfiles.avatarDao().obtener(clave)
+        if (archivo == null) perfiles.avatarDao().quitar(clave)
+        else perfiles.avatarDao().guardar(AvatarPerfilEntity(clave, archivo))
+        anterior
     }
 
     private fun validarIdentidad(usuario: UsuarioDto) {

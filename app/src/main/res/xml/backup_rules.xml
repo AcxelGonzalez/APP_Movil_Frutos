@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <full-backup-content>
+    <exclude domain="file" path="avatares_perfil/" />
     <exclude domain="database" path="oyl_perfiles_remotos.db" />
     <exclude domain="database" path="oyl_perfiles_remotos.db-wal" />
     <exclude domain="database" path="oyl_perfiles_remotos.db-shm" />

@@ -5,7 +5,6 @@ import com.example.oyl_fs.ui.theme.EncabezadoOYL
 import com.example.oyl_fs.ui.theme.MensajeErrorOYL
 
 import androidx.compose.material.icons.filled.ArrowBack
-import androidx.compose.material.icons.filled.PersonOutline
 import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Logout
@@ -21,6 +20,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.core.tween
 
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -59,7 +60,21 @@ fun PerfilUsuarioScreen(
     val perfiles by viewModel.perfiles.collectAsState()
     val errores by viewModel.errores.collectAsState()
     val guardando by viewModel.guardando.collectAsState()
+    val errorAvatar by viewModel.errorAvatar.collectAsState()
+    val mensajeAvatar by viewModel.mensajeAvatar.collectAsState()
     val perfil = perfiles.find { it.id == usuarioId } ?: return
+    var propietarioPendiente by rememberSaveable { mutableStateOf<String?>(null) }
+    var generacionPendiente by rememberSaveable { mutableStateOf<Long?>(null) }
+    val seleccionarAvatar = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        val propietario = propietarioPendiente
+        val generacion = generacionPendiente
+        propietarioPendiente = null
+        generacionPendiente = null
+        if (uri != null && propietario != null && generacion != null) {
+            viewModel.cambiarAvatar(propietario, generacion, uri)
+        }
+    }
+    LaunchedEffect(usuarioId) { viewModel.cargarAvatar(usuarioId) }
     var pantalla by rememberSaveable(usuarioId) { mutableStateOf("perfil") }
 
     fun volver() {
@@ -81,7 +96,26 @@ fun PerfilUsuarioScreen(
             viewModel.limpiarError()
             pantalla = "editar"
         }
-        else -> PerfilScreen(perfil, onVolver, { pantalla = "datos" }, onLogout)
+        else -> PerfilScreen(
+            perfil, { if (!guardando) onVolver() }, { pantalla = "datos" }, onLogout,
+            guardandoAvatar = guardando,
+            errorAvatar = errorAvatar,
+            mensajeAvatar = mensajeAvatar,
+            onCambiarAvatar = {
+                val generacion = viewModel.prepararSeleccionAvatar(usuarioId)
+                if (generacion != null) {
+                    propietarioPendiente = usuarioId
+                    generacionPendiente = generacion
+                    try { seleccionarAvatar.launch(arrayOf("image/*")) }
+                    catch (_: Exception) {
+                        propietarioPendiente = null
+                        generacionPendiente = null
+                        viewModel.errorSeleccionAvatar(usuarioId, generacion)
+                    }
+                }
+            },
+            onQuitarAvatar = { viewModel.quitarAvatar(usuarioId) }
+        )
     }
 }
 
@@ -90,7 +124,12 @@ fun PerfilScreen(
     perfil: PerfilUsuario,
     onVolver: () -> Unit,
     onDatosPersonales: () -> Unit,
-    onLogout: () -> Unit
+    onLogout: () -> Unit,
+    onCambiarAvatar: (() -> Unit)? = null,
+    onQuitarAvatar: (() -> Unit)? = null,
+    guardandoAvatar: Boolean = false,
+    errorAvatar: String? = null,
+    mensajeAvatar: String? = null
 ) {
     Column(
         Modifier.fillMaxSize().background(FondoPerfil)
@@ -104,10 +143,19 @@ fun PerfilScreen(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Surface(color = FondoPerfil, shape = CircleShape, modifier = Modifier.size(88.dp)) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(Icons.Default.PersonOutline, null, tint = OscuroPerfil, modifier = Modifier.size(44.dp))
-                    }
+                    ImagenAvatarPerfil(perfil)
                 }
+                if (onCambiarAvatar != null) {
+                    OutlinedButton(onClick = onCambiarAvatar, enabled = !guardandoAvatar) { Text("Cambiar avatar") }
+                    if (perfil.avatarArchivo != null && onQuitarAvatar != null) {
+                        TextButton(onClick = onQuitarAvatar, enabled = !guardandoAvatar) { Text("Quitar avatar") }
+                    }
+                    Text("Elige una imagen de demostración. Se guarda solo en este dispositivo.",
+                        color = CafePerfil, fontSize = 12.sp)
+                }
+                if (guardandoAvatar) LinearProgressIndicator(Modifier.fillMaxWidth())
+                errorAvatar?.let { MensajeErrorOYL(it) }
+                mensajeAvatar?.let { Text(it, color = Color(0xFF1B5E20)) }
                 Text("${perfil.nombre} ${perfil.apellido}".trim(), color = OscuroPerfil, fontSize = 24.sp, fontWeight = FontWeight.Bold)
                 Text(perfil.correo, color = CafePerfil, fontSize = 14.sp,
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center)
@@ -119,7 +167,8 @@ fun PerfilScreen(
             }
         }
         Button(
-            onClick = onDatosPersonales, modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
+            onClick = onDatosPersonales, enabled = !guardandoAvatar,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 56.dp),
             shape = RoundedCornerShape(16.dp),
             colors = ButtonDefaults.buttonColors(containerColor = OscuroPerfil)
         ) {
@@ -128,7 +177,8 @@ fun PerfilScreen(
             Text("Datos personales", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             Icon(Icons.Default.ChevronRight, null)
         }
-        OutlinedButton(onClick = onLogout, modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+        OutlinedButton(onClick = onLogout, enabled = !guardandoAvatar,
+            modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
             border = BorderStroke(1.dp, Color(0xFFD7BEA3)), shape = RoundedCornerShape(18.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroPerfil)) {
             Icon(Icons.Default.Logout, null, Modifier.size(20.dp))

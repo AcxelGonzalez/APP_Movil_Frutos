@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <data-extraction-rules>
     <cloud-backup>
+        <exclude domain="file" path="avatares_perfil/" />
         <exclude domain="database" path="oyl_perfiles_remotos.db" />
         <exclude domain="database" path="oyl_perfiles_remotos.db-wal" />
         <exclude domain="database" path="oyl_perfiles_remotos.db-shm" />
@@ -9,6 +10,7 @@
         <exclude domain="sharedpref" path="sesion_remota_oyl.xml" />
     </cloud-backup>
     <device-transfer>
+        <exclude domain="file" path="avatares_perfil/" />
         <exclude domain="database" path="oyl_perfiles_remotos.db-journal" />
         <exclude domain="database" path="oyl_perfiles_remotos.db" />
         <exclude domain="database" path="oyl_perfiles_remotos.db-wal" />
