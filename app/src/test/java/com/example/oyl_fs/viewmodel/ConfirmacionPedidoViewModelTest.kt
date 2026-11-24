@@ -32,6 +32,7 @@ class ConfirmacionPedidoViewModelTest {
 
     @Before fun preparar() {
         Dispatchers.setMain(dispatcher)
+        coEvery { remoto.pendiente(any()) } returns null
         vm = nuevo()
     }
 
@@ -47,7 +48,7 @@ class ConfirmacionPedidoViewModelTest {
         clearAllMocks()
     }
 
-    private fun iniciar() { vm.iniciar("7") }
+    private fun iniciar() { vm.iniciar("7"); dispatcher.scheduler.runCurrent() }
     private fun confirmar() { vm.confirmar("7", items, entrega) }
 
     @Test fun estadoInicialSinComprobanteYConstructorDeAndroidDisponible() {
@@ -114,6 +115,7 @@ class ConfirmacionPedidoViewModelTest {
         assertEquals("7", vm.estado.value.usuarioId)
         assertEquals(pedido, vm.estado.value.pedido)
         vm.iniciar("8")
+        runCurrent()
         assertEquals(ConfirmacionPedidoUiState("8"), vm.estado.value)
     }
 
@@ -150,8 +152,10 @@ class ConfirmacionPedidoViewModelTest {
         vm.iniciar("7")
         assertEquals(pedido, vm.estado.value.pedido)
         vm.iniciar("8")
+        runCurrent()
         assertEquals(ConfirmacionPedidoUiState("8"), vm.estado.value)
         vm.iniciar("")
+        runCurrent()
         assertEquals(ConfirmacionPedidoUiState(), vm.estado.value)
     }
 
@@ -161,6 +165,7 @@ class ConfirmacionPedidoViewModelTest {
         confirmar()
         runCurrent()
         vm.limpiar()
+        runCurrent()
         assertEquals(ConfirmacionPedidoUiState("7"), vm.estado.value)
         coEvery { remoto.confirmar(any(), any(), any()) } returns CompraRemotaRepository.Confirmada(pedido.copy(id = "PED-046"))
         confirmar()
@@ -241,6 +246,7 @@ class ConfirmacionPedidoViewModelTest {
         confirmar()
         runCurrent()
         vm.iniciar("8")
+        runCurrent()
         assertEquals(ConfirmacionPedidoUiState("8"), vm.estado.value)
         coVerify(exactly = 1) { remoto.confirmar(any(), any(), any()) }
     }

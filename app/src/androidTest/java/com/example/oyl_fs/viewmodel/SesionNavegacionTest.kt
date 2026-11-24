@@ -6,6 +6,8 @@ import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.test.performTextInput
 import androidx.test.core.app.ActivityScenario
 import androidx.test.core.app.ApplicationProvider
 import com.example.oyl_fs.MainActivity
@@ -24,12 +26,17 @@ class SesionNavegacionTest {
 
     @Test fun clienteConservaSesionAlRecrearYReabrirYElLogoutImpideRestaurarla() {
         val contexto = ApplicationProvider.getApplicationContext<Context>()
-        val preferencias = contexto.getSharedPreferences("sesion_remota_oyl", Context.MODE_PRIVATE)
-        val anterior = preferencias.getString("usuario", null)
+        val sesionProtegida = com.example.oyl_fs.util.SesionDispositivoProtegida(contexto)
         var escenario: ActivityScenario<MainActivity>? = null
         try {
-            check(preferencias.edit().putString("usuario", com.google.gson.Gson().toJson(com.example.oyl_fs.network.UsuarioDto(987654, "Cliente prueba", "clienteprueba", "cliente@example.test", "912345678", rol = "CLIENTE"))).commit())
             escenario = ActivityScenario.launch(MainActivity::class.java)
+            esperarTexto("Comenzar")
+            compose.onNodeWithText("Comenzar").performClick()
+            esperarTexto("Iniciar sesión")
+            // Login de la cuenta académica existente; no crea cuentas ni pedidos.
+            compose.onNodeWithText("Usuario").performScrollTo().performTextInput("cliente")
+            compose.onNodeWithText("Contraseña").performScrollTo().performTextInput("cliente")
+            compose.onNodeWithText("Iniciar sesión").performScrollTo().performClick()
             esperarTexto("Catálogo")
             escenario.recreate()
             esperarTexto("Catálogo")
@@ -47,9 +54,7 @@ class SesionNavegacionTest {
         } finally {
             escenario?.close()
             // Restaurar la sesión que tenía el dispositivo antes de la prueba.
-            val editor = preferencias.edit()
-            if (anterior == null) editor.remove("usuario") else editor.putString("usuario", anterior)
-            check(editor.commit())
+            sesionProtegida.close()
         }
     }
 }

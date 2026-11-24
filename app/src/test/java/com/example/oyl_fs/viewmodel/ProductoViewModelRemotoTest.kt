@@ -119,7 +119,7 @@ class ProductoViewModelRemotoTest {
         coEvery { remoto.listar() } returns listOf(almendras)
         val vm = viewModel()
 
-        coEvery { remoto.eliminar(1) } returns true
+        coEvery { remoto.eliminarRegistrado(1) } returns ProductoRemoteRepository.EliminacionRegistrada(true, true)
         coEvery { remoto.listar() } returns emptyList()
 
         val eliminado = vm.eliminarProductoPersistente(1)
@@ -129,16 +129,18 @@ class ProductoViewModelRemotoTest {
     }
 
     @Test
-    fun eliminarUnProductoQueYaNoExisteAvisaAlUsuario() = runBlocking {
+    fun eliminarUnProductoAusenteConfirmaElRetiroYQuitaLaFichaObsoleta() = runBlocking {
         coEvery { remoto.listar() } returns listOf(almendras)
         val vm = viewModel()
 
-        coEvery { remoto.eliminar(99) } returns false
+        coEvery { remoto.eliminarRegistrado(1) } returns ProductoRemoteRepository.EliminacionRegistrada(false, true)
+        coEvery { remoto.listar() } returns emptyList()
 
-        val eliminado = vm.eliminarProductoPersistente(99)
+        val eliminado = vm.eliminarProductoPersistente(1)
 
-        assertFalse(eliminado)
-        assertEquals("El producto ya no existe", vm.error.value)
+        assertTrue(eliminado)
+        assertTrue(vm.productos.value.isEmpty())
+        assertNull(vm.error.value)
     }
 
     private fun producto(id: Int, nombre: String, codigo: String) = ProductoInfo(

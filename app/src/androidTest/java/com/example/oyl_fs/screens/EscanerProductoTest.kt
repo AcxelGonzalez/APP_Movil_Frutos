@@ -51,7 +51,7 @@ class EscanerProductoTest {
         compose.onNodeWithText("Escanear producto").assertExists()
     }
 
-    @Test fun administradorEscaneaProductoInactivoYAjustaSuStock() {
+    @Test fun administradorEscaneaProductoInactivoYAbreMovimientoSinEditarStockDirectamente() {
         val vm = productos
         val original = vm.obtenerProducto(1)!!
         assertTrue(vm.editarProducto(original.copy(disponible = false)))
@@ -67,11 +67,13 @@ class EscanerProductoTest {
         compose.onNodeWithText("Escanear código QR").performClick()
         compose.onNodeWithText("Producto inactivo").assertIsDisplayed()
         compose.onNodeWithText("Ajustar inventario").performScrollTo().performClick()
-        compose.onNodeWithText("Editar producto").assertIsDisplayed()
-        compose.onNode(hasSetTextAction() and hasText(original.stock.toString()))
-            .performScrollTo().performTextReplacement("17")
-        compose.onNodeWithText("Guardar cambios").performScrollTo().performClick()
-        compose.waitUntil(5_000) { vm.obtenerProducto(1)?.stock == 17 }
+        compose.onNodeWithText("Movimiento de inventario").assertIsDisplayed()
+        compose.onNodeWithText("Cantidad de unidades").performScrollTo().performTextInput("17")
+        compose.onNodeWithText("Revisar movimiento").performScrollTo().performClick()
+        compose.onNodeWithText("Confirmar movimiento").performClick()
+        compose.onNodeWithText("Los movimientos de inventario requieren conexión con el servidor.").assertExists()
+        assertEquals(original.stock, vm.obtenerProducto(1)?.stock)
+        compose.onNodeWithContentDescription("Volver").performScrollTo().performClick()
         compose.onNodeWithText("Detalle del producto").assertExists()
         compose.onNodeWithContentDescription("Volver").performScrollTo().performClick()
         compose.onNodeWithText("Escanear código QR").assertIsDisplayed()

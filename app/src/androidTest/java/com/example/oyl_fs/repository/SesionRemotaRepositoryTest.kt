@@ -16,7 +16,7 @@ import okhttp3.ResponseBody.Companion.toResponseBody
 class SesionRemotaRepositoryTest {
     private val contexto = ApplicationProvider.getApplicationContext<Context>()
     private val preferencias = contexto.getSharedPreferences("sesion_remota_oyl", Context.MODE_PRIVATE)
-    private var anterior: Map<String, *> = emptyMap<String, Any>()
+    private lateinit var sesionProtegida: com.example.oyl_fs.util.SesionDispositivoProtegida
     private val repo = SesionRemotaRepository
     private class Api : UsuariosApi {
         val cliente = UsuarioDto(7, "Cliente prueba", "prueba", "prueba@example.test", "912345678", rol = "CLIENTE")
@@ -31,24 +31,10 @@ class SesionRemotaRepositoryTest {
         override suspend fun actualizar(id: Long, request: ActualizarPerfilRequest) = cliente.copy(nombre = request.nombre)
     }
     @Before fun preparar() = runBlocking {
-        anterior = preferencias.all.toMap()
-        repo.configurar(contexto)
-        repo.cerrar()
+        sesionProtegida = com.example.oyl_fs.util.SesionDispositivoProtegida(contexto)
     }
     @After fun limpiar() = runBlocking {
-        val editor = preferencias.edit().clear()
-        anterior.forEach { (clave, valor) ->
-            when (valor) {
-                is String -> editor.putString(clave, valor)
-                is Boolean -> editor.putBoolean(clave, valor)
-                is Int -> editor.putInt(clave, valor)
-                is Long -> editor.putLong(clave, valor)
-                is Float -> editor.putFloat(clave, valor)
-                is Set<*> -> editor.putStringSet(clave, valor.filterIsInstance<String>().toSet())
-            }
-        }
-        check(editor.commit())
-        repo.restaurar()
+        sesionProtegida.close()
         Unit
     }
 

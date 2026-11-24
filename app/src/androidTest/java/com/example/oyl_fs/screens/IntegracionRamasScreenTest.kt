@@ -24,11 +24,9 @@ class IntegracionRamasScreenTest {
     }
 
     @Test fun bienvenidaLoginYRegistroConservanNavegacionYErroresPorCampo() {
-        val preferencias = contexto.getSharedPreferences("sesion_remota_oyl", Context.MODE_PRIVATE)
-        val anterior = preferencias.getString("usuario", null)
+        val sesionProtegida = com.example.oyl_fs.util.SesionDispositivoProtegida(contexto)
         var escenario: ActivityScenario<MainActivity>? = null
         try {
-            check(preferencias.edit().remove("usuario").commit())
             escenario = ActivityScenario.launch(MainActivity::class.java)
             esperar("Comenzar")
             compose.onNodeWithText("Comenzar").performClick()
@@ -46,15 +44,13 @@ class IntegracionRamasScreenTest {
                 "Usa entre 3 y 24 caracteres: letras, números, punto, guion o guion bajo.",
                 "Ingresa tu nombre completo.", "Ingresa un correo electrónico válido.",
                 "Ingresa un RUT válido, por ejemplo 12.345.678-5.", "Ingresa tu teléfono",
-                "La contraseña debe tener entre 8 y 128 caracteres."
+                "La contraseña debe tener al menos 8 caracteres y no puede estar en blanco."
             )) compose.onNodeWithText(mensaje).assertExists()
             compose.onNodeWithContentDescription("Volver").performScrollTo().performClick()
             esperar("Iniciar sesión")
         } finally {
             escenario?.close()
-            val editor = preferencias.edit()
-            if (anterior == null) editor.remove("usuario") else editor.putString("usuario", anterior)
-            check(editor.commit())
+            sesionProtegida.close()
         }
     }
 }
