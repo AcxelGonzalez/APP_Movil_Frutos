@@ -82,7 +82,7 @@ fun PerfilUsuarioScreen(
         viewModel.limpiarError()
         pantalla = when (pantalla) {
             "editar" -> "datos"
-            "datos" -> "perfil"
+            "datos", "permisos" -> "perfil"
             else -> { onVolver(); "perfil" }
         }
     }
@@ -92,6 +92,7 @@ fun PerfilUsuarioScreen(
         "editar" -> EditarPerfilScreen(perfil, errores, { volver() }) { editado ->
             if (viewModel.guardarPerfil(editado)) pantalla = "datos"
         }
+        "permisos" -> PermisosPerfilScreen(onVolver = { volver() })
         "datos" -> DatosPersonalesScreen(perfil, { volver() }) {
             viewModel.limpiarError()
             pantalla = "editar"
@@ -114,7 +115,8 @@ fun PerfilUsuarioScreen(
                     }
                 }
             },
-            onQuitarAvatar = { viewModel.quitarAvatar(usuarioId) }
+            onQuitarAvatar = { viewModel.quitarAvatar(usuarioId) },
+            onPermisos = { if (!guardando) pantalla = "permisos" }
         )
     }
 }
@@ -129,7 +131,8 @@ fun PerfilScreen(
     onQuitarAvatar: (() -> Unit)? = null,
     guardandoAvatar: Boolean = false,
     errorAvatar: String? = null,
-    mensajeAvatar: String? = null
+    mensajeAvatar: String? = null,
+    onPermisos: (() -> Unit)? = null
 ) {
     Column(
         Modifier.fillMaxSize().background(FondoPerfil)
@@ -176,6 +179,14 @@ fun PerfilScreen(
             Spacer(Modifier.width(12.dp))
             Text("Datos personales", Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             Icon(Icons.Default.ChevronRight, null)
+        }
+        if (onPermisos != null) {
+            OutlinedButton(onClick = onPermisos, enabled = !guardandoAvatar,
+                modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
+                shape = RoundedCornerShape(18.dp),
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = OscuroPerfil)) {
+                Text("Permisos del dispositivo")
+            }
         }
         OutlinedButton(onClick = onLogout, enabled = !guardandoAvatar,
             modifier = Modifier.fillMaxWidth().heightIn(min = 54.dp),
