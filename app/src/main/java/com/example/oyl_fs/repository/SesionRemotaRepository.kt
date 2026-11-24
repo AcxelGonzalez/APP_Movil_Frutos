@@ -157,6 +157,9 @@ object SesionRemotaRepository {
     }
 
     suspend fun registrar(solicitud: RegistroRequest, api: UsuariosApi = RetrofitClient.usuarios): Result<UsuarioDto> = try {
+        com.example.oyl_fs.util.ValidacionLongitud.errorNombrePerfil(solicitud.nombre)?.let {
+            throw IllegalArgumentException(it)
+        }
         com.example.oyl_fs.util.ValidacionContrasena.errorRegistro(solicitud.contrasena)?.let {
             throw IllegalArgumentException(it)
         }
@@ -170,6 +173,9 @@ object SesionRemotaRepository {
         val inicio = synchronized(candado) { actual }
             ?: return Result.failure(IllegalStateException("No hay una sesión iniciada"))
         return try {
+            com.example.oyl_fs.util.ValidacionLongitud.errorNombrePerfil(solicitud.nombre)?.let {
+                throw IllegalArgumentException(it)
+            }
             val actualizado = api.actualizar(inicio.usuario.id, solicitud)
             validar(actualizado)
             require(actualizado.id == inicio.usuario.id && actualizado.rol == inicio.usuario.rol) { "Respuesta de usuario inválida" }

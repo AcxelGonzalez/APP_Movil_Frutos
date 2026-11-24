@@ -92,7 +92,7 @@ object ValidacionRegistro {
 
             nombre = if (datos.nombre.isBlank()) {
                 "Ingresa tu nombre completo."
-            } else null,
+            } else com.example.oyl_fs.util.ValidacionLongitud.errorNombrePerfil(datos.nombre),
 
             correo = if (!correoValido) {
                 "Ingresa un correo electrónico válido."

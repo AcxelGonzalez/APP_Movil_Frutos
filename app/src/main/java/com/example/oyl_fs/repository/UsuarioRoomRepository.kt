@@ -135,6 +135,10 @@ class UsuarioRoomRepository(
             )
         }
 
+        com.example.oyl_fs.util.ValidacionLongitud.errorNombrePerfil(nombre)?.let {
+            return ResultadoRegistro.Error(it)
+        }
+
         val patronCorreo = Regex(
             "^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$"
         )

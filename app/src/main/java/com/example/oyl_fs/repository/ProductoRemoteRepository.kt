@@ -74,6 +74,9 @@ class ProductoRemoteRepository(
     }
 
     private suspend fun guardar(producto: ProductoInfo, creando: Boolean): ProductoInfo {
+        com.example.oyl_fs.util.ValidacionLongitud.errorPresentacion(producto.presentacion)?.let {
+            throw IllegalArgumentException(it)
+        }
         val local = producto.imagenUri?.startsWith("content://") == true
         // Preparar antes del HTTP: un archivo inválido nunca crea ni modifica el producto.
         val foto = if (local) prepararFoto(requireNotNull(producto.imagenUri)) else null

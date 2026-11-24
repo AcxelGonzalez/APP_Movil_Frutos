@@ -64,7 +64,7 @@ object ValidacionFormularioProducto {
 
             presentacion = if (datos.presentacion.isBlank()) {
                 "Escribe el peso o la presentación."
-            } else null,
+            } else com.example.oyl_fs.util.ValidacionLongitud.errorPresentacion(datos.presentacion),
 
             descripcion = if (datos.descripcion.length > 500) {
                 "La descripción admite hasta 500 caracteres."
