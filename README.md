@@ -1,6 +1,5 @@
 # OYL Frutos Secos — Aplicación Móvil
 
-> **Sincronización Automatizada de Catálogo e Inventario Multi-Canal**
 > Asignatura **DSY1105 — Desarrollo de Aplicaciones Móviles** · Duoc UC
 > Docente: Cristian Gómez Vega
 
