@@ -1,0 +1,49 @@
+
+package com.example.oyl_fs.util
+
+import android.content.Context
+import com.google.mlkit.vision.barcode.common.Barcode
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
+
+// Permite sustituir la cámara en pruebas sin modificar el flujo de navegación.
+typealias LanzadorQr = (Context, (String) -> Unit, (String) -> Unit) -> Unit
+
+/*
+ * Función para abrir la cámara y escanear códigos QR.
+ */
+fun escanearQr(
+    context: Context,
+    alLeer: (String) -> Unit,
+    alFallar: (String) -> Unit
+) {
+    // Solo nos interesan los códigos QR, no los de barras.
+    val opciones = GmsBarcodeScannerOptions.Builder()
+        .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+        .enableAutoZoom()
+        .build()
+
+    // Abre el escáner de Google.
+    GmsBarcodeScanning.getClient(context, opciones)
+        .startScan()
+        .addOnSuccessListener { codigo ->
+
+            // Obtener el contenido del QR.
+            val texto = codigo.rawValue?.trim()
+
+            // Comprobar que el código tenga contenido.
+            if (texto.isNullOrEmpty()) {
+                alFallar("El código QR está vacío.")
+            } else {
+                alLeer(texto)
+            }
+        }
+        .addOnCanceledListener {
+            alFallar("Escaneo cancelado.")
+        }
+        .addOnFailureListener { error ->
+            alFallar(
+                "No se pudo escanear: ${error.message ?: "Error desconocido"}"
+            )
+        }
+}

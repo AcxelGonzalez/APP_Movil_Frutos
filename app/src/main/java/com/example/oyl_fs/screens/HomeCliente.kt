@@ -1,4 +1,26 @@
+
 package com.example.oyl_fs.screens
+
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.draw.drawBehind
+
+import androidx.compose.animation.core.Animatable
+import kotlinx.coroutines.launch
+
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.material3.Text
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
+
+import androidx.compose.foundation.Image
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.res.painterResource
+import com.example.oyl_fs.R
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.tween
@@ -17,6 +39,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import com.example.oyl_fs.viewmodel.PerfilViewModel
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,299 +50,751 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.oyl_fs.viewmodel.CarritoViewModel
+import com.example.oyl_fs.viewmodel.ProductoViewModel
+import com.example.oyl_fs.viewmodel.HistorialViewModel
+import com.example.oyl_fs.model.EstadoPedido
+import com.example.oyl_fs.model.ProductoInfo
+import com.example.oyl_fs.util.LanzadorQr
+import com.example.oyl_fs.util.escanearQr
 
 private val FondoOYL = Color(0xFFFFF5E7)
 private val PrincipalOYL = Color(0xFF92623D)
 private val SecundarioOYL = Color(0xFF4B2E15)
 
-data class ProductoDestacado(val nombre: String, val precio: Int, val formato: String)
 data class Promo(val titulo: String, val detalle: String)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeCliente(nombre: String = "Cliente", onLogout: () -> Unit) {
+
+fun HomeCliente(
+    nombre: String = "Cliente",
+    clienteId: String,
+    productoViewModel: ProductoViewModel,
+    carritoViewModel: CarritoViewModel,
+    historialViewModel: HistorialViewModel,
+    perfilViewModel: PerfilViewModel,
+    onLogout: () -> Unit,
+    onAbrirHistorial: () -> Unit,
+    onAbrirCarrito: () -> Unit,
+    pestanaSolicitada: Int? = null,
+    onPestanaAtendida: () -> Unit = {},
+    lanzarEscaner: LanzadorQr = ::escanearQr,
+    pestanaSeleccionada: Int? = null,
+    onSeleccionarPestana: ((Int) -> Unit)? = null
+) {
     // Datos de prueba (luego vendrán del ViewModel / SQLite)
     val promos = listOf(
         Promo("20% en nueces", "Solo esta semana"),
         Promo("Mix energético", "Llevando 2 unidades"),
         Promo("Despacho gratis", "Sobre $20.000")
     )
-    val categorias = listOf("Todos", "Frutos secos", "Semillas", "Deshidratados")
-    val destacados = listOf(
-        ProductoDestacado("Almendras", 6990, "500 g"),
-        ProductoDestacado("Nueces", 8490, "1 kg"),
-        ProductoDestacado("Pasas", 2990, "250 g"),
-        ProductoDestacado("Maní tostado", 3490, "500 g")
-    )
 
-    var tab by remember { mutableStateOf(0) }
+    val categorias = listOf("Todos", "Frutos secos", "Semillas", "Deshidratados")
+
+
+// Observamos los productos administrados por el equipo.
+    val productos by productoViewModel.productos.collectAsState()
+
+// Categoría seleccionada por el cliente.
     var categoria by remember { mutableStateOf(0) }
-    var carrito by remember { mutableStateOf(0) }
+
+// Muestra productos activos y con stock disponible.
+    val destacados = productos.filter { producto ->
+        producto.disponible &&
+                producto.stock > 0 &&
+                (categoria == 0 ||
+                        producto.categoria == categorias[categoria])
+    }
+
+// Observa el último pedido del cliente actual.
+// remember evita recrear el Flow en cada recomposición.
+    val ultimoPedido by remember(
+        historialViewModel,
+        clienteId
+    ) {
+        historialViewModel.observarUltimoPedidoCliente(
+            clienteId
+        )
+    }.collectAsState(initial = null)
+
+// Observamos el carrito para actualizar el contador.
+    val estadoCarrito by carritoViewModel.uiState.collectAsState()
+
+// Observamos mensajes de éxito y error.
+    val mensajeCarrito by carritoViewModel.mensaje.collectAsState()
+
+    val snackbarHostState = remember { SnackbarHostState() }
+    val escalaCarrito = remember { Animatable(1f) }
+    val animaciones = rememberCoroutineScope()
+
+
+// Identificamos al cliente en el ViewModel.
+    LaunchedEffect(clienteId) {
+        carritoViewModel.iniciar(clienteId)
+    }
+
+// Mostramos mensajes al agregar productos.
+    LaunchedEffect(mensajeCarrito) {
+        val texto = mensajeCarrito ?: return@LaunchedEffect
+
+        // Latido breve únicamente cuando se agregó correctamente un producto.
+        if (texto.endsWith("agregado al carrito")) {
+            animaciones.launch {
+                escalaCarrito.snapTo(1f)
+                escalaCarrito.animateTo(1.2f, tween(250))
+                escalaCarrito.animateTo(1f, tween(250))
+                escalaCarrito.animateTo(1.14f, tween(220))
+                escalaCarrito.animateTo(1f, tween(220))
+            }
+        }
+        carritoViewModel.mensajeMostrado()
+        snackbarHostState.showSnackbar(texto)
+    }
+
+
+    var tabLocal by rememberSaveable { mutableStateOf(0) }
+    // MainActivity conserva la selección incluso al abrir módulos externos.
+    val tab = pestanaSeleccionada ?: tabLocal
+    fun seleccionarPestana(indice: Int) {
+        if (onSeleccionarPestana != null) onSeleccionarPestana(indice)
+        else tabLocal = indice
+    }
+
+    // El historial puede solicitar una pestaña del mismo menú.
+    LaunchedEffect(pestanaSolicitada) {
+        if (pestanaSolicitada != null && pestanaSolicitada in listOf(0, 1, 2, 4)) {
+            seleccionarPestana(pestanaSolicitada)
+            onPestanaAtendida()
+        }
+    }
+
+
+    // identificar producto
+    var productoDetalleId by rememberSaveable {
+        mutableStateOf<Int?>(null)
+    }
+
+
+    var detalleDesdeEscaner by rememberSaveable { mutableStateOf(false) }
+    fun volverDetalle() {
+        productoDetalleId = null
+        seleccionarPestana(if (detalleDesdeEscaner) 6 else 0)
+        detalleDesdeEscaner = false
+    }
+
     var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { visible = true }
+
+
+    BackHandler(enabled = tab != 0) {
+        if (tab == 5) volverDetalle() else seleccionarPestana(0)
+    }
 
     Scaffold(
         containerColor = FondoOYL,
-        bottomBar = { BarraCliente(tab) { tab = it } }
+        snackbarHost = {
+            SnackbarHost(snackbarHostState)
+        },
+
+        bottomBar = {
+            BarraCliente(tab) { indice ->
+
+                // La pestaña Pedidos tiene índice 3.
+                if (indice == 3) {
+                    onAbrirHistorial()
+                } else {
+                    detalleDesdeEscaner = false
+                    seleccionarPestana(indice)
+                }
+            }
+        }
     ) { padding ->
-        AnimatedVisibility(
-            visible = visible,
-            enter = fadeIn(tween(600)) + slideInVertically { it / 6 }
-        ) {
-            Column(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize()
-                    .verticalScroll(rememberScrollState())
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.spacedBy(18.dp)
+
+        when (tab) {
+            6 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                EscanerScreen(
+                    viewModel = productoViewModel, esAdmin = false,
+                    onVolver = { seleccionarPestana(0)},
+                    onAbrirProducto = { id ->
+                        if (productoViewModel.obtenerProducto(id)?.disponible == true) {
+                            productoDetalleId = id
+                            detalleDesdeEscaner = true
+                            seleccionarPestana(5)
+                        }
+                    },
+                    lanzarEscaner = lanzarEscaner
+                )
+            }
+
+            /*
+             */
+            2 -> {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
+                    MapaScreen(
+                        onVolver = {
+                            seleccionarPestana(0)
+                        }
+                    )
+                }
+            }
+
+            1 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                ProductosCliente(
+                    productoViewModel = productoViewModel,
+                    carritoViewModel = carritoViewModel,
+                    onVolver = { seleccionarPestana(0) },
+                    onAbrirCarrito = onAbrirCarrito
+                )
+            }
+
+            // ---------- DETALLE DEL PRODUCTO ----------
+            5 -> {
+                val seleccionado = productos.find {
+                    it.id == productoDetalleId && it.disponible
+                }
+
+                if (seleccionado != null) {
+
+                    // Descontamos las unidades que ya están en el carrito.
+                    val enCarrito = estadoCarrito.items.find {
+                        it.productoId == seleccionado.id.toString()
+                    }?.cantidad ?: 0
+
+                    val unidadesDisponibles =
+                        (seleccionado.stock - enCarrito).coerceAtLeast(0)
+
+                    DetalleProductoClienteScreen(
+                        producto = seleccionado,
+                        disponibleParaAgregar = unidadesDisponibles,
+
+                        onVolver = {
+                            volverDetalle()
+                        },
+
+                        onAgregar = { cantidad ->
+                            carritoViewModel.agregarProducto(
+                                seleccionado,
+                                cantidad
+                            )
+                        },
+
+                        onAbrirCarrito = onAbrirCarrito
+                    )
+
+                } else {
+                    LaunchedEffect(productoDetalleId) {
+                        volverDetalle()
+                    }
+                }
+            }
+
+            4 -> Box(Modifier.fillMaxSize().padding(padding)) {
+                PerfilUsuarioScreen(
+                    usuarioId = clienteId,
+                    viewModel = perfilViewModel,
+                    onVolver = { seleccionarPestana(0) },
+                    onLogout = onLogout
+                )
+            }
+            else -> AnimatedVisibility(
+                visible = true,
+                enter = androidx.compose.animation.EnterTransition.None,
+                    exit = androidx.compose.animation.ExitTransition.None
             ) {
 
-                // ---------- Encabezado ----------
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(
+                    modifier = Modifier
+                        .padding(padding)
+                        .fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(20.dp),
+
+                    verticalArrangement = Arrangement.spacedBy(18.dp)
+                ) {
+
+                    // ---------- Encabezado ----------
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        LogoInicio(modifier = Modifier.weight(1f))
+                        Box(Modifier.size(64.dp).graphicsLayer {
+                            scaleX = escalaCarrito.value
+                            scaleY = escalaCarrito.value
+                        }) {
+                            IconoCircular(Icons.Default.ShoppingCart, "Carrito", onClick = onAbrirCarrito)
+                            if (estadoCarrito.cantidadProductos > 0) {
+                                Badge(modifier = Modifier.align(Alignment.TopEnd).offset(x = (-2).dp, y = 2.dp),
+                                    containerColor = Color(0xFFB3261E), contentColor = Color.White) {
+                                    Text(if (estadoCarrito.cantidadProductos > 99) "99+" else "${estadoCarrito.cantidadProductos}", fontSize = 11.sp)
+                                }
+                            }
+                        }
+                    }
+
+                    OutlinedButton(onClick = { seleccionarPestana(6)}, modifier = Modifier.fillMaxWidth()) {
+                        Icon(Icons.Default.QrCodeScanner, null)
+                        Spacer(Modifier.width(8.dp))
+                        Text("Escanear producto")
+                    }
+
+                    // ---------- abrir catalogo ----------
                     Card(
-                        // Temporal: así puedes probar el cierre de sesión.
-                        // Cuando exista PerfilScreen, cambia esto por { tab = 4 }
-                        modifier = Modifier.weight(1f).clickable { onLogout() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { seleccionarPestana(1) },
+
                         shape = RoundedCornerShape(50),
-                        colors = CardDefaults.cardColors(containerColor = Color.White)
+
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
+                        )
                     ) {
+
                         Row(
-                            Modifier.padding(horizontal = 10.dp, vertical = 8.dp),
+                            Modifier.padding(
+                                horizontal = 16.dp,
+                                vertical = 14.dp
+                            ),
                             verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Box(
-                                Modifier.size(38.dp).clip(CircleShape).background(FondoOYL),
-                                contentAlignment = Alignment.Center
-                            ) { Icon(Icons.Default.Person, null, tint = SecundarioOYL) }
+
+                            Icon(
+                                Icons.Default.Search,
+                                null,
+                                tint = PrincipalOYL
+                            )
 
                             Spacer(Modifier.width(10.dp))
-                            Column(Modifier.weight(1f)) {
-                                Text("Hola,", color = PrincipalOYL, fontSize = 12.sp)
-                                Text(
-                                    nombre,
-                                    fontWeight = FontWeight.Bold,
-                                    color = SecundarioOYL,
-                                    fontSize = 15.sp
-                                )
-                            }
-                            Icon(Icons.Default.KeyboardArrowRight, null, tint = PrincipalOYL)
+
+                            Text(
+                                "Buscar productos...",
+                                color = PrincipalOYL
+                            )
                         }
                     }
 
-                    Spacer(Modifier.width(10.dp))
+                    // ---------- promos ----------
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
 
-                    BadgedBox(badge = { if (carrito > 0) Badge { Text("$carrito") } }) {
-                        IconoCircular(Icons.Default.ShoppingCart, "Carrito") { }
+                        items(promos) { promo ->
+
+                            Card(
+                                modifier = Modifier
+                                    .width(280.dp)
+                                    .heightIn(min = 126.dp),
+
+                                shape = RoundedCornerShape(24.dp),
+
+                                colors = CardDefaults.cardColors(
+                                    containerColor = PrincipalOYL
+                                )
+                            ) {
+
+                                Column(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .background(Brush.linearGradient(listOf(SecundarioOYL, PrincipalOYL)))
+                                        .drawBehind {
+                                            drawCircle(Color.White.copy(alpha = 0.06f), size.width * 0.34f,
+                                                androidx.compose.ui.geometry.Offset(size.width * 0.95f, 0f))
+                                        }
+                                        .padding(22.dp),
+
+                                    verticalArrangement = Arrangement.Center
+                                ) {
+
+                                    Text(
+                                        promo.titulo,
+                                        color = Color.White,
+                                        fontSize = 19.sp,
+                                        fontWeight = FontWeight.Bold
+                                    )
+
+                                    Text(
+                                        promo.detalle,
+                                        color = Color.White,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+                        }
                     }
-                }
 
-                // ---------- abrir catalogo ----------
-                Card(
-                    modifier = Modifier.fillMaxWidth().clickable { tab = 1 },
-                    shape = RoundedCornerShape(50),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
+                    // ---------- categorías ----------
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+
+                        items(categorias.size) { i ->
+
+                            CategoriaChip(
+                                texto = categorias[i],
+                                seleccionado = categoria == i,
+                                onClick = { categoria = i }
+                            )
+                        }
+                    }
+
+                    // ---------- destacado ----------
                     Row(
-                        Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Icon(Icons.Default.Search, null, tint = PrincipalOYL)
-                        Spacer(Modifier.width(10.dp))
-                        Text("Buscar productos...", color = PrincipalOYL)
-                    }
-                }
 
-                // ---------- promos ----------
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(promos) { promo ->
-                        Card(
-                            modifier = Modifier.width(250.dp).height(105.dp),
-                            shape = RoundedCornerShape(20.dp),
-                            colors = CardDefaults.cardColors(containerColor = PrincipalOYL)
+                        Text(
+                            "Destacados",
+                            fontWeight = FontWeight.Bold,
+                            color = SecundarioOYL,
+                            fontSize = 18.sp,
+                            modifier = Modifier.weight(1f)
+                        )
+
+                        TextButton(
+                            onClick = { seleccionarPestana(1) }
                         ) {
-                            Column(
-                                Modifier.fillMaxSize().padding(18.dp),
-                                verticalArrangement = Arrangement.Center
-                            ) {
-                                Text(
-                                    promo.titulo,
-                                    color = Color.White,
-                                    fontSize = 19.sp,
-                                    fontWeight = FontWeight.Bold
-                                )
-                                Text(promo.detalle, color = Color.White, fontSize = 13.sp)
-                            }
+                            Text(
+                                "Ver todo →",
+                                color = PrincipalOYL
+                            )
                         }
                     }
-                }
 
-                // ---------- categorías ----------
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    items(categorias.size) { i ->
-                        CategoriaChip(
-                            texto = categorias[i],
-                            seleccionado = categoria == i,
-                            onClick = { categoria = i }
-                        )
-                    }
-                }
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
 
-                // ---------- destacado ----------
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(
-                        "Destacados",
-                        fontWeight = FontWeight.Bold,
-                        color = SecundarioOYL,
-                        fontSize = 18.sp,
-                        modifier = Modifier.weight(1f)
-                    )
-                    TextButton(onClick = { tab = 1 }) { Text("Ver todo →", color = PrincipalOYL) }
-                }
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    items(destacados) { p ->
-                        Card(
-                            modifier = Modifier.width(150.dp),
-                            shape = RoundedCornerShape(18.dp),
-                            colors = CardDefaults.cardColors(containerColor = Color.White)
-                        ) {
-                            Column(Modifier.padding(12.dp)) {
-                                // Marcador de imagen (después: foto del producto)
-                                Box(
-                                    Modifier.fillMaxWidth().height(85.dp)
-                                        .clip(RoundedCornerShape(14.dp))
-                                        .background(FondoOYL),
-                                    contentAlignment = Alignment.Center
-                                ) { Icon(Icons.Default.Inventory2, null, tint = PrincipalOYL) }
+                        items(destacados, key = { it.id }) { p ->
 
-                                Spacer(Modifier.height(8.dp))
-                                Text(p.nombre, fontWeight = FontWeight.Bold, color = SecundarioOYL)
-                                Text(p.formato, fontSize = 12.sp, color = PrincipalOYL)
-                                Spacer(Modifier.height(6.dp))
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text(
-                                        "$" + "%,d".format(p.precio).replace(',', '.'),
-                                        fontWeight = FontWeight.Bold,
-                                        color = SecundarioOYL,
-                                        modifier = Modifier.weight(1f)
+                            Card(
+                                modifier = Modifier.width(178.dp),
+
+                                shape = RoundedCornerShape(24.dp),
+
+                                colors = CardDefaults.cardColors(
+                                    containerColor = Color.White
+                                )
+                            ) {
+
+                                Column(
+                                    Modifier.padding(12.dp)
+                                ) {
+
+                                    ImagenProducto(
+                                        producto = p,
+                                        modifier = Modifier.fillMaxWidth().height(96.dp)
+                                            .clip(RoundedCornerShape(14.dp))
                                     )
-                                    Box(
-                                        Modifier.size(32.dp).clip(CircleShape)
-                                            .background(SecundarioOYL)
-                                            .clickable { carrito++ },
-                                        contentAlignment = Alignment.Center
+
+                                    Spacer(Modifier.height(8.dp))
+
+                                    TextoTarjetaProducto(
+                                        p.nombre,
+                                        fontSize = 14.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = SecundarioOYL
+                                    )
+
+                                    TextoTarjetaProducto(
+                                        p.presentacion,
+                                        lineas = 1,
+                                        fontSize = 12.sp,
+                                        color = PrincipalOYL
+                                    )
+
+                                    Spacer(Modifier.height(6.dp))
+
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically
                                     ) {
-                                        Icon(
-                                            Icons.Default.Add,
-                                            "Agregar al carrito",
-                                            tint = Color.White,
-                                            modifier = Modifier.size(18.dp)
+
+                                        Text(
+                                            "$" + "%,d"
+                                                .format(p.precio)
+                                                .replace(',', '.'),
+
+                                            fontWeight = FontWeight.Bold,
+                                            color = SecundarioOYL,
+                                            modifier = Modifier.weight(1f)
                                         )
+
+                                        Box(
+                                            Modifier
+                                                .size(32.dp)
+                                                .clip(CircleShape)
+                                                .background(SecundarioOYL)
+                                                .clickable {
+                                                    productoDetalleId = p.id
+                                                    detalleDesdeEscaner = false
+                                                    seleccionarPestana(5)
+                                                },
+                                            contentAlignment = Alignment.Center
+                                        ) {
+
+                                            Icon(
+                                                Icons.Default.Add,
+                                                "Ver detalle del producto",
+                                                tint = Color.White,
+                                                modifier = Modifier.size(18.dp)
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                // ---------- ultimos pedidos ----------
-                Card(
-                    shape = RoundedCornerShape(20.dp),
-                    colors = CardDefaults.cardColors(containerColor = Color.White)
-                ) {
-                    Column(Modifier.padding(16.dp)) {
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Text(
-                                "Mi último pedido",
-                                fontWeight = FontWeight.Bold,
-                                color = SecundarioOYL,
-                                fontSize = 18.sp,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text("#Pedido 3", color = PrincipalOYL, fontSize = 13.sp)
-                        }
-                        Spacer(Modifier.height(14.dp))
-                        LinearProgressIndicator(
-                            progress = 0.75f,   // 3 de 4 pasos
-                            modifier = Modifier.fillMaxWidth().height(8.dp)
-                                .clip(RoundedCornerShape(50)),
-                            color = PrincipalOYL,
-                            trackColor = FondoOYL
+                    // ---------- ultimos pedidos ----------
+                    Card(
+                        shape = RoundedCornerShape(24.dp),
+
+                        colors = CardDefaults.cardColors(
+                            containerColor = Color.White
                         )
-                        Spacer(Modifier.height(8.dp))
-                        Row(
-                            Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+
+                        Column(
+                            Modifier.padding(16.dp)
                         ) {
-                            listOf("Pendiente", "Confirmado", "Preparado", "Entregado")
-                                .forEachIndexed { i, paso ->
-                                    Text(
-                                        paso,
-                                        fontSize = 10.sp,
-                                        color = if (i <= 2) SecundarioOYL else PrincipalOYL.copy(alpha = 0.4f)
-                                    )
+
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+
+                                Text(
+                                    "Mi último pedido",
+                                    fontWeight = FontWeight.Bold,
+                                    color = SecundarioOYL,
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.weight(1f)
+                                )
+
+                                Text(
+                                    ultimoPedido?.id ?: "Sin pedidos",
+                                    color = PrincipalOYL,
+                                    fontSize = 13.sp
+                                )
+                            }
+
+
+                            ultimoPedido?.let { pedido ->
+
+                                // Posición correspondiente al estado actual.
+                                val indiceEstado = when (pedido.estado) {
+                                    EstadoPedido.PENDIENTE_VALIDACION -> 0
+                                    EstadoPedido.CONFIRMADO -> 1
+                                    EstadoPedido.PREPARADO -> 2
+                                    EstadoPedido.ENTREGADO -> 3
                                 }
+
+                                Spacer(Modifier.height(14.dp))
+
+                                // Progreso del pedido: 25 %, 50 %, 75 % o 100 %.
+                                LinearProgressIndicator(
+                                    progress = (indiceEstado + 1) / 4f,
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(8.dp)
+                                        .clip(RoundedCornerShape(50)),
+                                    color = PrincipalOYL,
+                                    trackColor = FondoOYL
+                                )
+
+                                Spacer(Modifier.height(8.dp))
+
+                                // Etapas del pedido.
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    horizontalArrangement = Arrangement.SpaceBetween
+                                ) {
+                                    listOf(
+                                        "Pendiente",
+                                        "Confirmado",
+                                        "Preparado",
+                                        "Entregado"
+                                    ).forEachIndexed { indice, nombreEstado ->
+
+                                        Text(
+                                            text = nombreEstado,
+                                            fontSize = 10.sp,
+                                            color = if (indice <= indiceEstado) {
+                                                SecundarioOYL
+                                            } else {
+                                                PrincipalOYL.copy(alpha = 0.4f)
+                                            }
+                                        )
+                                    }
+                                }
+
+                            } ?: Text(
+                                text = "Aún no tienes pedidos registrados.",
+                                color = PrincipalOYL,
+                                fontSize = 13.sp,
+                                modifier = Modifier.padding(top = 14.dp)
+                            )
+
                         }
                     }
                 }
             }
-        }
+            }
     }
 }
 
 @Composable
-private fun IconoCircular(icono: ImageVector, descripcion: String, onClick: () -> Unit) {
+private fun IconoCircular(
+    icono: ImageVector,
+    descripcion: String,
+    onClick: () -> Unit
+) {
+
     Box(
         Modifier
-            .size(42.dp)
+            .size(64.dp)
             .clip(CircleShape)
             .background(Color.White)
             .clickable(onClick = onClick),
+
         contentAlignment = Alignment.Center
     ) {
-        Icon(icono, contentDescription = descripcion, tint = SecundarioOYL, modifier = Modifier.size(20.dp))
+
+        Icon(
+            icono,
+            contentDescription = descripcion,
+            tint = SecundarioOYL,
+            modifier = Modifier.size(32.dp)
+        )
     }
 }
 
 @Composable
-private fun CategoriaChip(texto: String, seleccionado: Boolean, onClick: () -> Unit) {
+private fun CategoriaChip(
+    texto: String,
+    seleccionado: Boolean,
+    onClick: () -> Unit
+) {
+
     Text(
         texto,
         color = if (seleccionado) Color.White else PrincipalOYL,
         fontSize = 13.sp,
-        fontWeight = if (seleccionado) FontWeight.Bold else FontWeight.Normal,
+        fontWeight = if (seleccionado) {
+            FontWeight.Bold
+        } else {
+            FontWeight.Normal
+        },
+
         modifier = Modifier
             .clip(RoundedCornerShape(50))
-            .background(if (seleccionado) SecundarioOYL else Color.White)
+            .background(
+                if (seleccionado) {
+                    SecundarioOYL
+                } else {
+                    Color.White
+                }
+            )
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 9.dp)
+            .padding(
+                horizontal = 16.dp,
+                vertical = 9.dp
+            )
     )
 }
 
 @Composable
-private fun BarraCliente(seleccion: Int, onSelect: (Int) -> Unit) {
-    NavigationBar(containerColor = Color.White) {
+fun BarraCliente(
+    seleccion: Int,
+    onSelect: (Int) -> Unit
+) {
+
+    NavigationBar(
+        containerColor = Color.White,
+        tonalElevation = 0.dp,
+        modifier = Modifier.clip(RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp))
+    ) {
+
         val items = listOf(
             "Inicio" to Icons.Default.Home,
-            "Catálogo" to Icons.Default.List,
+            "Catálogo" to Icons.Default.GridView,
             "Tiendas" to Icons.Default.Storefront,
             "Pedidos" to Icons.Default.Receipt,
             "Perfil" to Icons.Default.Person
         )
+
         items.forEachIndexed { i, (texto, icono) ->
+
             NavigationBarItem(
                 selected = seleccion == i,
                 onClick = { onSelect(i) },
-                label = { Text(texto, fontSize = 10.sp) },
-                icon = { Icon(icono, contentDescription = texto) },
+
+                label = {
+                    Text(
+                        texto,
+                        fontSize = 11.sp,
+                        fontWeight = if (seleccion == i) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                },
+
+                icon = {
+                    Icon(
+                        icono,
+                        contentDescription = texto
+                    )
+                },
+
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = SecundarioOYL,
+                    selectedIconColor = Color.White,
                     selectedTextColor = SecundarioOYL,
-                    indicatorColor = FondoOYL,
+                    indicatorColor = SecundarioOYL,
                     unselectedIconColor = PrincipalOYL,
                     unselectedTextColor = PrincipalOYL
                 )
             )
         }
     }
+}
+
+@Composable
+private fun LogoInicio(modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth().height(80.dp),
+        shape = RoundedCornerShape(24.dp),
+        color = Color.White,
+        border = BorderStroke(1.dp, Color(0xFFEEDFCB))
+    ) {
+        Box(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 10.dp), contentAlignment = Alignment.Center) {
+            Image(
+                painter = painterResource(R.drawable.logo_oyl_vector),
+                contentDescription = "OYL Frutos Secos",
+                contentScale = androidx.compose.ui.layout.ContentScale.Fit,
+                alignment = Alignment.Center,
+                modifier = Modifier.fillMaxSize().offset(y = (-2).dp)
+            )
+        }
+    }
+}
+
+@Composable
+private fun TextoTarjetaProducto(
+    text: String,
+    color: Color,
+    fontWeight: FontWeight = FontWeight.Normal,
+    fontSize: TextUnit = 16.sp,
+    lineas: Int = 2
+) {
+    val altoLinea = (fontSize.value * 1.3f).sp
+    val alto = with(LocalDensity.current) { (altoLinea.value * lineas).sp.toDp() }
+    Text(
+        text = text,
+        color = color,
+        fontWeight = fontWeight,
+        fontSize = fontSize,
+        lineHeight = altoLinea,
+        maxLines = lineas,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier.fillMaxWidth().height(alto)
+    )
 }

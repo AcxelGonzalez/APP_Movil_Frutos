@@ -1,0 +1,455 @@
+package com.example.oyl_fs.screens
+
+import com.example.oyl_fs.ui.theme.BotonVolverOYL
+
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.tween
+import com.example.oyl_fs.model.ProductoInfo
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.activity.compose.BackHandler
+import com.example.oyl_fs.model.PerfilUsuario
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoViewModel
+import com.example.oyl_fs.viewmodel.ConfirmacionPedidoUiState
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.oyl_fs.model.ItemCarrito
+import com.example.oyl_fs.viewmodel.CarritoUiState
+import com.example.oyl_fs.viewmodel.CarritoViewModel
+import java.text.NumberFormat
+import java.util.Locale
+
+// Paleta de la hoja de ruta
+private val FondoOYL = Color(0xFFFFF5E7)
+private val PrincipalOYL = Color(0xFF92623D)
+private val SecundarioOYL = Color(0xFF4B2E15)
+private val CriticoOYL = Color(0xFFC0392B)
+
+// Pantalla que se usa en la app: conecta el ViewModel con el diseño
+@Composable
+fun CarroScreen(
+    clienteId: String,
+    onVolver: () -> Unit,
+    onMisPedidos: () -> Unit,
+    perfil: PerfilUsuario? = null,
+    vm: CarritoViewModel = viewModel(),
+    confirmacionVm: ConfirmacionPedidoViewModel = viewModel()
+) {
+    LaunchedEffect(clienteId) { vm.iniciar(clienteId) }
+    val confirmacionActual by confirmacionVm.estado.collectAsState()
+    LaunchedEffect(clienteId, confirmacionActual.usuarioId, confirmacionActual.procesando) {
+        confirmacionVm.iniciar(clienteId)
+    }
+    if (confirmacionActual.procesando && confirmacionActual.usuarioId != clienteId) {
+        Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Text("Hay una confirmación anterior en curso. Espera a que termine antes de continuar.")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+            TextButton(onClick = onVolver) { Text("Volver") }
+        }
+        return
+    }
+    val confirmacion = confirmacionActual.takeIf { it.usuarioId == clienteId } ?: ConfirmacionPedidoUiState()
+
+    val estado by vm.uiState.collectAsState()
+    val mensaje by vm.mensaje.collectAsState()
+
+
+    var mostrarConfirmacion by rememberSaveable(clienteId) { mutableStateOf(false) }
+    fun abrirMisPedidos() { confirmacionVm.limpiar(); onMisPedidos() }
+    BackHandler(enabled = mostrarConfirmacion || confirmacion.pedido != null || confirmacion.procesando) {
+        if (!confirmacion.procesando) {
+            if (confirmacion.pedido != null) abrirMisPedidos() else mostrarConfirmacion = false
+        }
+    }
+    val pedido = confirmacion.pedido
+    if (pedido != null) {
+        PedidoConfirmadoScreen(pedido, confirmacion.error, ::abrirMisPedidos)
+        return
+    }
+    if (confirmacion.pendiente != null || confirmacion.recuperacionBloqueada) {
+        CompraEnRevisionContenido(confirmacion,
+            onConsultar = { confirmacionVm.recuperar(clienteId, false) },
+            onContinuar = { confirmacionVm.recuperar(clienteId, true) },
+            onMisPedidos = onMisPedidos, onVolver = onVolver)
+        return
+    }
+    if (confirmacion.procesando && !mostrarConfirmacion) {
+        Column(Modifier.fillMaxSize().padding(24.dp)) {
+            Text("Revisando el registro local de compras…")
+            LinearProgressIndicator(Modifier.fillMaxWidth())
+        }
+        return
+    }
+    if (mostrarConfirmacion) {
+        ConfirmacionPedidoScreen(estado.items, perfil, confirmacion.procesando, confirmacion.error,
+            onVolver = { mostrarConfirmacion = false; confirmacionVm.limpiar() },
+            onConfirmar = { confirmacionVm.confirmar(clienteId, estado.items, it) })
+        return
+    }
+
+    var itemAEliminar by remember { mutableStateOf<ItemCarrito?>(null) }
+
+    CarroContenido(
+        estado = estado,
+        mensaje = mensaje ?: confirmacion.error,
+        onMensajeMostrado = { if (mensaje != null) vm.mensajeMostrado() else confirmacionVm.borrarMensaje() },
+        onVolver = onVolver,
+        onAumentar = vm::aumentar,
+        onDisminuir = { item ->
+            if (item.cantidad <= 1) itemAEliminar = item else vm.disminuir(item)
+        },
+        onQuitar = { item -> itemAEliminar = item },
+        onConfirmar = {
+            if (vm.validarAntesDeConfirmar()) mostrarConfirmacion = true
+        }
+    )
+
+    // mensaje para confirmar que se quita un producto
+    itemAEliminar?.let { item ->
+        DialogoQuitarProducto(
+            item = item,
+            onCancelar = { itemAEliminar = null },
+            onAceptar = {
+                vm.quitar(item)
+                itemAEliminar = null
+            }
+        )
+    }
+}
+
+@Composable
+private fun CompraEnRevisionContenido(estado: ConfirmacionPedidoUiState, onConsultar: () -> Unit,
+    onContinuar: () -> Unit, onMisPedidos: () -> Unit, onVolver: () -> Unit) {
+    LazyColumn(Modifier.fillMaxSize().background(FondoOYL), contentPadding = PaddingValues(24.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        item { Text("Compra en revisión", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = SecundarioOYL) }
+        item { Text("Conservamos el intento original. Consulta su resultado antes de crear otra compra. Continuar enviará únicamente este mismo intento.") }
+        estado.pendiente?.let { intento ->
+            items(intento.items) { Text("${it.nombre} · ${it.cantidad} · ${formatoPrecio(it.subtotal)}") }
+            item {
+                Text("Total: ${formatoPrecio(intento.items.sumOf { it.subtotal })}")
+                Text("Entrega: ${intento.entrega.modalidad.descripcion}")
+                Text(if (intento.entrega.puntoRetiroNombre.isNotBlank()) intento.entrega.puntoRetiroNombre else intento.entrega.direccion)
+            }
+        }
+        estado.error?.let { mensaje -> item { Text(mensaje, color = CriticoOYL) } }
+        if (estado.procesando) item { LinearProgressIndicator(Modifier.fillMaxWidth()) }
+        item { Button(onClick = onConsultar, enabled = !estado.procesando, modifier = Modifier.fillMaxWidth()) {
+            Text(if (estado.recuperacionBloqueada) "Releer registro local" else "Consultar resultado")
+        } }
+        if (estado.pendiente != null && !estado.recuperacionBloqueada) item {
+            OutlinedButton(onClick = onContinuar, enabled = !estado.procesando, modifier = Modifier.fillMaxWidth()) { Text("Continuar el mismo intento") }
+        }
+        item { TextButton(onClick = onMisPedidos, enabled = !estado.procesando) { Text("Mis pedidos") } }
+        item { TextButton(onClick = onVolver, enabled = !estado.procesando) { Text("Volver") } }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun CarroContenido(
+    estado: CarritoUiState,
+    mensaje: String?,
+    onMensajeMostrado: () -> Unit,
+    onVolver: () -> Unit,
+    onAumentar: (ItemCarrito) -> Unit,
+    onDisminuir: (ItemCarrito) -> Unit,
+    onQuitar: (ItemCarrito) -> Unit,
+    onConfirmar: () -> Unit
+) {
+    val snackbar = remember { SnackbarHostState() }
+    LaunchedEffect(mensaje) {
+        if (mensaje != null) {
+            snackbar.showSnackbar(mensaje)
+            onMensajeMostrado()
+        }
+    }
+
+    Scaffold(
+        containerColor = FondoOYL,
+        snackbarHost = { SnackbarHost(snackbar) },
+        topBar = {
+            Row(
+                Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                BotonVolverOYL(onVolver)
+                Spacer(Modifier.width(14.dp))
+                com.example.oyl_fs.ui.theme.TituloPantallaOYL("Mi carrito", Modifier.weight(1f))
+            }
+        },
+        bottomBar = {
+            if (!estado.estaVacio) ResumenTotal(estado, onConfirmar)
+        }
+    ) { padding ->
+        if (estado.estaVacio) {
+            CarritoVacio(Modifier.padding(padding))
+        } else {
+            LazyColumn(
+                modifier = Modifier.padding(padding).fillMaxSize(),
+                contentPadding = PaddingValues(horizontal = 20.dp, vertical = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                items(estado.items, key = { it.productoId }) { item ->
+                    FilaCarrito(
+                        item = item,
+                        onAumentar = { onAumentar(item) },
+                        onDisminuir = { onDisminuir(item) },
+                        onQuitar = { onQuitar(item) }
+                    )
+                }
+            }
+        }
+    }
+}
+@Composable
+private fun FilaCarrito(
+    item: ItemCarrito,
+    onAumentar: () -> Unit,
+    onDisminuir: () -> Unit,
+    onQuitar: () -> Unit
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().animateContentSize(),
+        shape = RoundedCornerShape(24.dp),
+        colors = CardDefaults.cardColors(containerColor = Color.White)
+    ) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+
+            // Foto del producto (o un ícono si no tiene)
+            Box(
+                Modifier.size(72.dp).clip(RoundedCornerShape(14.dp)).background(FondoOYL),
+                contentAlignment = Alignment.Center
+            ) {
+                if (item.imagen != 0 || !item.imagenUri.isNullOrBlank()) {
+                    ImagenProducto(producto = item.comoProducto(), modifier = Modifier.fillMaxSize())
+                } else {
+                    Icon(Icons.Default.Inventory2, null, tint = PrincipalOYL)
+                }
+            }
+
+            Spacer(Modifier.width(12.dp))
+
+            // Nombre, precio y botones - +
+            Column(Modifier.weight(1f)) {
+                Text(item.nombre, fontWeight = FontWeight.Bold, color = SecundarioOYL)
+                Text(
+
+                    "${item.formato} · ${formatoPrecio(item.precio.toLong())} c/u",
+
+                    fontSize = 12.sp,
+                    color = PrincipalOYL
+                )
+                if (!item.stockSuficiente) {
+                    Text(
+                        "Solo quedan ${item.stockDisponible}",
+                        fontSize = 12.sp,
+                        color = CriticoOYL,
+                        fontWeight = FontWeight.Medium
+                    )
+                }
+                Spacer(Modifier.height(8.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    BotonCantidad(Icons.Default.Remove, "Disminuir", onDisminuir)
+                    Crossfade(targetState = item.cantidad, animationSpec = tween(350)) { cantidad ->
+                        Text("$cantidad", modifier = Modifier.padding(horizontal = 14.dp),
+                            fontWeight = FontWeight.Bold, color = SecundarioOYL)
+                    }
+                    BotonCantidad(Icons.Default.Add, "Aumentar", onAumentar)
+                }
+            }
+
+            // Basurero y subtotal
+            Column(horizontalAlignment = Alignment.End) {
+                IconButton(onClick = onQuitar) {
+                    Icon(Icons.Default.Delete, "Quitar", tint = PrincipalOYL)
+                }
+                Crossfade(targetState = item.subtotal, animationSpec = tween(450)) { subtotal ->
+                    Text(formatoPrecio(subtotal), fontWeight = FontWeight.Bold, color = SecundarioOYL)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun BotonCantidad(icono: ImageVector, descripcion: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(30.dp)
+            .clip(CircleShape)
+            .background(SecundarioOYL)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Icon(icono, descripcion, tint = Color.White, modifier = Modifier.size(16.dp))
+    }
+}
+@Composable
+private fun ResumenTotal(estado: CarritoUiState, onConfirmar: () -> Unit) {
+    val pulso = remember { Animatable(1f) }
+    var totalAnterior by remember { mutableStateOf(estado.total) }
+    LaunchedEffect(estado.total) {
+        if (estado.total != totalAnterior) {
+            totalAnterior = estado.total
+            pulso.animateTo(1.10f, tween(140))
+            pulso.animateTo(1f, spring(dampingRatio = 0.65f))
+        }
+    }
+    Surface(color = Color.White, shadowElevation = 8.dp) {
+        Column(Modifier.fillMaxWidth().padding(20.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    "Total (${estado.cantidadProductos} productos)",
+                    color = PrincipalOYL,
+                    modifier = Modifier.weight(1f)
+                )
+                // Transición entre importes exactos, sin modificar el cálculo del pedido.
+                Crossfade(targetState = estado.total, animationSpec = tween(650),
+                    modifier = Modifier.graphicsLayer { scaleX = pulso.value; scaleY = pulso.value }) { total ->
+                    Text(
+                        formatoPrecio(total),
+                        fontSize = 22.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = SecundarioOYL
+                    )
+                }
+            }
+            Spacer(Modifier.height(14.dp))
+            Button(
+                onClick = onConfirmar,
+                colors = ButtonDefaults.buttonColors(containerColor = SecundarioOYL),
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(min = 52.dp)
+            ) {
+                Text("Confirmar pedido")
+            }
+        }
+    }
+}
+
+@Composable
+private fun CarritoVacio(modifier: Modifier) {
+    Column(
+        modifier.fillMaxSize().padding(32.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.Center
+    ) {
+        Icon(
+            Icons.Default.ShoppingCart, null,
+            tint = PrincipalOYL.copy(alpha = 0.5f),
+            modifier = Modifier.size(72.dp)
+        )
+        Spacer(Modifier.height(12.dp))
+        Text("Tu carrito está vacío", fontWeight = FontWeight.Bold, color = SecundarioOYL, fontSize = 18.sp)
+        Text("Agrega productos desde el catálogo", color = PrincipalOYL)
+    }
+}
+
+
+/**
+ * Formatea montos en pesos chilenos.
+ * Acepta valores Long para representar
+ * correctamente subtotales y totales elevados.
+ */
+private fun formatoPrecio(valor: Long): String =
+    "$" + NumberFormat
+        .getIntegerInstance(Locale("es", "CL"))
+        .format(valor)
+
+private fun ItemCarrito.comoProducto() = ProductoInfo(
+    id = productoId.toIntOrNull() ?: 0,
+    nombre = nombre,
+    codigo = "",
+    categoria = "",
+    descripcion = "",
+    presentacion = formato,
+    precio = precio,
+    stock = stockDisponible,
+    stockMinimo = 0,
+    disponible = true,
+    imagen = imagen,
+    imagenUri = imagenUri
+)
+
+@Composable
+private fun DialogoQuitarProducto(
+    item: ItemCarrito,
+    onCancelar: () -> Unit,
+    onAceptar: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onCancelar,
+        containerColor = Color.White,
+        icon = {
+            Icon(Icons.Default.Delete, null, tint = CriticoOYL)
+        },
+        title = {
+            Text("¿Quitar producto?", fontWeight = FontWeight.Bold, color = SecundarioOYL)
+        },
+        text = {
+            Text(
+                "Se quitará ${item.nombre} (${item.cantidad} " +
+                        "${if (item.cantidad == 1) "unidad" else "unidades"}) de tu carrito.",
+                color = PrincipalOYL
+            )
+        },
+        confirmButton = {
+            Button(
+                onClick = onAceptar,
+                colors = ButtonDefaults.buttonColors(containerColor = CriticoOYL),
+                shape = RoundedCornerShape(12.dp)
+            ) { Text("Quitar") }
+        },
+        dismissButton = {
+            TextButton(onClick = onCancelar) {
+                Text("Cancelar", color = PrincipalOYL)
+            }
+        }
+    )
+}
+
+// ---------- Preview (se ve sin emulador) ----------
+@Preview(showBackground = true)
+@Composable
+private fun CarroPreview() {
+    CarroContenido(
+        estado = CarritoUiState(
+            items = listOf(
+                ItemCarrito("1", "Almendras", "500 g", 6990, 2, 10, imagen = ProductosDatos.almendras.imagen),
+                ItemCarrito("2", "Nueces", "500 g", 5990, 3, 2, imagen = ProductosDatos.nueces.imagen),
+                ItemCarrito("3", "Pasas", "500 g", 6000, 1, 15, imagen = ProductosDatos.pasas.imagen)
+            )
+        ),
+        mensaje = null,
+        onMensajeMostrado = {},
+        onVolver = {},
+        onAumentar = {},
+        onDisminuir = {},
+        onQuitar = {},
+        onConfirmar = {}
+    )
+}
